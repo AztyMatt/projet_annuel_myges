@@ -1,0 +1,29 @@
+{
+  "name": "projet_annuel_myges",
+  "version": "1.0.0",
+  "description": "",
+  "private": true,
+  "workspaces": [
+    "apps/backend",
+    "apps/frontend"
+  ],
+  "main": "index.js",
+  "scripts": {
+    "install:all": "npm install",
+    "dev:back": "npm run dev -w apps/backend",
+    "dev:front": "npm run dev -w apps/frontend",
+    "build": "npm run build --workspaces",
+    "test": "npm test --workspaces"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ludovicMAK/projet_annuel_myges.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/ludovicMAK/projet_annuel_myges/issues"
+  },
+  "homepage": "https://github.com/ludovicMAK/projet_annuel_myges#readme"
+}
