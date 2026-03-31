@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.base.json",
+  "files": [],
+  "references": [
+    { "path": "domain" },
+    { "path": "application" },
+    { "path": "infrastructure/backend/express" }
+  ],
+  "compilerOptions": {
+    "ignoreDeprecations": "5.0"
+  }
+}
