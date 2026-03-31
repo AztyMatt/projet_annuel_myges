@@ -1,15 +1,12 @@
-# --- Dépendances ---
 node_modules/
 .pnpm-store/
 
-# --- Build & Sorties ---
 dist/
 build/
 .next/
 out/
 *.tsbuildinfo
 
-# --- Environnement & Secrets (TRES IMPORTANT) ---
 .env
 .env.local
 .env.development.local
@@ -17,7 +14,6 @@ out/
 .env.production.local
 .env.stack
 
-# --- Docker & OS ---
 .docker/
 *.log
 npm-debug.log*
@@ -26,16 +22,15 @@ yarn-error.log*
 .DS_Store
 Thumbs.db
 
-# --- IDE (VS Code / JetBrains) ---
 .vscode/
 .idea/
 *.swp
 *.swo
 
-# --- Tests ---
 coverage/
 .nyc_output
 
-# --- Database (Données locales de ta DB Stateful) ---
 pgdata/
 postgres_data/
+
+package-lock.json

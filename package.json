@@ -4,16 +4,16 @@
   "description": "",
   "private": true,
   "workspaces": [
-    "apps/backend",
-    "apps/frontend"
+    "domain",
+    "application",
+    "infrastructure/*",
+    "infrastructure/backend/express",
+    "infrastructure/frontend/next"
   ],
-  "main": "index.js",
   "scripts": {
-    "install:all": "npm install",
-    "dev:back": "npm run dev -w apps/backend",
-    "dev:front": "npm run dev -w apps/frontend",
-    "build": "npm run build --workspaces",
-    "test": "npm test --workspaces"
+    "dev:express": "npm run dev --workspace=@myges/express",
+    "dev:next": "npm run dev --workspace=@myges/next",
+    "start:next": "npm run start --workspace=@myges/next"
   },
   "repository": {
     "type": "git",
@@ -25,5 +25,10 @@
   "bugs": {
     "url": "https://github.com/ludovicMAK/projet_annuel_myges/issues"
   },
-  "homepage": "https://github.com/ludovicMAK/projet_annuel_myges#readme"
+  "homepage": "https://github.com/ludovicMAK/projet_annuel_myges#readme",
+  "devDependencies": {
+    "ts-node": "^10.9.2",
+    "tsconfig-paths": "^4.2.0",
+    "typescript": "^6.0.2"
+  }
 }
