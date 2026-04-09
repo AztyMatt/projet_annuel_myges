@@ -1,25 +1,18 @@
 {
-  "extends": "../../tsconfig.base.json",
+  "extends": "../../../tsconfig.base.json",
   "compilerOptions": {
     "composite": true,
-    "rootDir": "..",
+    "rootDir": ".",
     "outDir": "dist",
     "baseUrl": ".",
     "paths": {
       "@express/*": ["./*"],
-      "@adapters/*": ["../adaptaters/*"],
-      "@application/*": ["../../application/*"],
-      "@domain/*": ["../../domain/*"]
+      "@application/*": ["../../../application/*"],
+      "@domain/*": ["../../../domain/*"]
     },
     "ignoreDeprecations": "5.0"
   },
-  "references": [{ "path": "../../domain" }, { "path": "../../application" }],
-  "include": [
-    "src/**/*.ts",
-    "controllers/**/*.ts",
-    "schemas/**/*.ts",
-    "types/**/*.ts",
-    "../adaptaters/**/*.ts"
-  ],
+  "references": [{ "path": "../../../domain" }, { "path": "../../../application" }],
+  "include": ["**/*.ts"],
   "exclude": ["dist", "node_modules"]
 }

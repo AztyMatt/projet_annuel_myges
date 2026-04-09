@@ -1,12 +1,11 @@
 import express from "express"
 import cors from "cors"
-import bodyParser from "body-parser"
 
 const app = express()
 
 app.use(cors())
+app.use(express.json())
 const router = express.Router()
-app.use(bodyParser.json())
 app.use("/api", router)
 
 router.get("/hello", (req, res) => {
