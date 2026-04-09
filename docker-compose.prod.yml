@@ -1,6 +1,18 @@
 x-postgres-password: &postgres-password ${POSTGRES_PASSWORD:?create a .env file from .env.example | cp .env.example .env}
 
 services:
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports:
+      - "${HTTP_PORT:-80}:80"
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./docker/nginx/proxy_headers.conf:/etc/nginx/proxy_headers.conf:ro
+    depends_on:
+      - frontend
+      - backend
+
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
@@ -10,8 +22,6 @@ services:
       POSTGRES_PASSWORD: *postgres-password
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "${POSTGRES_PORT:-5432}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mygesuser} -d ${POSTGRES_DB:-mygesdb}"]
       interval: 2s
@@ -22,13 +32,9 @@ services:
     build:
       context: .
       dockerfile: docker/backend/Dockerfile
-      target: dev
+      target: prod
+    image: myges/backend:${APP_VERSION:-latest}
     restart: unless-stopped
-    volumes:
-      - .:/app
-      - node_modules_backend:/app/node_modules
-    ports:
-      - "${BACKEND_PORT:-3001}:3001"
     environment:
       PORT: 3001
       DB_HOST: postgres
@@ -44,21 +50,13 @@ services:
     build:
       context: .
       dockerfile: docker/frontend/Dockerfile
-      target: dev
+      target: prod
+    image: myges/frontend:${APP_VERSION:-latest}
     restart: unless-stopped
-    volumes:
-      - .:/app
-      - node_modules_frontend:/app/node_modules
-      - next_build:/app/infrastructure/frontend/next/.next
-    ports:
-      - "${FRONTEND_PORT:-3000}:3000"
     environment:
-      NEXT_PUBLIC_API_URL: http://localhost:${BACKEND_PORT:-3001}
+      NEXT_PUBLIC_API_URL: http://nginx:${HTTP_PORT:-80}
     depends_on:
       - backend
 
 volumes:
   postgres_data:
-  node_modules_backend:
-  node_modules_frontend:
-  next_build:
