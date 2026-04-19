@@ -5,8 +5,9 @@
 - **Frontend** — Next.js
 - **Backend** — Express.js
 - **Database** — PostgreSQL
-- **Reverse proxy** — Nginx
-- **Containerization** — Docker Compose
+- **Reverse proxy** — Nginx (dev) / Traefik (prod)
+- **Containerization** — Docker Compose (dev) / Kubernetes (prod)
+- **Secrets management** — [Infisical](https://app.infisical.com/organizations/34e46529-d43b-46e2-a72f-8f0f798856a8/projects/secret-management/eaa2be30-8c84-4edb-a020-179d170cc682/overview)
 
 ## Project structure
 
@@ -20,18 +21,72 @@
 │   ├── backend/Dockerfile          # Multi-stage build (dev / builder / prod)
 │   ├── frontend/Dockerfile         # Multi-stage build (dev / builder / prod)
 │   └── nginx/nginx.conf            # Reverse proxy config
-├── docker-compose.yml              # Development environment
-└── docker-compose.prod.yml         # Production environment
+├── k8s/
+│   ├── namespaces.yml              # Namespaces: frontend, backend, postgres
+│   ├── backend/
+│   │   ├── deployment.yml          # Deployment (2 replicas) + Service
+│   │   ├── infisical-secret.yml    # InfisicalSecret CRD → backend-generated-secrets
+│   │   └── ingressRoute.yml        # Traefik IngressRoute (api.myges.local)
+│   ├── frontend/
+│   │   ├── deployment.yml          # Deployment (3 replicas) + Service
+│   │   ├── infisical-secret.yml    # InfisicalSecret CRD → frontend-generated-secrets
+│   │   └── ingressRoute.yml        # Traefik IngressRoute (myges.local)
+│   └── postgres/
+│       ├── deployment.yml          # Deployment (1 replica) + Service
+│       ├── infisical-secret.yml    # InfisicalSecret CRD → postgres-generated-secrets
+│       └── pvc.yml                 # PersistentVolumeClaim (5Gi, local-path)
+├── scripts/
+│   └── export-dev-env.sh           # Pull dev secrets from Infisical into .env
+├── .infisical.json                 # Infisical project config
+└── docker-compose.yml              # Development environment
 ```
 
-## Getting started
-
-### Prerequisites
+## Prerequisites
 
 - Node.js 20+
 - Docker & Docker Compose v2
+- [Infisical CLI](https://infisical.com/docs/cli/overview) (`brew install infisical/get-cli/infisical`)
 
-### Without Docker (local dev)
+## Infisical
+
+All secrets (dev and prod) are managed through Infisical — there is no `.env.example` to copy manually.
+
+### How it works
+
+- **Dev** — the CLI is used to manually pull secrets into a local `.env` file (gitignored) when needed
+- **Prod** — the [Infisical Kubernetes operator](https://infisical.com/docs/integrations/platforms/kubernetes) syncs secrets directly into Kubernetes `Secret` objects at runtime
+
+Secrets are organized by path in the `dev` / `prod` environments:
+
+| Infisical path | Used by          |
+|----------------|------------------|
+| `/`            | General / shared |
+| `/frontend`    | Frontend         |
+| `/backend`     | Backend          |
+| `/postgres`    | PostgreSQL       |
+
+### Setup
+
+```bash
+# 1. Install the CLI
+brew install infisical/get-cli/infisical
+
+# 2. Log in
+infisical login
+```
+
+## Running the project
+
+### Generate the .env
+
+```bash
+# Pull dev secrets into .env (re-run whenever secrets change)
+bash scripts/export-dev-env.sh
+```
+
+> `.env` is gitignored — never commit it.
+
+### Without Docker
 
 ```bash
 # Install dependencies
@@ -47,9 +102,6 @@ npm run dev:next
 ### With Docker (recommended)
 
 ```bash
-# Copy and fill in environment variables
-cp .env.example .env
-
 # Start dev environment (hot-reload)
 docker compose up
 
@@ -87,38 +139,34 @@ The volume persists across restarts (`docker compose down` / `up`), so the depen
 > **Why not 'docker compose up --build' ?**
 > Rebuilding the image does re-run `npm ci` in the Dockerfile, but the existing named volume mounts over the image's `node_modules` at startup, so the rebuild has no effect as long as the volume exists.
 
-## Production
+## Production (Kubernetes)
 
-```bash
-# Build and start production containers
-APP_VERSION=1.0.0 docker compose -f docker-compose.prod.yml up -d
+Production runs on Kubernetes. Images are published to GHCR and secrets are injected at runtime by the Infisical operator.
 
-# Services available at:
-#   App (via nginx) → http://localhost:80
-#     /api/*        → proxied to backend
-#     /*            → proxied to frontend
+### Architecture
+
 ```
+Traefik ingress
+├── myges.local      → frontend (namespace: frontend, 3 replicas)
+└── api.myges.local  → backend  (namespace: backend,  2 replicas)
+                           ↓
+                        postgres (namespace: postgres, 1 replica + 5Gi PVC)
+```
+
+### Secrets injection
+
+The CI/CD creates a Kubernetes `Secret` `<service>-infisical-auth` from GitHub Actions secrets, containing the service token for each service. The Infisical operator uses that token (declared in `k8s/<service>/infisical-secret.yml`) to fetch the service's secrets from Infisical and syncs them into `<service>-generated-secrets` (e.g. `DATABASE_URL`, `JWT_SECRET`), which pods consume via `envFrom`.
 
 ### Image versioning
 
-Production images are tagged using the `APP_VERSION` variable:
+| Image | Registry |
+|-------|----------|
+| Backend  | `ghcr.io/aztymatt/myges-backend:<tag>`  |
+| Frontend | `ghcr.io/aztymatt/myges-frontend:<tag>` |
+
+If a deployment introduces a regression or a critical bug, revert the offending commit — the CI/CD pipeline will rebuild and redeploy the previous image automatically:
 
 ```bash
-APP_VERSION=1.2.0 docker compose -f docker-compose.prod.yml up -d  # deploy
-APP_VERSION=1.1.0 docker compose -f docker-compose.prod.yml up -d  # rollback
+git revert <commit>
+git push
 ```
-
-## Environment variables
-
-Copy `.env.example` to `.env` and adjust values:
-
-| Variable          | Default      | Description                                 |
-|-------------------|--------------|---------------------------------------------|
-| `APP_VERSION`     | `latest`     | Docker image tag used in prod               |
-| `POSTGRES_DB`     | `mygesdb`    | PostgreSQL database name                    |
-| `POSTGRES_USER`   | `mygesuser`  | PostgreSQL user                             |
-| `POSTGRES_PASSWORD` | —          | PostgreSQL password (required)              |
-| `POSTGRES_PORT`   | `5432`       | PostgreSQL port                             |
-| `HTTP_PORT`       | `80`         | Port exposed by nginx (prod only)           |
-| `BACKEND_PORT`    | `3001`       | Backend port (dev only)                     |
-| `FRONTEND_PORT`   | `3000`       | Frontend port (dev only)                    |
