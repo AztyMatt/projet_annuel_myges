@@ -55,8 +55,8 @@ const statusConfig = {
   valid: { label: "Valide", icon: CheckCircle, className: "text-green-600", bg: "bg-green-50" },
   expiring: { label: "Expire bientôt", icon: AlertCircle, className: "text-orange-600", bg: "bg-orange-50" },
   missing: { label: "Manquant", icon: AlertCircle, className: "text-red-600", bg: "bg-red-50" },
-  validated: { label: "Validé", icon: CheckCircle, className: "text-green-600" },
-  pending: { label: "En attente", icon: Clock, className: "text-orange-600" },
+  validated: { label: "Validé", icon: CheckCircle, className: "text-green-600", bg: "bg-green-50" },
+  pending: { label: "En attente", icon: Clock, className: "text-orange-600", bg: "bg-orange-50" },
 };
 
 export default function DocumentsEtudiant() {
