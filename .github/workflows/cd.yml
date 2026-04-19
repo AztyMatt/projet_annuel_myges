@@ -23,8 +23,8 @@ jobs:
 
       - name: Update frontend & backend image tags in k8s manifests
         run: |
-          sed -i "s|image: ghcr.io/aztymatt/myges-backend:.*|image: ghcr.io/aztymatt/myges-backend:${{ github.event.workflow_run.head_sha }}|" k8s/backend/deployment.yaml
-          sed -i "s|image: ghcr.io/aztymatt/myges-frontend:.*|image: ghcr.io/aztymatt/myges-frontend:${{ github.event.workflow_run.head_sha }}|" k8s/frontend/deployment.yaml
+          sed -i "s|image: ghcr.io/aztymatt/myges-backend:.*|image: ghcr.io/aztymatt/myges-backend:${{ github.event.workflow_run.head_sha }}|" k8s/backend/deployment.yml
+          sed -i "s|image: ghcr.io/aztymatt/myges-frontend:.*|image: ghcr.io/aztymatt/myges-frontend:${{ github.event.workflow_run.head_sha }}|" k8s/frontend/deployment.yml
 
       - name: Setup kubectl
         uses: azure/setup-kubectl@v3
@@ -35,7 +35,7 @@ jobs:
           echo "${{ secrets.KUBECONFIG }}" > ~/.kube/config
 
       - name: Create namespaces
-        run: kubectl apply -f k8s/namespaces.yaml
+        run: kubectl apply -f k8s/namespaces.yml
 
       - name: Create ghcr-secret
         run: |
