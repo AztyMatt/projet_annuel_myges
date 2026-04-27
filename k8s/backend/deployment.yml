@@ -28,16 +28,22 @@ spec:
             limits:
               cpu: "300m"
               memory: "256Mi"
+          startupProbe:
+            tcpSocket:
+              port: 3001
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 12
           readinessProbe:
             tcpSocket:
               port: 3001
-            initialDelaySeconds: 5
             periodSeconds: 5
+            failureThreshold: 3
           livenessProbe:
             tcpSocket:
               port: 3001
-            initialDelaySeconds: 15
             periodSeconds: 10
+            failureThreshold: 3
 ---
 apiVersion: v1
 kind: Service
