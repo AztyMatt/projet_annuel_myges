@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Prevents Git Bash on Windows from converting Unix paths to Windows absolute paths
+export MSYS_NO_PATHCONV=1
+
 # Reset du fichier .env
 > .env
 
