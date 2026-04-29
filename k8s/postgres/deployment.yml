@@ -5,6 +5,8 @@ metadata:
   namespace: postgres
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: postgres
@@ -36,7 +38,9 @@ spec:
                 - -c
                 - pg_isready -U $POSTGRES_USER -d $POSTGRES_DB
             initialDelaySeconds: 5
-            periodSeconds: 3
+            periodSeconds: 10
+            failureThreshold: 3
+            timeoutSeconds: 2
           livenessProbe:
             exec:
               command:
@@ -45,6 +49,8 @@ spec:
                 - pg_isready -U $POSTGRES_USER -d $POSTGRES_DB
             initialDelaySeconds: 30
             periodSeconds: 10
+            failureThreshold: 3
+            timeoutSeconds: 2
       volumes:
         - name: data
           persistentVolumeClaim:
