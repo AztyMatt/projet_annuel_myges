@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, type ChangeEvent, type FormEvent } from "react";
+import { Suspense, useState, type ChangeEvent, type FormEvent } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 
-export default function ResetPasswordPage() {
+function ResetPasswordForm() {
   const searchParams = useSearchParams();
   const [email, setEmail] = useState(searchParams.get("email") ?? "");
   const [oldPassword, setOldPassword] = useState("");
@@ -106,5 +106,13 @@ export default function ResetPasswordPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+export default function ResetPasswordPage() {
+  return (
+    <Suspense>
+      <ResetPasswordForm />
+    </Suspense>
   );
 }
