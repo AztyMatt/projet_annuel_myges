@@ -24,15 +24,18 @@
 ├── k8s/
 │   ├── namespaces.yml              # Namespaces: frontend, backend, postgres
 │   ├── backend/
-│   │   ├── deployment.yml          # Deployment (2 replicas) + Service
+│   │   ├── deployment.yml          # Deployment (2 replicas)
+│   │   ├── service.yml             # Service (port 3001)
 │   │   ├── infisical-secret.yml    # InfisicalSecret CRD → backend-generated-secrets
 │   │   └── ingressRoute.yml        # Traefik IngressRoute (api.myges.local)
 │   ├── frontend/
-│   │   ├── deployment.yml          # Deployment (3 replicas) + Service
+│   │   ├── deployment.yml          # Deployment (3 replicas)
+│   │   ├── service.yml             # Service (port 3000)
 │   │   ├── infisical-secret.yml    # InfisicalSecret CRD → frontend-generated-secrets
 │   │   └── ingressRoute.yml        # Traefik IngressRoute (myges.local)
 │   └── postgres/
-│       ├── deployment.yml          # Deployment (1 replica) + Service
+│       ├── deployment.yml          # Deployment (1 replica)
+│       ├── service.yml             # Service (port 5432)
 │       ├── infisical-secret.yml    # InfisicalSecret CRD → postgres-generated-secrets
 │       └── pvc.yml                 # PersistentVolumeClaim (5Gi, local-path)
 ├── scripts/
@@ -153,9 +156,34 @@ Traefik ingress
                         postgres (namespace: postgres, 1 replica + 5Gi PVC)
 ```
 
-### Secrets injection
+### CI/CD pipeline
 
-The CI/CD creates a Kubernetes `Secret` `<service>-infisical-auth` from GitHub Actions secrets, containing the service token for each service. The Infisical operator uses that token (declared in `k8s/<service>/infisical-secret.yml`) to fetch the service's secrets from Infisical and syncs them into `<service>-generated-secrets` (e.g. `DATABASE_URL`, `JWT_SECRET`), which pods consume via `envFrom`.
+```
+push to main
+     │
+     ▼
+CI (ubuntu-latest)
+  matrix: [backend, frontend]   ← both jobs run in parallel
+  → docker build (with GHA layer cache)
+  → push to ghcr.io/<service>:<commit-sha>
+     │
+     ▼  (workflow_run: completed)
+CD (self-hosted runner)
+  → kubectl apply -R -f k8s/
+  → rollout status backend & frontend in parallel (timeout: 60s)
+  → on failure: kubectl rollout undo (automatic rollback to previous revision)
+```
+
+### Build platform
+
+By default, Docker images are built for `linux/amd64`.
+Set the `BUILD_PLATFORM` repository variable (**Settings → Variables → Actions**) to `linux/arm64` when deploying to an ARM-based environment such as Apple Silicon or AWS Graviton.
+
+### Docker layer cache
+
+GHA layer cache (`cache-from/cache-to: type=gha`) persists Docker build layers between CI runs so unchanged layers are reused instead of rebuilt. To make it effective on this project:
+- Each Dockerfile copies `package*.json` before the rest of the source so the `npm ci` layer is only invalidated when dependencies actually change, not on every source edit.
+- `mode=max` is set in the CI so GHA also caches the `builder` stage layers, without it, only the final `prod` stage is cached and the `builder` stage (where `npm ci` runs) is discarded after every build.
 
 ### Image versioning
 
@@ -164,9 +192,47 @@ The CI/CD creates a Kubernetes `Secret` `<service>-infisical-auth` from GitHub A
 | Backend  | `ghcr.io/aztymatt/myges-backend:<tag>`  |
 | Frontend | `ghcr.io/aztymatt/myges-frontend:<tag>` |
 
-If a deployment introduces a regression or a critical bug, revert the offending commit — the CI/CD pipeline will rebuild and redeploy the previous image automatically:
+If a deployment introduces a regression or a critical bug, **revert the offending commit**.
+The CI/CD pipeline will rebuild and redeploy the previous image automatically:
 
 ```bash
 git revert <commit>
 git push
 ```
+
+### Secrets injection
+
+The CD pipeline creates a Kubernetes `Secret` `<service>-infisical-auth` from GitHub Actions secrets, containing the service token for each service. The Infisical operator uses that token (declared in `k8s/<service>/infisical-secret.yml`) to fetch the service's secrets from Infisical and syncs them into `<service>-generated-secrets` (e.g. `DATABASE_URL`, `JWT_SECRET`), which pods consume via `envFrom`.
+
+### Deployment strategies
+
+**Backend & frontend — RollingUpdate:**
+
+```yaml
+strategy:
+  rollingUpdate:
+    maxSurge: 2
+    maxUnavailable: 1
+```
+
+A rolling update replaces pods gradually.
+By default K8s replaces them one at a time, `maxSurge: 2` makes it create 2 new pods simultaneously instead of 1, cutting rollout time roughly in half while keeping at least 1 pod serving traffic throughout (`maxUnavailable: 1`).
+
+**Postgres — Recreate:**
+
+```yaml
+strategy:
+  type: Recreate
+```
+
+Postgres cannot have two instances writing to the same PVC at the same time. `Recreate` kills the old pod first, then creates the new one, it avoids volume corruption at the cost of ~5-10s of DB downtime per deploy.
+
+### Health probes
+
+**readinessProbe** — gates traffic. K8s waits for this to pass before routing requests to a new pod and before taking down the old one during a rolling update. Failure removes the pod from rotation but does **not** restart it.
+
+**livenessProbe** — detects zombie state (process alive but app deadlocked / event loop blocked / DB pool exhausted). Failure **restarts** the container. `initialDelaySeconds` is set higher than readiness to avoid restart loops during startup.
+
+### Automatic rollback
+
+The CD waits for the rollout to complete (`kubectl rollout status --timeout=60s`). If it times out (meaning new pods never passed readiness), the pipeline fails and automatically runs `kubectl rollout undo`, which reactivates the previous ReplicaSet without any rebuild.
