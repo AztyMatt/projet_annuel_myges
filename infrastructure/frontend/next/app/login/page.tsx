@@ -1,72 +1,149 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { cn } from "@/lib/utils";
-import { GraduationCap, Briefcase, Building2, Shield, Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
 
-const roles = [
-  {
-    id: "etudiant",
-    label: "Étudiant",
-    description: "Formation initiale ou alternance",
-    icon: GraduationCap,
-    color: "bg-blue-500",
-    border: "border-blue-500",
-    bg: "bg-blue-50",
-    href: "/etudiant",
-    email: "etudiant@myges.fr",
-  },
-  {
-    id: "intervenant",
-    label: "Intervenant",
-    description: "Cours & supports pédagogiques",
-    icon: Briefcase,
-    color: "bg-emerald-500",
-    border: "border-emerald-500",
-    bg: "bg-emerald-50",
-    href: "/intervenant",
-    email: "intervenant@myges.fr",
-  },
-  {
-    id: "scolarite",
-    label: "Administration",
-    description: "Scolarité & pédagogie",
-    icon: Building2,
-    color: "bg-orange-500",
-    border: "border-orange-500",
-    bg: "bg-orange-50",
-    href: "/scolarite",
-    email: "admin@myges.fr",
-  },
-  {
-    id: "superadmin",
-    label: "Super Admin",
-    description: "Gestion système & sécurité",
-    icon: Shield,
-    color: "bg-red-500",
-    border: "border-red-500",
-    bg: "bg-red-50",
-    href: "/superadmin",
-    email: "superadmin@myges.fr",
-  },
-] as const;
+type SeedAccount = {
+  role: string;
+  email: string;
+  password: string;
+  twoFactorEnabled: boolean;
+  totpSecret: string | null;
+};
 
 export default function LoginPage() {
   const router = useRouter();
-  const [selectedRole, setSelectedRole] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [totpCode, setTotpCode] = useState("");
+  const [error, setError] = useState("");
+  const [totpRequired, setTotpRequired] = useState(false);
+  const [tempSessionUserId, setTempSessionUserId] = useState("");
+  const [seedAccounts, setSeedAccounts] = useState<SeedAccount[]>([]);
 
-  const selected = roles.find((r) => r.id === selectedRole);
+  const getApiBaseUrl = (): string => process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 
-  const handleLogin = () => {
-    if (!selected) return;
-    setLoading(true);
+  const roleToRoute: Record<string, string> = {
+    student: "/etudiant",
+    teacher: "/intervenant",
+    admin: "/scolarite",
+    super_admin: "/superadmin",
+  };
+
+  const roleToLegacyStorage: Record<string, string> = {
+    student: "etudiant",
+    teacher: "intervenant",
+    admin: "scolarite",
+    super_admin: "superadmin",
+  };
+
+  const completeLogin = (token: string, role: string) => {
+    const route = roleToRoute[role] ?? "/login";
     if (typeof window !== "undefined") {
-      localStorage.setItem("myges_role", selected.id);
+      localStorage.setItem("myges_token", token);
+      localStorage.setItem("myges_role", roleToLegacyStorage[role] ?? "etudiant");
     }
-    setTimeout(() => router.push(selected.href), 700);
+    router.push(route);
+  };
+
+  useEffect(() => {
+    const loadSeedAccounts = async () => {
+      try {
+        const response = await fetch(`${getApiBaseUrl()}/api/auth/dev-seed-accounts`);
+        if (!response.ok) return;
+        const payload = (await response.json()) as { accounts?: SeedAccount[] };
+        if (Array.isArray(payload.accounts)) {
+          setSeedAccounts(payload.accounts);
+        }
+      } catch {
+        // Ignore in production/non-seed contexts.
+      }
+    };
+    loadSeedAccounts();
+  }, []);
+
+  const handleLogin = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const response = await fetch(`${getApiBaseUrl()}/api/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      const payload = (await response.json()) as {
+        error?: string;
+        twoFactorRequired?: boolean;
+        tempSessionUserId?: string;
+        token?: string;
+        user?: { role?: string };
+        passwordResetRequired?: boolean;
+      };
+
+      if (!response.ok) {
+        if (payload.passwordResetRequired) {
+          router.push(`/reset-password?email=${encodeURIComponent(email)}`);
+          return;
+        }
+        setError(payload.error ?? "Connexion impossible.");
+        return;
+      }
+
+      if (payload.twoFactorRequired && payload.tempSessionUserId) {
+        setTotpRequired(true);
+        setTempSessionUserId(payload.tempSessionUserId);
+        return;
+      }
+
+      if (payload.token && payload.user?.role) {
+        completeLogin(payload.token, payload.user.role);
+        return;
+      }
+
+      setError("Réponse serveur invalide.");
+    } catch {
+      setError("Serveur indisponible. Vérifie que le backend tourne sur le port 3001.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handle2FALogin = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const response = await fetch(`${getApiBaseUrl()}/api/auth/login/2fa`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tempSessionUserId, code: totpCode }),
+      });
+      const payload = (await response.json()) as {
+        error?: string;
+        token?: string;
+        user?: { role?: string };
+      };
+
+      if (!response.ok) {
+        setError(payload.error ?? "Code TOTP invalide.");
+        return;
+      }
+
+      if (payload.token && payload.user?.role) {
+        completeLogin(payload.token, payload.user.role);
+        return;
+      }
+
+      setError("Réponse serveur invalide.");
+    } catch {
+      setError("Erreur lors de la validation du code 2FA.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -90,54 +167,8 @@ export default function LoginPage() {
         <div className="bg-white rounded-2xl shadow-2xl p-8">
           <h2 className="text-xl font-bold text-gray-900">Connexion</h2>
           <p className="text-gray-500 text-sm mt-1 mb-6">
-            Sélectionnez votre profil pour accéder à la plateforme
+            Saisissez vos identifiants pour accéder à la plateforme
           </p>
-
-          {/* Role grid */}
-          <div className="grid grid-cols-2 gap-2.5 mb-5">
-            {roles.map((role) => {
-              const Icon = role.icon;
-              const isSelected = selectedRole === role.id;
-              return (
-                <button
-                  key={role.id}
-                  onClick={() => setSelectedRole(role.id)}
-                  className={cn(
-                    "flex flex-col items-center gap-2.5 p-4 rounded-xl border-2 transition-all text-center cursor-pointer",
-                    isSelected
-                      ? cn(role.border, role.bg)
-                      : "border-gray-100 hover:border-gray-200 hover:bg-gray-50"
-                  )}
-                >
-                  <div
-                    className={cn(
-                      "w-10 h-10 rounded-full flex items-center justify-center text-white",
-                      role.color
-                    )}
-                  >
-                    <Icon size={18} />
-                  </div>
-                  <div>
-                    <div className="font-semibold text-sm text-gray-900 leading-none">
-                      {role.label}
-                    </div>
-                    <div className="text-xs text-gray-500 mt-0.5 leading-tight">
-                      {role.description}
-                    </div>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Demo hint */}
-          {selected && (
-            <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 mb-4 text-sm">
-              <p className="font-semibold text-blue-900 text-xs mb-1">Identifiants de démonstration</p>
-              <p className="text-blue-700 text-xs font-mono">{selected.email}</p>
-              <p className="text-blue-700 text-xs font-mono">demo1234</p>
-            </div>
-          )}
 
           {/* Form */}
           <div className="space-y-3 mb-5">
@@ -146,8 +177,8 @@ export default function LoginPage() {
               <input
                 type="email"
                 placeholder="votre@email.fr"
-                defaultValue={selected?.email ?? ""}
-                key={selectedRole}
+                value={email}
+                onChange={(e: ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
                 className="w-full px-3 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
               />
             </div>
@@ -156,8 +187,9 @@ export default function LoginPage() {
               <div className="relative">
                 <input
                   type={showPassword ? "text" : "password"}
-                  placeholder="••••••••"
-                  defaultValue="demo1234"
+                  placeholder="Votre mot de passe"
+                  value={password}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
                   className="w-full px-3 py-2.5 pr-10 text-sm bg-gray-50 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
                 />
                 <button
@@ -169,20 +201,74 @@ export default function LoginPage() {
                 </button>
               </div>
             </div>
+            {totpRequired && (
+              <div>
+                <label className="text-xs font-medium text-gray-700 block mb-1">
+                  Code de vérification (2FA)
+                </label>
+                <input
+                  type="text"
+                  placeholder="123456"
+                  value={totpCode}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                    setTotpCode(e.target.value.replace(/\D/g, "").slice(0, 6))
+                  }
+                  className="w-full px-3 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+                />
+              </div>
+            )}
           </div>
 
+          {error && (
+            <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+              {error}
+            </div>
+          )}
+
           <button
-            onClick={handleLogin}
-            disabled={!selectedRole || loading}
+            onClick={totpRequired ? handle2FALogin : handleLogin}
+            disabled={!email || !password || loading || (totpRequired && totpCode.length !== 6)}
             className={cn(
               "w-full py-2.5 rounded-xl font-semibold text-sm text-white transition-all",
-              selectedRole && !loading
+              !loading && email && password && (!totpRequired || totpCode.length === 6)
                 ? "bg-[#001944] hover:bg-[#002C6E] cursor-pointer shadow-sm"
                 : "bg-gray-300 cursor-not-allowed"
             )}
           >
-            {loading ? "Connexion en cours…" : "Se connecter"}
+            {loading ? "Connexion en cours…" : totpRequired ? "Valider le code 2FA" : "Se connecter"}
           </button>
+
+          {!totpRequired && (
+            <div className="mt-4 flex items-center justify-start text-xs">
+              <Link href="/signup" className="text-blue-700 hover:text-blue-900 font-medium">
+                Créer un compte
+              </Link>
+            </div>
+          )}
+
+          {seedAccounts.length > 0 && (
+            <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 space-y-2">
+              <p className="font-semibold">Comptes de test (dev)</p>
+              {seedAccounts.map((account) => (
+                <div key={account.email} className="rounded-md bg-white/70 p-2">
+                  <p>
+                    <span className="font-semibold">Rôle:</span> {account.role}
+                  </p>
+                  <p>
+                    <span className="font-semibold">Email:</span> {account.email}
+                  </p>
+                  <p>
+                    <span className="font-semibold">Mot de passe:</span> {account.password}
+                  </p>
+                  {account.twoFactorEnabled && account.totpSecret && (
+                    <p>
+                      <span className="font-semibold">Secret 2FA:</span> {account.totpSecret}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <p className="text-center text-white/30 text-xs mt-6">

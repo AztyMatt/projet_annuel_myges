@@ -31,6 +31,8 @@ services:
       - "${BACKEND_PORT:-3001}:3001"
     environment:
       PORT: 3001
+      SEED_ON_START: "true"
+      SEED_PASSWORD: ${SEED_PASSWORD:-Str0ng!Password#2026}
       DB_HOST: postgres
       DB_PORT: ${POSTGRES_PORT:-5432}
       POSTGRES_DB: ${POSTGRES_DB:-mygesdb}

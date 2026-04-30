@@ -1,18 +1,16 @@
-import express from "express"
-import cors from "cors"
-
-const app = express()
-
-app.use(cors())
-app.use(express.json())
-const router = express.Router()
-app.use("/api", router)
-
-router.get("/hello", (req, res) => {
-  res.json({ message: "Hello from Express!" })
-})
+import { app } from "./src/app"
+import { SEED_ON_START, seedUsers } from "./src/auth/service"
 
 const PORT = process.env.PORT || 3001
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`)
-})
+seedUsers()
+  .catch((error) => {
+    console.error("[seed] Erreur pendant l'initialisation des comptes de test:", error)
+  })
+  .finally(() => {
+    app.listen(PORT, () => {
+      console.log(`Server is running on port ${PORT}`)
+      if (SEED_ON_START) {
+        console.log("[seed] Comptes de test activés (SEED_ON_START=true).")
+      }
+    })
+  })
