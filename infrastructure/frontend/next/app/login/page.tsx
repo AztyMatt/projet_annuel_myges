@@ -26,8 +26,6 @@ export default function LoginPage() {
   const [tempSessionUserId, setTempSessionUserId] = useState("");
   const [seedAccounts, setSeedAccounts] = useState<SeedAccount[]>([]);
 
-  const getApiBaseUrl = (): string => process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
-
   const roleToRoute: Record<string, string> = {
     student: "/etudiant",
     teacher: "/intervenant",
@@ -54,7 +52,7 @@ export default function LoginPage() {
   useEffect(() => {
     const loadSeedAccounts = async () => {
       try {
-        const response = await fetch(`${getApiBaseUrl()}/api/auth/dev-seed-accounts`);
+        const response = await fetch("/api/auth/dev-seed-accounts");
         if (!response.ok) return;
         const payload = (await response.json()) as { accounts?: SeedAccount[] };
         if (Array.isArray(payload.accounts)) {
@@ -71,7 +69,7 @@ export default function LoginPage() {
     setLoading(true);
     setError("");
     try {
-      const response = await fetch(`${getApiBaseUrl()}/api/auth/login`, {
+      const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
@@ -117,7 +115,7 @@ export default function LoginPage() {
     setLoading(true);
     setError("");
     try {
-      const response = await fetch(`${getApiBaseUrl()}/api/auth/login/2fa`, {
+      const response = await fetch("/api/auth/login/2fa", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tempSessionUserId, code: totpCode }),

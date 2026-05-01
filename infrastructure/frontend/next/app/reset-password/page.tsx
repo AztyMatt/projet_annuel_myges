@@ -13,8 +13,6 @@ function ResetPasswordForm() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  const getApiBaseUrl = (): string => process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
-
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setLoading(true);
@@ -22,7 +20,7 @@ function ResetPasswordForm() {
     setSuccess("");
 
     try {
-      const response = await fetch(`${getApiBaseUrl()}/api/auth/password/reset-with-credentials`, {
+      const response = await fetch("/api/auth/password/reset-with-credentials", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, oldPassword, newPassword }),

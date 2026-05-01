@@ -16,8 +16,6 @@ export default function SignupPage() {
   const [success, setSuccess] = useState("");
   const [totpSecret, setTotpSecret] = useState<string | null>(null);
 
-  const getApiBaseUrl = (): string => process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
-
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setLoading(true);
@@ -26,7 +24,7 @@ export default function SignupPage() {
     setTotpSecret(null);
 
     try {
-      const response = await fetch(`${getApiBaseUrl()}/api/auth/signup`, {
+      const response = await fetch("/api/auth/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password, role, enable2FA, gdprConsent }),
