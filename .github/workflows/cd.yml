@@ -72,8 +72,8 @@ jobs:
 
       - name: Wait for rollout
         run: |
-          kubectl rollout status deployment/backend -n backend --timeout=60s &
-          kubectl rollout status deployment/frontend -n frontend --timeout=60s &
+          kubectl rollout status deployment/backend -n backend --timeout=120s &
+          kubectl rollout status deployment/frontend -n frontend --timeout=120s &
           wait
 
       - name: Rollback on failure
