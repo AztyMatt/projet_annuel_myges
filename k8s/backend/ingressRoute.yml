@@ -1,14 +1,33 @@
 apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
 metadata:
-  name: backend
+  name: backend-https
+  namespace: backend
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`__BACKEND_HOST__`)
+      kind: Rule
+      services:
+        - name: backend
+          port: 3001
+  tls:
+    secretName: myges-tls
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: backend-http
   namespace: backend
 spec:
   entryPoints:
     - web
   routes:
-    - match: Host(`api.myges.local`)
+    - match: Host(`__BACKEND_HOST__`)
       kind: Rule
+      middlewares:
+        - name: redirect-backend-https
       services:
         - name: backend
           port: 3001

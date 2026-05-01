@@ -21,7 +21,7 @@ spec:
         - name: ghcr-secret
       containers:
         - name: backend
-          image: ghcr.io/aztymatt/myges-backend:__TAG__
+          image: __BACKEND_IMAGE__
           envFrom:
             - secretRef:
                 name: backend-generated-secrets

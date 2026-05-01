@@ -21,7 +21,7 @@ spec:
         - name: ghcr-secret
       containers:
         - name: frontend
-          image: ghcr.io/aztymatt/myges-frontend:__TAG__
+          image: __FRONTEND_IMAGE__
           envFrom:
             - secretRef:
                 name: frontend-generated-secrets

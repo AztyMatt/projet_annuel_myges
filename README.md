@@ -27,12 +27,14 @@
 │   │   ├── deployment.yml          # Deployment (2 replicas)
 │   │   ├── service.yml             # Service (port 3001)
 │   │   ├── infisical-secret.yml    # InfisicalSecret CRD → backend-generated-secrets
-│   │   └── ingressRoute.yml        # Traefik IngressRoute (api.myges.local)
+│   │   ├── ingressRoute.yml        # Traefik IngressRoute backend HTTPS + HTTP(redirect to HTTPS)
+│   │   └── middleware.yml          # Traefik Middleware (redirectScheme https)
 │   ├── frontend/
 │   │   ├── deployment.yml          # Deployment (3 replicas)
 │   │   ├── service.yml             # Service (port 3000)
 │   │   ├── infisical-secret.yml    # InfisicalSecret CRD → frontend-generated-secrets
-│   │   └── ingressRoute.yml        # Traefik IngressRoute (myges.local)
+│   │   ├── ingressRoute.yml        # Traefik IngressRoute frontend HTTPS + HTTP(redirect to HTTPS)
+│   │   └── middleware.yml          # Traefik Middleware (redirectScheme https)
 │   └── postgres/
 │       ├── deployment.yml          # Deployment (1 replica)
 │       ├── service.yml             # Service (port 5432)
@@ -49,6 +51,15 @@
 - Node.js 20+
 - Docker & Docker Compose v2
 - [Infisical CLI](https://infisical.com/docs/cli/overview) (`brew install infisical/get-cli/infisical`)
+
+## Hostnames
+
+The application hostnames are not hardcoded, they are injected at deploy time by the CI/CD pipeline via two GitHub Actions Variables:
+
+| Variable | Role |
+|----------|------|
+| `FRONTEND_HOST` | Hostname for the frontend |
+| `BACKEND_HOST` | Hostname for the backend API |
 
 ## Infisical
 
@@ -150,8 +161,8 @@ Production runs on Kubernetes. Images are published to GHCR and secrets are inje
 
 ```
 Traefik ingress
-├── myges.local      → frontend (namespace: frontend, 3 replicas)
-└── api.myges.local  → backend  (namespace: backend,  2 replicas)
+├── $FRONTEND_HOST   → frontend (namespace: frontend, 3 replicas)
+└── $BACKEND_HOST    → backend  (namespace: backend,  2 replicas)
                            ↓
                         postgres (namespace: postgres, 1 replica + 5Gi PVC)
 ```
@@ -195,10 +206,20 @@ GHA layer cache (`cache-from/cache-to: type=gha`) persists Docker build layers b
 
 ### Image versioning
 
-| Image | Registry |
-|-------|----------|
-| Backend  | `ghcr.io/aztymatt/myges-backend:<tag>`  |
-| Frontend | `ghcr.io/aztymatt/myges-frontend:<tag>` |
+Image names are derived at runtime from the GitHub repository context (nothing is hardcoded):
+
+```
+ghcr.io/<repository_owner>/<repository_name>-<service>:<commit-sha>
+```
+
+| Variable | Source |
+|----------|--------|
+| `repository_owner` | `github.repository_owner` (lowercased) |
+| `repository_name` | `github.event.repository.name` (lowercased) |
+| `service` | `backend` or `frontend` (matrix) |
+| `commit-sha` | `github.sha` (CI) / `github.event.workflow_run.head_sha` (CD) |
+
+The k8s manifests use `__BACKEND_IMAGE__` and `__FRONTEND_IMAGE__` as placeholders, replaced by the CD pipeline before `kubectl apply`.
 
 If a deployment introduces a regression or a critical bug, **revert the offending commit**.
 The CI/CD pipeline will rebuild and redeploy the previous image automatically:

@@ -33,6 +33,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Set image name
+        run: |
+          OWNER="${{ github.repository_owner }}"
+          REPO="${{ github.event.repository.name }}"
+          echo "IMAGE_NAME=ghcr.io/${OWNER,,}/${REPO,,}-${{ matrix.service }}" >> $GITHUB_ENV
+
       - name: ${{ github.ref == 'refs/heads/main' && 'Build & push image' || 'Build image' }}
         uses: docker/build-push-action@v6
         with:
@@ -41,6 +47,6 @@ jobs:
           target: prod
           push: ${{ github.ref == 'refs/heads/main' }}
           platforms: linux/amd64
-          tags: ghcr.io/aztymatt/myges-${{ matrix.service }}:${{ github.sha }}
+          tags: ${{ env.IMAGE_NAME }}:${{ github.sha }}
           cache-from: type=gha,scope=${{ matrix.service }}
           cache-to: type=gha,mode=max,scope=${{ matrix.service }}
