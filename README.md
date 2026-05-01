@@ -206,10 +206,20 @@ GHA layer cache (`cache-from/cache-to: type=gha`) persists Docker build layers b
 
 ### Image versioning
 
-| Image | Registry |
-|-------|----------|
-| Backend  | `ghcr.io/aztymatt/myges-backend:<tag>`  |
-| Frontend | `ghcr.io/aztymatt/myges-frontend:<tag>` |
+Image names are derived at runtime from the GitHub repository context (nothing is hardcoded):
+
+```
+ghcr.io/<repository_owner>/<repository_name>-<service>:<commit-sha>
+```
+
+| Variable | Source |
+|----------|--------|
+| `repository_owner` | `github.repository_owner` (lowercased) |
+| `repository_name` | `github.event.repository.name` (lowercased) |
+| `service` | `backend` or `frontend` (matrix) |
+| `commit-sha` | `github.sha` (CI) / `github.event.workflow_run.head_sha` (CD) |
+
+The k8s manifests use `__BACKEND_IMAGE__` and `__FRONTEND_IMAGE__` as placeholders, replaced by the CD pipeline before `kubectl apply`.
 
 If a deployment introduces a regression or a critical bug, **revert the offending commit**.
 The CI/CD pipeline will rebuild and redeploy the previous image automatically:
