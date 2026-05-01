@@ -46,7 +46,7 @@ jobs:
           file: ./docker/${{ matrix.service }}/Dockerfile
           target: prod
           push: ${{ github.ref == 'refs/heads/main' }}
-          platforms: linux/amd64
+          platforms: linux/amd64,linux/arm64
           tags: ${{ env.IMAGE_NAME }}:${{ github.sha }}
           cache-from: type=gha,scope=${{ matrix.service }}
           cache-to: type=gha,mode=max,scope=${{ matrix.service }}
