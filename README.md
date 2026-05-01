@@ -27,12 +27,14 @@
 │   │   ├── deployment.yml          # Deployment (2 replicas)
 │   │   ├── service.yml             # Service (port 3001)
 │   │   ├── infisical-secret.yml    # InfisicalSecret CRD → backend-generated-secrets
-│   │   └── ingressRoute.yml        # Traefik IngressRoute (api.myges.local)
+│   │   ├── ingressRoute.yml        # Traefik IngressRoute backend HTTPS + HTTP(redirect to HTTPS)
+│   │   └── middleware.yml          # Traefik Middleware (redirectScheme https)
 │   ├── frontend/
 │   │   ├── deployment.yml          # Deployment (3 replicas)
 │   │   ├── service.yml             # Service (port 3000)
 │   │   ├── infisical-secret.yml    # InfisicalSecret CRD → frontend-generated-secrets
-│   │   └── ingressRoute.yml        # Traefik IngressRoute (myges.local)
+│   │   ├── ingressRoute.yml        # Traefik IngressRoute frontend HTTPS + HTTP(redirect to HTTPS)
+│   │   └── middleware.yml          # Traefik Middleware (redirectScheme https)
 │   └── postgres/
 │       ├── deployment.yml          # Deployment (1 replica)
 │       ├── service.yml             # Service (port 5432)
@@ -49,6 +51,15 @@
 - Node.js 20+
 - Docker & Docker Compose v2
 - [Infisical CLI](https://infisical.com/docs/cli/overview) (`brew install infisical/get-cli/infisical`)
+
+## Hostnames
+
+The application hostnames are not hardcoded, they are injected at deploy time by the CI/CD pipeline via two GitHub Actions Variables:
+
+| Variable | Role |
+|----------|------|
+| `FRONTEND_HOST` | Hostname for the frontend |
+| `BACKEND_HOST` | Hostname for the backend API |
 
 ## Infisical
 
@@ -150,8 +161,8 @@ Production runs on Kubernetes. Images are published to GHCR and secrets are inje
 
 ```
 Traefik ingress
-├── myges.local      → frontend (namespace: frontend, 3 replicas)
-└── api.myges.local  → backend  (namespace: backend,  2 replicas)
+├── $FRONTEND_HOST   → frontend (namespace: frontend, 3 replicas)
+└── $BACKEND_HOST    → backend  (namespace: backend,  2 replicas)
                            ↓
                         postgres (namespace: postgres, 1 replica + 5Gi PVC)
 ```

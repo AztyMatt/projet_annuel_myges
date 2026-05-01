@@ -37,3 +37,5 @@ package-lock.json
 
 k8s/**/*-infisical-auth.y*ml
 k8s/**/infisical-token-secret.y*ml
+
+*.pem

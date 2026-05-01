@@ -1,14 +1,33 @@
 apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
 metadata:
-  name: frontend
+  name: frontend-https
+  namespace: frontend
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`__FRONTEND_HOST__`)
+      kind: Rule
+      services:
+        - name: frontend
+          port: 3000
+  tls:
+    secretName: myges-tls
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: frontend-http
   namespace: frontend
 spec:
   entryPoints:
     - web
   routes:
-    - match: Host(`myges.local`)
+    - match: Host(`__FRONTEND_HOST__`)
       kind: Rule
+      middlewares:
+        - name: redirect-frontend-https
       services:
         - name: frontend
           port: 3000

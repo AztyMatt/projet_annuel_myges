@@ -26,6 +26,11 @@ jobs:
           sed -i "s|image: ghcr.io/aztymatt/myges-backend:.*|image: ghcr.io/aztymatt/myges-backend:${{ github.event.workflow_run.head_sha }}|" k8s/backend/deployment.yml
           sed -i "s|image: ghcr.io/aztymatt/myges-frontend:.*|image: ghcr.io/aztymatt/myges-frontend:${{ github.event.workflow_run.head_sha }}|" k8s/frontend/deployment.yml
 
+      - name: Set hostnames in IngressRoutes
+        run: |
+          sed -i "s|__FRONTEND_HOST__|${{ vars.FRONTEND_HOST }}|g" k8s/frontend/ingressRoute.yml
+          sed -i "s|__BACKEND_HOST__|${{ vars.BACKEND_HOST }}|g" k8s/backend/ingressRoute.yml
+
       - name: Configure kubeconfig
         run: |
           mkdir -p ~/.kube
