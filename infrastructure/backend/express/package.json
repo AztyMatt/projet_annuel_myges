@@ -4,11 +4,14 @@
   "scripts": {
     "dev": "tsx watch server.ts",
     "build": "tsc -b",
-    "start": "node dist/server.js"
+    "start": "node dist/server.js",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate"
   },
   "dependencies": {
     "argon2": "^0.44.0",
     "cors": "^2.8.6",
+    "drizzle-orm": "^0.45.2",
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.3",
     "otplib": "^13.4.0",
@@ -21,6 +24,7 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/pg": "^8.11.11",
     "@types/speakeasy": "^2.0.10",
+    "drizzle-kit": "^0.31.10",
     "typescript": "^5"
   }
 }

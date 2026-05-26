@@ -1,0 +1,57 @@
+import { boolean, integer, pgTable, real, text, timestamp } from "drizzle-orm/pg-core"
+import { student } from "./student"
+import { users } from "./auth"
+import { assessment } from "./assessment"
+import { sessionExam } from "./session"
+import { module } from "./module"
+
+export const manualNotation = pgTable("manual_notation", {
+  id: text("id").primaryKey(),
+  moduleId: text("module_id")
+    .notNull()
+    .references(() => module.id),
+  name: text("name").notNull(),
+})
+
+export const grade = pgTable("grade", {
+  id: text("id").primaryKey(),
+  studentId: text("student_id")
+    .notNull()
+    .references(() => student.id),
+  value: real("value").notNull(),
+  isLocked: boolean("is_locked").notNull().default(false),
+  enteredAt: timestamp("entered_at", { withTimezone: true }).notNull(),
+  enteredBy: text("entered_by")
+    .notNull()
+    .references(() => users.id),
+})
+
+export const gradeAssessment = pgTable("grade_assessment", {
+  id: text("id").primaryKey(),
+  gradeId: text("grade_id")
+    .notNull()
+    .references(() => grade.id),
+  assessmentId: text("assessment_id")
+    .notNull()
+    .references(() => assessment.id),
+})
+
+export const gradeManualNotation = pgTable("grade_manual_notation", {
+  id: text("id").primaryKey(),
+  gradeId: text("grade_id")
+    .notNull()
+    .references(() => grade.id),
+  gradeManualId: text("grade_manual_id")
+    .notNull()
+    .references(() => manualNotation.id),
+})
+
+export const gradeSessionExam = pgTable("grade_session_exam", {
+  id: text("id").primaryKey(),
+  gradeId: text("grade_id")
+    .notNull()
+    .references(() => grade.id),
+  sessionExamId: text("session_exam_id")
+    .notNull()
+    .references(() => sessionExam.id),
+})

@@ -6,14 +6,6 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { Eye, EyeOff } from "lucide-react";
 
-type SeedAccount = {
-  role: string;
-  email: string;
-  password: string;
-  twoFactorEnabled: boolean;
-  totpSecret: string | null;
-};
-
 export default function LoginPage() {
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
@@ -24,20 +16,19 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [totpRequired, setTotpRequired] = useState(false);
   const [tempSessionUserId, setTempSessionUserId] = useState("");
-  const [seedAccounts, setSeedAccounts] = useState<SeedAccount[]>([]);
 
   const roleToRoute: Record<string, string> = {
-    student: "/etudiant",
-    teacher: "/intervenant",
-    admin: "/scolarite",
-    super_admin: "/superadmin",
+    STUDENT: "/etudiant",
+    INSTRUCTOR: "/intervenant",
+    ADMIN: "/scolarite",
+    SUPER_ADMIN: "/superadmin",
   };
 
   const roleToLegacyStorage: Record<string, string> = {
-    student: "etudiant",
-    teacher: "intervenant",
-    admin: "scolarite",
-    super_admin: "superadmin",
+    STUDENT: "etudiant",
+    INSTRUCTOR: "intervenant",
+    ADMIN: "scolarite",
+    SUPER_ADMIN: "superadmin",
   };
 
   const completeLogin = (token: string, role: string) => {
@@ -48,22 +39,6 @@ export default function LoginPage() {
     }
     router.push(route);
   };
-
-  useEffect(() => {
-    const loadSeedAccounts = async () => {
-      try {
-        const response = await fetch("/api/auth/dev-seed-accounts");
-        if (!response.ok) return;
-        const payload = (await response.json()) as { accounts?: SeedAccount[] };
-        if (Array.isArray(payload.accounts)) {
-          setSeedAccounts(payload.accounts);
-        }
-      } catch {
-        // Ignore in production/non-seed contexts.
-      }
-    };
-    loadSeedAccounts();
-  }, []);
 
   const handleLogin = async () => {
     setLoading(true);
@@ -244,29 +219,6 @@ export default function LoginPage() {
             </div>
           )}
 
-          {seedAccounts.length > 0 && (
-            <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 space-y-2">
-              <p className="font-semibold">Comptes de test (dev)</p>
-              {seedAccounts.map((account) => (
-                <div key={account.email} className="rounded-md bg-white/70 p-2">
-                  <p>
-                    <span className="font-semibold">Rôle:</span> {account.role}
-                  </p>
-                  <p>
-                    <span className="font-semibold">Email:</span> {account.email}
-                  </p>
-                  <p>
-                    <span className="font-semibold">Mot de passe:</span> {account.password}
-                  </p>
-                  {account.twoFactorEnabled && account.totpSecret && (
-                    <p>
-                      <span className="font-semibold">Secret 2FA:</span> {account.totpSecret}
-                    </p>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
         </div>
 
         <p className="text-center text-white/30 text-xs mt-6">

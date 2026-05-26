@@ -8,6 +8,6 @@ app.use(cors())
 app.use(express.json())
 app.use("/api", authRouter)
 
-app.get("/api/hello", (_req, res) => {
-  res.json({ message: "Hello from Express!" })
+app.get("/api/hello", (_request, response) => {
+  response.json({ message: "Hello from Express!" })
 })

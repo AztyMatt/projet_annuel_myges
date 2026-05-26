@@ -9,7 +9,7 @@
       "@domain/*": ["./*"]
     },
     "declaration": true,
-    "ignoreDeprecations": "5.0"
+    "ignoreDeprecations": "6.0"
   },
   "include": ["**/*.ts"],
   "exclude": ["dist", "node_modules"]

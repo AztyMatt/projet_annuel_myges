@@ -1,4 +1,4 @@
-import { type User } from "./user"
+import { type User } from "./user.entity"
 
 export const PASSWORD_MAX_AGE_DAYS = 60
 export const MAX_FAILED_ATTEMPTS = 5

@@ -15,7 +15,9 @@
     "build:express": "npm run build --workspace=@myges/express",
     "start:express": "npm run start --workspace=@myges/express",
     "dev:next": "npm run dev --workspace=@myges/next",
-    "start:next": "npm run start --workspace=@myges/next"
+    "start:next": "npm run start --workspace=@myges/next",
+    "db:generate": "npm run db:generate --workspace=@myges/express",
+    "db:migrate": "npm run db:migrate --workspace=@myges/express"
   },
   "repository": {
     "type": "git",

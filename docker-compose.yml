@@ -32,9 +32,10 @@ services:
     environment:
       PORT: 3001
       SEED_ON_START: "true"
-      SEED_PASSWORD: ${SEED_PASSWORD:-Str0ng!Password#2026}
+      SEED_PASSWORD: ${SEED_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
       DB_HOST: postgres
-      DB_PORT: ${POSTGRES_PORT:-5432}
+      DB_PORT: ${DB_PORT:-5432}
       POSTGRES_DB: ${POSTGRES_DB:-mygesdb}
       POSTGRES_USER: ${POSTGRES_USER:-mygesuser}
       POSTGRES_PASSWORD: *postgres-password
