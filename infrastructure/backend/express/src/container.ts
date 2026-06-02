@@ -1,4 +1,5 @@
 import { userRepository } from "./postgres/auth/user.adapter"
+import { twoFactorSessionRepository } from "./postgres/auth/two-factor-session.adapter"
 import { adminRepository } from "./postgres/admin/admin.adapter"
 import { studentRepository } from "./postgres/student/student.adapter"
 import { instructorRepository } from "./postgres/instructor/instructor.adapter"
@@ -14,6 +15,7 @@ export const authUseCases = new AuthUseCases(
   instructorRepository,
   passwordHasher,
   tokenProvider,
-  totpProvider
+  totpProvider,
+  twoFactorSessionRepository
 )
 export { userRepository }

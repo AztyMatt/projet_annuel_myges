@@ -13,3 +13,12 @@ export const users = pgTable("users", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
   lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
 })
+
+export const twoFactorSessions = pgTable("two_factor_sessions", {
+  token: text("token").primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  attempts: integer("attempts").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+})

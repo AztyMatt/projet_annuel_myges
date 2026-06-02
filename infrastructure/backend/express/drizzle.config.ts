@@ -4,6 +4,10 @@ export default defineConfig({
   dialect: "postgresql",
   schema: "./src/postgres/schema/*.ts",
   out: "./drizzle",
+  migrations: {
+    table: "__drizzle_migrations",
+    schema: "drizzle",
+  },
   dbCredentials: {
     host: process.env.DB_HOST!,
     port: Number(process.env.DB_PORT),

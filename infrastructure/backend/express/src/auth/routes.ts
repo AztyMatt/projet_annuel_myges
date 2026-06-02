@@ -5,11 +5,10 @@ import {
   type SignupResult,
   type Verify2faResult,
 } from "../../../../../application/auth/use-cases"
-import { needsPasswordReset } from "../../../../../domain/auth/security-policy"
 import { Router } from "express"
-import { requireAuth, requireRole, type AuthRequest } from "./middleware"
+import { requireAuth, requireCronSecret, requireRole, type AuthRequest } from "./middleware"
 import { AdminRole } from "../../../../../domain/admin/admin.enums"
-import { authUseCases, userRepository } from "../container"
+import { authUseCases } from "../container"
 
 export const authRouter = Router()
 
@@ -24,7 +23,7 @@ type LoginResponseBody =
   | { error: string; lockedUntil?: string }
   | { error: string; passwordResetRequired: true }
   | { error: string; setup2FARequired: true }
-  | { twoFactorRequired: true; tempSessionUserId: string }
+  | { twoFactorRequired: true; tempSessionToken: string }
   | { token: string; user: AuthUserView }
 
 type Verify2faResponseBody = { error: string } | { token: string; user: AuthUserView }
@@ -76,7 +75,7 @@ const loginResponse = (result: LoginResult): { status: number; body: LoginRespon
     case "super_admin_2fa_required":
       return { status: 403, body: { error: "Super admin must enable TOTP 2FA.", setup2FARequired: result.setup2FARequired } }
     case "two_factor_required":
-      return { status: 200, body: { twoFactorRequired: true, tempSessionUserId: result.tempSessionUserId } }
+      return { status: 200, body: { twoFactorRequired: true, tempSessionToken: result.tempSessionToken } }
     case "authenticated":
       return { status: 200, body: { token: result.token, user: result.user } }
   }
@@ -85,7 +84,7 @@ const loginResponse = (result: LoginResult): { status: number; body: LoginRespon
 const verify2faResponse = (result: Verify2faResult): { status: number; body: Verify2faResponseBody } => {
   switch (result.kind) {
     case "missing_2fa_payload":
-      return { status: 400, body: { error: "tempSessionUserId and code are required" } }
+      return { status: 400, body: { error: "tempSessionToken and code are required" } }
     case "invalid_2fa_session":
       return { status: 401, body: { error: "Invalid 2FA session" } }
     case "invalid_totp_code":
@@ -139,14 +138,8 @@ authRouter.post("/auth/login/2fa", async (request, response) => {
 
 authRouter.post("/auth/password/reset", requireAuth, async (request: AuthRequest, response) => {
   if (!request.auth) return void response.status(401).json({ error: "Unauthorized" })
-  const user = await userRepository.findById(request.auth.userId)
-  if (!user) return void response.status(404).json({ error: "User not found" })
   const { oldPassword, newPassword } = request.body as { oldPassword?: string; newPassword?: string }
-  const result = await authUseCases.resetWithCredentials({
-    email: user.email,
-    oldPassword,
-    newPassword,
-  })
+  const result = await authUseCases.resetAuthenticatedPassword({ userId: request.auth.userId, oldPassword, newPassword })
   const httpResponse = resetPasswordResponse(result)
   response.status(httpResponse.status).json(httpResponse.body)
 })
@@ -163,36 +156,34 @@ authRouter.get("/users/me", requireAuth, async (request: AuthRequest, response) 
 })
 
 authRouter.get("/admin/security/users", requireAuth, requireRole(AdminRole.SUPER_ADMIN), async (_request: AuthRequest, response) => {
-  const users = (await userRepository.list()).map((user) => ({
-    id: user.id,
-    email: user.email,
-    failedAttempts: user.failedAttempts,
-    lockedUntil: user.lockedUntil?.toISOString() ?? null,
-    passwordExpired: needsPasswordReset(user.passwordUpdatedAt),
-    twoFactorEnabled: user.twoFactorEnabled,
-  }))
-  response.status(200).json({ users })
+  const result = await authUseCases.listUsersForAdmin()
+  response.status(200).json({
+    users: result.users.map((user) => ({ ...user, lockedUntil: user.lockedUntil?.toISOString() ?? null })),
+  })
 })
 
 authRouter.get("/gdpr/export", requireAuth, async (request: AuthRequest, response) => {
   if (!request.auth) return void response.status(401).json({ error: "Unauthorized" })
-  const user = await userRepository.findById(request.auth.userId)
-  if (!user) return void response.status(404).json({ error: "User not found" })
+  const result = await authUseCases.exportGdprData(request.auth.userId)
+  if (result.kind === "user_not_found") return void response.status(404).json({ error: "User not found" })
   response.status(200).json({
     data: {
-      id: user.id,
-      email: user.email,
-      gdprConsentAt: user.gdprConsentAt.toISOString(),
-      createdAt: user.createdAt.toISOString(),
-      lastLoginAt: user.lastLoginAt?.toISOString() ?? null,
+      ...result.data,
+      gdprConsentAt: result.data.gdprConsentAt.toISOString(),
+      createdAt: result.data.createdAt.toISOString(),
+      lastLoginAt: result.data.lastLoginAt?.toISOString() ?? null,
     },
   })
 })
 
-authRouter.delete("/gdpr/me", requireAuth, async (request: AuthRequest, response) => {
+authRouter.post("/admin/auth/cleanup-sessions", requireCronSecret, async (_request, response) => {
+  await authUseCases.cleanupExpiredSessions()
+  response.status(200).json({ message: "Expired 2FA sessions deleted" })
+})
+
+authRouter.delete("/users/me", requireAuth, async (request: AuthRequest, response) => {
   if (!request.auth) return void response.status(401).json({ error: "Unauthorized" })
-  const user = await userRepository.findById(request.auth.userId)
-  if (!user) return void response.status(404).json({ error: "User not found" })
-  await userRepository.deleteById(user.id)
+  const result = await authUseCases.deleteAccount(request.auth.userId)
+  if (result.kind === "user_not_found") return void response.status(404).json({ error: "User not found" })
   response.status(200).json({ message: "Account deleted and personal data erased" })
 })

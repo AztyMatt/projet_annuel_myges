@@ -15,7 +15,7 @@ export default function LoginPage() {
   const [totpCode, setTotpCode] = useState("");
   const [error, setError] = useState("");
   const [totpRequired, setTotpRequired] = useState(false);
-  const [tempSessionUserId, setTempSessionUserId] = useState("");
+  const [tempSessionToken, setTempSessionToken] = useState("");
 
   const roleToRoute: Record<string, string> = {
     STUDENT: "/etudiant",
@@ -52,7 +52,7 @@ export default function LoginPage() {
       const payload = (await response.json()) as {
         error?: string;
         twoFactorRequired?: boolean;
-        tempSessionUserId?: string;
+        tempSessionToken?: string;
         token?: string;
         user?: { role?: string };
         passwordResetRequired?: boolean;
@@ -67,9 +67,9 @@ export default function LoginPage() {
         return;
       }
 
-      if (payload.twoFactorRequired && payload.tempSessionUserId) {
+      if (payload.twoFactorRequired && payload.tempSessionToken) {
         setTotpRequired(true);
-        setTempSessionUserId(payload.tempSessionUserId);
+        setTempSessionToken(payload.tempSessionToken);
         return;
       }
 
@@ -93,7 +93,7 @@ export default function LoginPage() {
       const response = await fetch("/api/auth/login/2fa", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tempSessionUserId, code: totpCode }),
+        body: JSON.stringify({ tempSessionToken, code: totpCode }),
       });
       const payload = (await response.json()) as {
         error?: string;

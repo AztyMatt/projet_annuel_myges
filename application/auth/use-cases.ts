@@ -17,6 +17,10 @@ import { type PasswordHasher } from "./password-hasher.port"
 import { type TokenProvider } from "./token-provider.port"
 import { type TotpProvider } from "./totp-provider.port"
 import { type UserRepository } from "./user.repository"
+import { type TwoFactorSessionRepository } from "./two-factor-session.repository"
+
+const MAX_2FA_ATTEMPTS = 5
+const TWO_FACTOR_SESSION_EXPIRY_MS = 5 * 60 * 1000
 
 type RoleKey = keyof typeof Role
 
@@ -54,7 +58,7 @@ export type LoginResult =
   | { kind: "account_locked"; lockedUntil: Date | null }
   | { kind: "password_expired"; passwordResetRequired: true }
   | { kind: "super_admin_2fa_required"; setup2FARequired: true }
-  | { kind: "two_factor_required"; tempSessionUserId: string }
+  | { kind: "two_factor_required"; tempSessionToken: string }
   | AuthenticatedResult
 
 export type Verify2faResult =
@@ -80,6 +84,29 @@ export type GetMeResult =
       }
     }
 
+export type ListUsersResult = {
+  kind: "users_listed"
+  users: Array<{
+    id: string
+    email: string
+    failedAttempts: number
+    lockedUntil: Date | null
+    passwordExpired: boolean
+    twoFactorEnabled: boolean
+  }>
+}
+
+export type GdprExportResult =
+  | { kind: "user_not_found" }
+  | {
+      kind: "data_exported"
+      data: { id: string; email: string; gdprConsentAt: Date; createdAt: Date; lastLoginAt: Date | null }
+    }
+
+export type DeleteAccountResult =
+  | { kind: "user_not_found" }
+  | { kind: "account_deleted" }
+
 export class AuthUseCases {
   constructor(
     private readonly users: UserRepository,
@@ -88,7 +115,8 @@ export class AuthUseCases {
     private readonly instructors: InstructorRepository,
     private readonly hasher: PasswordHasher,
     private readonly tokens: TokenProvider,
-    private readonly totp: TotpProvider
+    private readonly totp: TotpProvider,
+    private readonly twoFactorSessions: TwoFactorSessionRepository
   ) {}
 
   private async resolveRole(userId: string): Promise<Role | undefined> {
@@ -170,19 +198,33 @@ export class AuthUseCases {
 
     if (needsPasswordReset(user.passwordUpdatedAt)) return { kind: "password_expired", passwordResetRequired: true }
     if (role === Role.SUPER_ADMIN && !user.twoFactorEnabled) return { kind: "super_admin_2fa_required", setup2FARequired: true }
-    if (user.twoFactorEnabled) return { kind: "two_factor_required", tempSessionUserId: user.id }
+    if (user.twoFactorEnabled) {
+      const session = await this.twoFactorSessions.create(user.id)
+      return { kind: "two_factor_required", tempSessionToken: session.token }
+    }
 
     user.lastLoginAt = new Date()
     await this.users.save(user)
     return this.authenticated(user, role)
   }
 
-  async verify2fa(input: { tempSessionUserId?: string; code?: string }): Promise<Verify2faResult> {
-    const { tempSessionUserId, code } = input
-    if (!tempSessionUserId || !code) return { kind: "missing_2fa_payload" }
-    const user = await this.users.findById(tempSessionUserId)
+  async verify2fa(input: { tempSessionToken?: string; code?: string }): Promise<Verify2faResult> {
+    const { tempSessionToken, code } = input
+    if (!tempSessionToken || !code) return { kind: "missing_2fa_payload" }
+    const notBefore = new Date(Date.now() - TWO_FACTOR_SESSION_EXPIRY_MS)
+    const session = await this.twoFactorSessions.find(tempSessionToken, notBefore)
+    if (!session) return { kind: "invalid_2fa_session" }
+    if (session.attempts >= MAX_2FA_ATTEMPTS) {
+      await this.twoFactorSessions.delete(tempSessionToken)
+      return { kind: "invalid_2fa_session" }
+    }
+    const user = await this.users.findById(session.userId)
     if (!user || !user.twoFactorEnabled || !user.twoFactorSecret) return { kind: "invalid_2fa_session" }
-    if (!this.totp.verify(user.twoFactorSecret, code)) return { kind: "invalid_totp_code" }
+    if (!this.totp.verify(user.twoFactorSecret, code)) {
+      await this.twoFactorSessions.incrementAttempts(tempSessionToken)
+      return { kind: "invalid_totp_code" }
+    }
+    await this.twoFactorSessions.delete(tempSessionToken)
     const role = await this.resolveRole(user.id)
     if (!role) return { kind: "invalid_2fa_session" }
     user.lastLoginAt = new Date()
@@ -224,6 +266,63 @@ export class AuthUseCases {
         twoFactorEnabled: user.twoFactorEnabled,
       },
     }
+  }
+
+  async resetAuthenticatedPassword(input: { userId: string; oldPassword?: string; newPassword?: string }): Promise<ResetPasswordResult> {
+    const { userId, oldPassword, newPassword } = input
+    if (!oldPassword || !newPassword) return { kind: "missing_reset_payload" }
+    if (!isStrongPassword(newPassword)) return { kind: "weak_password" }
+    const user = await this.users.findById(userId)
+    if (!user) return { kind: "user_not_found" }
+    if (!(await this.hasher.verify(user.passwordHash, oldPassword))) return { kind: "invalid_old_password" }
+    user.passwordHash = await this.hasher.hash(newPassword)
+    user.passwordUpdatedAt = new Date()
+    user.failedAttempts = 0
+    user.lockedUntil = null
+    await this.users.save(user)
+    return { kind: "password_updated" }
+  }
+
+  async listUsersForAdmin(): Promise<ListUsersResult> {
+    const users = await this.users.list()
+    return {
+      kind: "users_listed",
+      users: users.map((user) => ({
+        id: user.id,
+        email: user.email,
+        failedAttempts: user.failedAttempts,
+        lockedUntil: user.lockedUntil,
+        passwordExpired: needsPasswordReset(user.passwordUpdatedAt),
+        twoFactorEnabled: user.twoFactorEnabled,
+      })),
+    }
+  }
+
+  async exportGdprData(userId: string): Promise<GdprExportResult> {
+    const user = await this.users.findById(userId)
+    if (!user) return { kind: "user_not_found" }
+    return {
+      kind: "data_exported",
+      data: {
+        id: user.id,
+        email: user.email,
+        gdprConsentAt: user.gdprConsentAt,
+        createdAt: user.createdAt,
+        lastLoginAt: user.lastLoginAt,
+      },
+    }
+  }
+
+  async cleanupExpiredSessions(): Promise<void> {
+    const cutoff = new Date(Date.now() - TWO_FACTOR_SESSION_EXPIRY_MS)
+    await this.twoFactorSessions.deleteOlderThan(cutoff)
+  }
+
+  async deleteAccount(userId: string): Promise<DeleteAccountResult> {
+    const user = await this.users.findById(userId)
+    if (!user) return { kind: "user_not_found" }
+    await this.users.deleteById(user.id)
+    return { kind: "account_deleted" }
   }
 
   private roleToKey(role: Role): RoleKey {

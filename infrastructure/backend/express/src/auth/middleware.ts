@@ -22,6 +22,16 @@ export const requireAuth = (request: AuthRequest, response: Response, nextFuncti
   }
 }
 
+export const requireCronSecret = (request: Request, response: Response, nextFunction: NextFunction): void => {
+  const authorization = request.headers.authorization
+  const secret = process.env.CRON_SECRET
+  if (!secret || !authorization || authorization !== `Bearer ${secret}`) {
+    response.status(401).json({ error: "Unauthorized" })
+    return
+  }
+  nextFunction()
+}
+
 export const requireRole =
   (...allowedRoles: Role[]) =>
   (request: AuthRequest, response: Response, nextFunction: NextFunction): void => {
