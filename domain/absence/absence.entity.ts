@@ -1,4 +1,4 @@
-import { type BasicStatus } from "./absence.enums"
+import { type BasicStatus } from "@domain/absence/absence.enums"
 
 export type Absence = {
   id: string

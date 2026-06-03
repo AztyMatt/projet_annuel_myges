@@ -1,5 +1,5 @@
 import { pgTable, text } from "drizzle-orm/pg-core"
-import { program } from "./program"
+import { program } from "@express/src/postgres/schema/program"
 
 export const bloc = pgTable("bloc", {
   id: text("id").primaryKey(),

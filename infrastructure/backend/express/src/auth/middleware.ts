@@ -1,6 +1,6 @@
 import { type NextFunction, type Request, type Response } from "express"
-import { tokenProvider } from "./token-provider.adapter"
-import { type Role } from "../../../../../domain/auth/user.enums"
+import { tokenProvider } from "@express/src/auth/token-provider.adapter"
+import { type Role } from "@domain/auth/user.enums"
 
 export type AuthRequest = Request & {
   auth?: { userId: string; role: Role; email: string }

@@ -1,5 +1,5 @@
 import speakeasy from "speakeasy"
-import { type TotpProvider } from "../../../../../application/auth/totp-provider.port"
+import { type TotpProvider } from "@application/auth/totp-provider.port"
 
 export const totpProvider: TotpProvider = {
   generateSecret(email: string) {

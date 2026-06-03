@@ -1,8 +1,8 @@
 import { desc, eq } from "drizzle-orm"
-import { type UserRepository } from "../../../../../../application/auth/user.repository"
-import { type User } from "../../../../../../domain/auth/user.entity"
-import { db } from "../db"
-import { users } from "../schema/auth"
+import { type UserRepository } from "@application/auth/user.repository"
+import { type User } from "@domain/auth/user.entity"
+import { db } from "@express/src/postgres/db"
+import { users } from "@express/src/postgres/schema/auth"
 
 function rowToUser(row: typeof users.$inferSelect): User {
   return {

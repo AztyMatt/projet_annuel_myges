@@ -1,8 +1,8 @@
 import { eq } from "drizzle-orm"
-import { type SessionExamInstructorRepository } from "../../../../../../../../application/session/session-exam/session-exam-instructor/session-exam-instructor.repository"
-import { type SessionExamInstructor } from "../../../../../../../../domain/session/session-exam/session-exam-instructor/session-exam-instructor.entity"
-import { db } from "../../../db"
-import { sessionExamInstructor as sessionExamInstructorTable } from "../../../schema/session"
+import { type SessionExamInstructorRepository } from "@application/session/session-exam/session-exam-instructor/session-exam-instructor.repository"
+import { type SessionExamInstructor } from "@domain/session/session-exam/session-exam-instructor/session-exam-instructor.entity"
+import { db } from "@express/src/postgres/db"
+import { sessionExamInstructor as sessionExamInstructorTable } from "@express/src/postgres/schema/session"
 
 function rowToSessionExamInstructor(row: typeof sessionExamInstructorTable.$inferSelect): SessionExamInstructor {
   return {

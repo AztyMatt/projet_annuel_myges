@@ -1,4 +1,4 @@
-import { type SessionMode } from "./session.enums"
+import { type SessionMode } from "@domain/session/session.enums"
 
 export type Session = {
   id: string

@@ -1,6 +1,6 @@
 import { pgTable, text } from "drizzle-orm/pg-core"
-import { classTable } from "./class"
-import { student } from "./student"
+import { classTable } from "@express/src/postgres/schema/class"
+import { student } from "@express/src/postgres/schema/student"
 
 export const group = pgTable("group", {
   id: text("id").primaryKey(),

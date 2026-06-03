@@ -1,4 +1,4 @@
-import { type File } from "../../domain/file/file.entity"
+import { type File } from "@domain/file/file.entity"
 
 export interface FileRepository {
   findById(id: string): Promise<File | undefined>

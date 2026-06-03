@@ -1,4 +1,4 @@
-import { type TwoFactorSession } from "../../domain/auth/two-factor-session.entity"
+import { type TwoFactorSession } from "@domain/auth/two-factor-session.entity"
 
 export interface TwoFactorSessionRepository {
   create(userId: string): Promise<TwoFactorSession>

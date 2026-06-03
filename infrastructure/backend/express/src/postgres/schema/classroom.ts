@@ -1,5 +1,5 @@
 import { integer, pgTable, text } from "drizzle-orm/pg-core"
-import { campus } from "./campus"
+import { campus } from "@express/src/postgres/schema/campus"
 
 export const classroom = pgTable("classroom", {
   id: text("id").primaryKey(),

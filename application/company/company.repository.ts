@@ -1,4 +1,4 @@
-import { type Company } from "../../domain/company/company.entity"
+import { type Company } from "@domain/company/company.entity"
 
 export interface CompanyRepository {
   findById(id: string): Promise<Company | undefined>

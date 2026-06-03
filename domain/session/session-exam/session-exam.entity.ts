@@ -1,4 +1,4 @@
-import { type SessionExamType } from "./session-exam.enums"
+import { type SessionExamType } from "@domain/session/session-exam/session-exam.enums"
 
 export type SessionExam = {
   id: string

@@ -1,4 +1,4 @@
-import { type InstructorContractType } from "./instructor.enums"
+import { type InstructorContractType } from "@domain/instructor/instructor.enums"
 
 export type Instructor = {
   id: string

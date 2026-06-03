@@ -4,11 +4,11 @@ import {
   type ResetPasswordResult,
   type SignupResult,
   type Verify2faResult,
-} from "../../../../../application/auth/use-cases"
+} from "@application/auth/use-cases"
 import { Router } from "express"
-import { requireAuth, requireCronSecret, requireRole, type AuthRequest } from "./middleware"
-import { AdminRole } from "../../../../../domain/admin/admin.enums"
-import { authUseCases } from "../container"
+import { requireAuth, requireCronSecret, requireRole, type AuthRequest } from "@express/src/auth/middleware"
+import { AdminRole } from "@domain/admin/admin.enums"
+import { authUseCases } from "@express/src/container"
 
 export const authRouter = Router()
 

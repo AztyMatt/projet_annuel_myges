@@ -1,10 +1,10 @@
 import { pgTable, text, timestamp } from "drizzle-orm/pg-core"
-import { course } from "./course"
-import { classroom } from "./classroom"
-import { assessment } from "./assessment"
-import { external } from "./external"
-import { instructor } from "./instructor"
-import { student } from "./student"
+import { course } from "@express/src/postgres/schema/course"
+import { classroom } from "@express/src/postgres/schema/classroom"
+import { assessment } from "@express/src/postgres/schema/assessment"
+import { external } from "@express/src/postgres/schema/external"
+import { instructor } from "@express/src/postgres/schema/instructor"
+import { student } from "@express/src/postgres/schema/student"
 
 export const session = pgTable("session", {
   id: text("id").primaryKey(),

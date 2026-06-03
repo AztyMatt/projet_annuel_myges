@@ -1,8 +1,8 @@
 import { eq } from "drizzle-orm"
-import { type SessionExamExternalRepository } from "../../../../../../../../application/session/session-exam/session-exam-external/session-exam-external.repository"
-import { type SessionExamExternal } from "../../../../../../../../domain/session/session-exam/session-exam-external/session-exam-external.entity"
-import { db } from "../../../db"
-import { sessionExamExternal as sessionExamExternalTable } from "../../../schema/session"
+import { type SessionExamExternalRepository } from "@application/session/session-exam/session-exam-external/session-exam-external.repository"
+import { type SessionExamExternal } from "@domain/session/session-exam/session-exam-external/session-exam-external.entity"
+import { db } from "@express/src/postgres/db"
+import { sessionExamExternal as sessionExamExternalTable } from "@express/src/postgres/schema/session"
 
 function rowToSessionExamExternal(row: typeof sessionExamExternalTable.$inferSelect): SessionExamExternal {
   return {

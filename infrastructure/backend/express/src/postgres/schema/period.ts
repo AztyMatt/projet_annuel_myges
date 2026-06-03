@@ -1,5 +1,5 @@
 import { integer, pgTable, text, timestamp } from "drizzle-orm/pg-core"
-import { academicYear } from "./academic-year"
+import { academicYear } from "@express/src/postgres/schema/academic-year"
 
 export const period = pgTable("period", {
   id: text("id").primaryKey(),

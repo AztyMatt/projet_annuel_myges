@@ -1,8 +1,8 @@
 import { asc, eq } from "drizzle-orm"
-import { type ModuleRepository } from "../../../../../../application/module/module.repository"
-import { type Module } from "../../../../../../domain/module/module.entity"
-import { db } from "../db"
-import { module as moduleTable } from "../schema/module"
+import { type ModuleRepository } from "@application/module/module.repository"
+import { type Module } from "@domain/module/module.entity"
+import { db } from "@express/src/postgres/db"
+import { module as moduleTable } from "@express/src/postgres/schema/module"
 
 function rowToModule(row: typeof moduleTable.$inferSelect): Module {
   return {

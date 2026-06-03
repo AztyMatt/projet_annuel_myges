@@ -1,8 +1,8 @@
 import { asc, eq } from "drizzle-orm"
-import { type PeriodRepository } from "../../../../../../application/period/period.repository"
-import { type Period } from "../../../../../../domain/period/period.entity"
-import { db } from "../db"
-import { period as periodTable } from "../schema/period"
+import { type PeriodRepository } from "@application/period/period.repository"
+import { type Period } from "@domain/period/period.entity"
+import { db } from "@express/src/postgres/db"
+import { period as periodTable } from "@express/src/postgres/schema/period"
 
 function rowToPeriod(row: typeof periodTable.$inferSelect): Period {
   return {

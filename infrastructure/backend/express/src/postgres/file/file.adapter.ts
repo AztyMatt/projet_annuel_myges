@@ -1,8 +1,8 @@
 import { desc, eq } from "drizzle-orm"
-import { type FileRepository } from "../../../../../../application/file/file.repository"
-import { type File } from "../../../../../../domain/file/file.entity"
-import { db } from "../db"
-import { file as fileTable } from "../schema/file"
+import { type FileRepository } from "@application/file/file.repository"
+import { type File } from "@domain/file/file.entity"
+import { db } from "@express/src/postgres/db"
+import { file as fileTable } from "@express/src/postgres/schema/file"
 
 function rowToFile(row: typeof fileTable.$inferSelect): File {
   return {

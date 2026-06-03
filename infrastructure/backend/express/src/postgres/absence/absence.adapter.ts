@@ -1,10 +1,10 @@
 import { desc, eq } from "drizzle-orm"
-import { type AbsenceRepository } from "../../../../../../application/absence/absence.repository"
-import { type Absence } from "../../../../../../domain/absence/absence.entity"
-import { BasicStatus } from "../../../../../../domain/absence/absence.enums"
-import { assertEnum } from "../assert-enum"
-import { db } from "../db"
-import { absence as absenceTable } from "../schema/absence"
+import { type AbsenceRepository } from "@application/absence/absence.repository"
+import { type Absence } from "@domain/absence/absence.entity"
+import { BasicStatus } from "@domain/absence/absence.enums"
+import { assertEnum } from "@express/src/postgres/assert-enum"
+import { db } from "@express/src/postgres/db"
+import { absence as absenceTable } from "@express/src/postgres/schema/absence"
 
 function rowToAbsence(row: typeof absenceTable.$inferSelect): Absence {
   return {

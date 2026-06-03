@@ -1,8 +1,8 @@
 import { eq } from "drizzle-orm"
-import { type GradeSessionExamRepository } from "../../../../../../../application/grade/grade-session-exam/grade-session-exam.repository"
-import { type GradeSessionExam } from "../../../../../../../domain/grade/grade-session-exam/grade-session-exam.entity"
-import { db } from "../../db"
-import { gradeSessionExam as gradeSessionExamTable } from "../../schema/grade"
+import { type GradeSessionExamRepository } from "@application/grade/grade-session-exam/grade-session-exam.repository"
+import { type GradeSessionExam } from "@domain/grade/grade-session-exam/grade-session-exam.entity"
+import { db } from "@express/src/postgres/db"
+import { gradeSessionExam as gradeSessionExamTable } from "@express/src/postgres/schema/grade"
 
 function rowToGradeSessionExam(row: typeof gradeSessionExamTable.$inferSelect): GradeSessionExam {
   return {

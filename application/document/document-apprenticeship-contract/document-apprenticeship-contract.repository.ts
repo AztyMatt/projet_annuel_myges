@@ -1,4 +1,4 @@
-import { type DocumentApprenticeshipContract } from "../../../domain/document/document-apprenticeship-contract/document-apprenticeship-contract.entity"
+import { type DocumentApprenticeshipContract } from "@domain/document/document-apprenticeship-contract/document-apprenticeship-contract.entity"
 
 export interface DocumentApprenticeshipContractRepository {
   findById(id: string): Promise<DocumentApprenticeshipContract | undefined>

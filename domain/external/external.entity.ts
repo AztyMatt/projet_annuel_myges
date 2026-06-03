@@ -1,4 +1,4 @@
-import { type ExternalType } from "./external.enums"
+import { type ExternalType } from "@domain/external/external.enums"
 
 export type External = {
   id: string

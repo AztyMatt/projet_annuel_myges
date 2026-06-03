@@ -1,5 +1,5 @@
 import { json, pgTable, text } from "drizzle-orm/pg-core"
-import { users } from "./auth"
+import { users } from "@express/src/postgres/schema/auth"
 
 export const instructor = pgTable("instructor", {
   id: text("id").primaryKey(),

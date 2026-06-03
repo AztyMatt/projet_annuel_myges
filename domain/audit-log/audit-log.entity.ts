@@ -1,4 +1,4 @@
-import { type AuditLogAction } from "./audit-log.enums"
+import { type AuditLogAction } from "@domain/audit-log/audit-log.enums"
 
 export type AuditLogValue = { [key: string]: string | number | boolean | null | AuditLogValue | AuditLogValue[] }
 

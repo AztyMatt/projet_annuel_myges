@@ -1,8 +1,8 @@
 import { eq } from "drizzle-orm"
-import { type CourseRepository } from "../../../../../../application/course/course.repository"
-import { type Course } from "../../../../../../domain/course/course.entity"
-import { db } from "../db"
-import { course as courseTable } from "../schema/course"
+import { type CourseRepository } from "@application/course/course.repository"
+import { type Course } from "@domain/course/course.entity"
+import { db } from "@express/src/postgres/db"
+import { course as courseTable } from "@express/src/postgres/schema/course"
 
 function rowToCourse(row: typeof courseTable.$inferSelect): Course {
   return {

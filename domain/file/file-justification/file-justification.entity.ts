@@ -1,4 +1,4 @@
-import { type BasicStatus } from "../../absence/absence.enums"
+import { type BasicStatus } from "@domain/absence/absence.enums"
 
 export type FileJustification = {
   id: string

@@ -1,8 +1,8 @@
 import { desc, eq } from "drizzle-orm"
-import { type GradeRepository } from "../../../../../../application/grade/grade.repository"
-import { type Grade } from "../../../../../../domain/grade/grade.entity"
-import { db } from "../db"
-import { grade as gradeTable } from "../schema/grade"
+import { type GradeRepository } from "@application/grade/grade.repository"
+import { type Grade } from "@domain/grade/grade.entity"
+import { db } from "@express/src/postgres/db"
+import { grade as gradeTable } from "@express/src/postgres/schema/grade"
 
 function rowToGrade(row: typeof gradeTable.$inferSelect): Grade {
   return {

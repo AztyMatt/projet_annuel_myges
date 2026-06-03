@@ -1,8 +1,8 @@
 import { eq } from "drizzle-orm"
-import { type FileCourseRepository } from "../../../../../../../application/file/file-course/file-course.repository"
-import { type FileCourse } from "../../../../../../../domain/file/file-course/file-course.entity"
-import { db } from "../../db"
-import { fileCourse as fileCourseTable } from "../../schema/file"
+import { type FileCourseRepository } from "@application/file/file-course/file-course.repository"
+import { type FileCourse } from "@domain/file/file-course/file-course.entity"
+import { db } from "@express/src/postgres/db"
+import { fileCourse as fileCourseTable } from "@express/src/postgres/schema/file"
 
 function rowToFileCourse(row: typeof fileCourseTable.$inferSelect): FileCourse {
   return {

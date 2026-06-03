@@ -1,4 +1,4 @@
-import { type Period } from "../../domain/period/period.entity"
+import { type Period } from "@domain/period/period.entity"
 
 export interface PeriodRepository {
   findById(id: string): Promise<Period | undefined>

@@ -1,13 +1,13 @@
 import { randomUUID } from "node:crypto"
-import { isStrongPassword } from "../../../../../domain/auth/security-policy"
-import { type User } from "../../../../../domain/auth/user.entity"
-import { AdminRole } from "../../../../../domain/admin/admin.enums"
-import { type Admin } from "../../../../../domain/admin/admin.entity"
-import { passwordHasher } from "./password-hasher.adapter"
-import { SEED_ON_START, SEED_PASSWORD } from "./auth.config"
-import { totpProvider } from "./totp-provider.adapter"
-import { userRepository } from "../postgres/auth/user.adapter"
-import { adminRepository } from "../postgres/admin/admin.adapter"
+import { isStrongPassword } from "@domain/auth/security-policy"
+import { type User } from "@domain/auth/user.entity"
+import { AdminRole } from "@domain/admin/admin.enums"
+import { type Admin } from "@domain/admin/admin.entity"
+import { passwordHasher } from "@express/src/auth/password-hasher.adapter"
+import { SEED_ON_START, SEED_PASSWORD } from "@express/src/auth/auth.config"
+import { totpProvider } from "@express/src/auth/totp-provider.adapter"
+import { userRepository } from "@express/src/postgres/auth/user.adapter"
+import { adminRepository } from "@express/src/postgres/admin/admin.adapter"
 
 const SEED_DEFINITIONS: Array<{ email: string; adminRole: AdminRole; enable2FA?: boolean }> = [
   { email: "admin.seed@myges.fr", adminRole: AdminRole.ADMIN },

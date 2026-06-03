@@ -1,4 +1,4 @@
-import { type FileAssessment } from "../../../domain/file/file-assessment/file-assessment.entity"
+import { type FileAssessment } from "@domain/file/file-assessment/file-assessment.entity"
 
 export interface FileAssessmentRepository {
   findById(id: string): Promise<FileAssessment | undefined>

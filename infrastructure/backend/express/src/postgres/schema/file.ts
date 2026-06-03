@@ -1,10 +1,10 @@
 import { integer, pgTable, text, timestamp } from "drizzle-orm/pg-core"
-import { users } from "./auth"
-import { assessment, assessmentGroup } from "./assessment"
-import { admin } from "./admin"
-import { course } from "./course"
-import { student } from "./student"
-import { absence } from "./absence"
+import { users } from "@express/src/postgres/schema/auth"
+import { assessment, assessmentGroup } from "@express/src/postgres/schema/assessment"
+import { admin } from "@express/src/postgres/schema/admin"
+import { course } from "@express/src/postgres/schema/course"
+import { student } from "@express/src/postgres/schema/student"
+import { absence } from "@express/src/postgres/schema/absence"
 
 export const file = pgTable("file", {
   id: text("id").primaryKey(),

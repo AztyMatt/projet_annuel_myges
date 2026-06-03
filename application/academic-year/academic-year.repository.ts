@@ -1,4 +1,4 @@
-import { type AcademicYear } from "../../domain/academic-year/academic-year.entity"
+import { type AcademicYear } from "@domain/academic-year/academic-year.entity"
 
 export interface AcademicYearRepository {
   findById(id: string): Promise<AcademicYear | undefined>

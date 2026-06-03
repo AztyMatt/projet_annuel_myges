@@ -1,8 +1,8 @@
 import { asc, eq } from "drizzle-orm"
-import { type ManualNotationRepository } from "../../../../../../../../application/grade/grade-manual-notation/manual-notation/manual-notation.repository"
-import { type ManualNotation } from "../../../../../../../../domain/grade/grade-manual-notation/manual-notation/manual-notation.entity"
-import { db } from "../../../db"
-import { manualNotation as manualNotationTable } from "../../../schema/grade"
+import { type ManualNotationRepository } from "@application/grade/grade-manual-notation/manual-notation/manual-notation.repository"
+import { type ManualNotation } from "@domain/grade/grade-manual-notation/manual-notation/manual-notation.entity"
+import { db } from "@express/src/postgres/db"
+import { manualNotation as manualNotationTable } from "@express/src/postgres/schema/grade"
 
 function rowToManualNotation(row: typeof manualNotationTable.$inferSelect): ManualNotation {
   return {

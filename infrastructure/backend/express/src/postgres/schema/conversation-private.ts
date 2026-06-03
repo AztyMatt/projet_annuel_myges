@@ -1,7 +1,7 @@
 import { pgTable, text } from "drizzle-orm/pg-core"
-import { admin } from "./admin"
-import { student } from "./student"
-import { conversation } from "./conversation"
+import { admin } from "@express/src/postgres/schema/admin"
+import { student } from "@express/src/postgres/schema/student"
+import { conversation } from "@express/src/postgres/schema/conversation"
 
 export const conversationPrivate = pgTable("conversation_private", {
   id: text("id").primaryKey(),

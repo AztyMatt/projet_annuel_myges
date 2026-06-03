@@ -1,6 +1,6 @@
 import { pgTable, text } from "drizzle-orm/pg-core"
-import { users } from "./auth"
-import { instructor } from "./instructor"
+import { users } from "@express/src/postgres/schema/auth"
+import { instructor } from "@express/src/postgres/schema/instructor"
 
 export const admin = pgTable("admin", {
   id: text("id").primaryKey(),

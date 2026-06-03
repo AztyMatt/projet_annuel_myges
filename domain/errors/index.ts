@@ -1,4 +1,4 @@
-import { DomainErrorDetail } from "../types/errors";
+import { DomainErrorDetail } from "@domain/types/errors";
 
 export class DomainError extends Error {
   public readonly code: string;

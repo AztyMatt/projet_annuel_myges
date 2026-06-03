@@ -1,4 +1,4 @@
-import { type Group } from "../../domain/group/group.entity"
+import { type Group } from "@domain/group/group.entity"
 
 export interface GroupRepository {
   findById(id: string): Promise<Group | undefined>

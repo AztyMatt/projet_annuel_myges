@@ -1,8 +1,8 @@
 import { asc, eq } from "drizzle-orm"
-import { type BlocRepository } from "../../../../../../application/bloc/bloc.repository"
-import { type Bloc } from "../../../../../../domain/bloc/bloc.entity"
-import { db } from "../db"
-import { bloc as blocTable } from "../schema/bloc"
+import { type BlocRepository } from "@application/bloc/bloc.repository"
+import { type Bloc } from "@domain/bloc/bloc.entity"
+import { db } from "@express/src/postgres/db"
+import { bloc as blocTable } from "@express/src/postgres/schema/bloc"
 
 function rowToBloc(row: typeof blocTable.$inferSelect): Bloc {
   return {

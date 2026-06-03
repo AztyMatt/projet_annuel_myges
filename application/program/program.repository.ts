@@ -1,4 +1,4 @@
-import { type Program } from "../../domain/program/program.entity"
+import { type Program } from "@domain/program/program.entity"
 
 export interface ProgramRepository {
   findById(id: string): Promise<Program | undefined>

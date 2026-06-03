@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto"
 import { and, eq, gte, lt, sql } from "drizzle-orm"
-import { type TwoFactorSessionRepository } from "../../../../../../application/auth/two-factor-session.repository"
-import { type TwoFactorSession } from "../../../../../../domain/auth/two-factor-session.entity"
-import { db } from "../db"
-import { twoFactorSessions } from "../schema/auth"
+import { type TwoFactorSessionRepository } from "@application/auth/two-factor-session.repository"
+import { type TwoFactorSession } from "@domain/auth/two-factor-session.entity"
+import { db } from "@express/src/postgres/db"
+import { twoFactorSessions } from "@express/src/postgres/schema/auth"
 
 function rowToSession(row: typeof twoFactorSessions.$inferSelect): TwoFactorSession {
   return {

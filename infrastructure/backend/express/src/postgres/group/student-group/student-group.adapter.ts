@@ -1,8 +1,8 @@
 import { eq } from "drizzle-orm"
-import { type StudentGroupRepository } from "../../../../../../../application/group/student-group/student-group.repository"
-import { type StudentGroup } from "../../../../../../../domain/group/student-group/student-group.entity"
-import { db } from "../../db"
-import { studentGroup as studentGroupTable } from "../../schema/group"
+import { type StudentGroupRepository } from "@application/group/student-group/student-group.repository"
+import { type StudentGroup } from "@domain/group/student-group/student-group.entity"
+import { db } from "@express/src/postgres/db"
+import { studentGroup as studentGroupTable } from "@express/src/postgres/schema/group"
 
 function rowToStudentGroup(row: typeof studentGroupTable.$inferSelect): StudentGroup {
   return {

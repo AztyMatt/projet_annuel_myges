@@ -1,6 +1,6 @@
 import { pgTable, text, timestamp } from "drizzle-orm/pg-core"
-import { student } from "./student"
-import { session } from "./session"
+import { student } from "@express/src/postgres/schema/student"
+import { session } from "@express/src/postgres/schema/session"
 
 export const absence = pgTable("absence", {
   id: text("id").primaryKey(),

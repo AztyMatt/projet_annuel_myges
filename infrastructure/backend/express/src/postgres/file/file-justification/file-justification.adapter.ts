@@ -1,10 +1,10 @@
 import { eq } from "drizzle-orm"
-import { BasicStatus } from "../../../../../../../domain/absence/absence.enums"
-import { assertEnum } from "../../assert-enum"
-import { type FileJustificationRepository } from "../../../../../../../application/file/file-justification/file-justification.repository"
-import { type FileJustification } from "../../../../../../../domain/file/file-justification/file-justification.entity"
-import { db } from "../../db"
-import { fileJustification as fileJustificationTable } from "../../schema/file"
+import { BasicStatus } from "@domain/absence/absence.enums"
+import { assertEnum } from "@express/src/postgres/assert-enum"
+import { type FileJustificationRepository } from "@application/file/file-justification/file-justification.repository"
+import { type FileJustification } from "@domain/file/file-justification/file-justification.entity"
+import { db } from "@express/src/postgres/db"
+import { fileJustification as fileJustificationTable } from "@express/src/postgres/schema/file"
 
 function rowToFileJustification(row: typeof fileJustificationTable.$inferSelect): FileJustification {
   return {

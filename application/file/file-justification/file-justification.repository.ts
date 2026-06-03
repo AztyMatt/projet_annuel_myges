@@ -1,4 +1,4 @@
-import { type FileJustification } from "../../../domain/file/file-justification/file-justification.entity"
+import { type FileJustification } from "@domain/file/file-justification/file-justification.entity"
 
 export interface FileJustificationRepository {
   findById(id: string): Promise<FileJustification | undefined>

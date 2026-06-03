@@ -1,8 +1,8 @@
 import { eq } from "drizzle-orm"
-import { type AssessmentGroupRepository } from "../../../../../../../application/assessment/assessment-group/assessment-group.repository"
-import { type AssessmentGroup } from "../../../../../../../domain/assessment/assessment-group/assessment-group.entity"
-import { db } from "../../db"
-import { assessmentGroup as assessmentGroupTable } from "../../schema/assessment"
+import { type AssessmentGroupRepository } from "@application/assessment/assessment-group/assessment-group.repository"
+import { type AssessmentGroup } from "@domain/assessment/assessment-group/assessment-group.entity"
+import { db } from "@express/src/postgres/db"
+import { assessmentGroup as assessmentGroupTable } from "@express/src/postgres/schema/assessment"
 
 function rowToAssessmentGroup(row: typeof assessmentGroupTable.$inferSelect): AssessmentGroup {
   return {

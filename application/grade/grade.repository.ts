@@ -1,4 +1,4 @@
-import { type Grade } from "../../domain/grade/grade.entity"
+import { type Grade } from "@domain/grade/grade.entity"
 
 export interface GradeRepository {
   findById(id: string): Promise<Grade | undefined>

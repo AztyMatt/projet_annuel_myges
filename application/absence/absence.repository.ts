@@ -1,4 +1,4 @@
-import { type Absence } from "../../domain/absence/absence.entity"
+import { type Absence } from "@domain/absence/absence.entity"
 
 export interface AbsenceRepository {
   findById(id: string): Promise<Absence | undefined>

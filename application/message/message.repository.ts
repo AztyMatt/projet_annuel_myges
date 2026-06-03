@@ -1,4 +1,4 @@
-import { type Message } from "../../domain/message/message.entity"
+import { type Message } from "@domain/message/message.entity"
 
 export interface MessageRepository {
   findById(id: string): Promise<Message | undefined>

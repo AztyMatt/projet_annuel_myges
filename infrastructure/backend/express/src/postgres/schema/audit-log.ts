@@ -1,5 +1,5 @@
 import { json, pgTable, text, timestamp } from "drizzle-orm/pg-core"
-import { users } from "./auth"
+import { users } from "@express/src/postgres/schema/auth"
 
 export const auditLog = pgTable("audit_log", {
   id: text("id").primaryKey(),

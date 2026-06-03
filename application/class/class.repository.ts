@@ -1,4 +1,4 @@
-import { type Class } from "../../domain/class/class.entity"
+import { type Class } from "@domain/class/class.entity"
 
 export interface ClassRepository {
   findById(id: string): Promise<Class | undefined>

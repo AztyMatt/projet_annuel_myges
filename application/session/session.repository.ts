@@ -1,4 +1,4 @@
-import { type Session } from "../../domain/session/session.entity"
+import { type Session } from "@domain/session/session.entity"
 
 export interface SessionRepository {
   findById(id: string): Promise<Session | undefined>

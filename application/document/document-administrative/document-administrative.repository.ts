@@ -1,4 +1,4 @@
-import { type DocumentAdministrative } from "../../../domain/document/document-administrative/document-administrative.entity"
+import { type DocumentAdministrative } from "@domain/document/document-administrative/document-administrative.entity"
 
 export interface DocumentAdministrativeRepository {
   findById(id: string): Promise<DocumentAdministrative | undefined>

@@ -1,8 +1,8 @@
 import { asc, eq } from "drizzle-orm"
-import { type CampusRepository } from "../../../../../../application/campus/campus.repository"
-import { type Campus } from "../../../../../../domain/campus/campus.entity"
-import { db } from "../db"
-import { campus as campusTable } from "../schema/campus"
+import { type CampusRepository } from "@application/campus/campus.repository"
+import { type Campus } from "@domain/campus/campus.entity"
+import { db } from "@express/src/postgres/db"
+import { campus as campusTable } from "@express/src/postgres/schema/campus"
 
 function rowToCampus(row: typeof campusTable.$inferSelect): Campus {
   return {

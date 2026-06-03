@@ -1,8 +1,8 @@
 import { asc, desc, eq } from "drizzle-orm"
-import { type MessageRepository } from "../../../../../../application/message/message.repository"
-import { type Message } from "../../../../../../domain/message/message.entity"
-import { db } from "../db"
-import { message as messageTable } from "../schema/message"
+import { type MessageRepository } from "@application/message/message.repository"
+import { type Message } from "@domain/message/message.entity"
+import { db } from "@express/src/postgres/db"
+import { message as messageTable } from "@express/src/postgres/schema/message"
 
 function rowToMessage(row: typeof messageTable.$inferSelect): Message {
   return {

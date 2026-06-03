@@ -1,7 +1,7 @@
 import jwt from "jsonwebtoken"
-import { type TokenProvider } from "../../../../../application/auth/token-provider.port"
-import { type User } from "../../../../../domain/auth/user.entity"
-import { type Role } from "../../../../../domain/auth/user.enums"
+import { type TokenProvider } from "@application/auth/token-provider.port"
+import { type User } from "@domain/auth/user.entity"
+import { type Role } from "@domain/auth/user.enums"
 
 const JWT_SECRET = process.env.JWT_SECRET as string
 const JWT_EXPIRES_IN = "8h"

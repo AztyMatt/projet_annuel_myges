@@ -1,8 +1,8 @@
 import { eq } from "drizzle-orm"
-import { type ConversationPrivateRepository } from "../../../../../../../application/conversation/conversation-private/conversation-private.repository"
-import { type ConversationPrivate } from "../../../../../../../domain/conversation/conversation-private/conversation-private.entity"
-import { db } from "../../db"
-import { conversationPrivate as conversationPrivateTable } from "../../schema/conversation-private"
+import { type ConversationPrivateRepository } from "@application/conversation/conversation-private/conversation-private.repository"
+import { type ConversationPrivate } from "@domain/conversation/conversation-private/conversation-private.entity"
+import { db } from "@express/src/postgres/db"
+import { conversationPrivate as conversationPrivateTable } from "@express/src/postgres/schema/conversation-private"
 
 function rowToConversationPrivate(row: typeof conversationPrivateTable.$inferSelect): ConversationPrivate {
   return {

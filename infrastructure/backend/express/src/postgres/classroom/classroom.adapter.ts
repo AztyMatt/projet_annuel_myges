@@ -1,8 +1,8 @@
 import { asc, eq } from "drizzle-orm"
-import { type ClassroomRepository } from "../../../../../../application/classroom/classroom.repository"
-import { type Classroom } from "../../../../../../domain/classroom/classroom.entity"
-import { db } from "../db"
-import { classroom as classroomTable } from "../schema/classroom"
+import { type ClassroomRepository } from "@application/classroom/classroom.repository"
+import { type Classroom } from "@domain/classroom/classroom.entity"
+import { db } from "@express/src/postgres/db"
+import { classroom as classroomTable } from "@express/src/postgres/schema/classroom"
 
 function rowToClassroom(row: typeof classroomTable.$inferSelect): Classroom {
   return {

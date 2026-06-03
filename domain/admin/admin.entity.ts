@@ -1,4 +1,4 @@
-import { type AdminRole } from "./admin.enums"
+import { type AdminRole } from "@domain/admin/admin.enums"
 
 export type Admin = {
   id: string

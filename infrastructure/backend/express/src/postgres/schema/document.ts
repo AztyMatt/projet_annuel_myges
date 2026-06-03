@@ -1,6 +1,6 @@
 import { pgTable, text, timestamp } from "drizzle-orm/pg-core"
-import { fileDocument } from "./file"
-import { company } from "./company"
+import { fileDocument } from "@express/src/postgres/schema/file"
+import { company } from "@express/src/postgres/schema/company"
 
 export const documentAdministrative = pgTable("document_administrative", {
   id: text("id").primaryKey(),

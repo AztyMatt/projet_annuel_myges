@@ -1,4 +1,4 @@
-import { type Bloc } from "../../domain/bloc/bloc.entity"
+import { type Bloc } from "@domain/bloc/bloc.entity"
 
 export interface BlocRepository {
   findById(id: string): Promise<Bloc | undefined>

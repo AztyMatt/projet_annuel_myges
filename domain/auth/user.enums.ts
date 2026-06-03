@@ -1,4 +1,4 @@
-import { AdminRole } from "../admin/admin.enums"
+import { AdminRole } from "@domain/admin/admin.enums"
 
 export const Role = {
   ...AdminRole,

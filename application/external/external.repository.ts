@@ -1,4 +1,4 @@
-import { type External } from "../../domain/external/external.entity"
+import { type External } from "@domain/external/external.entity"
 
 export interface ExternalRepository {
   findById(id: string): Promise<External | undefined>

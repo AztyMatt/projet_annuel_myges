@@ -1,4 +1,4 @@
-import { type Module } from "../../domain/module/module.entity"
+import { type Module } from "@domain/module/module.entity"
 
 export interface ModuleRepository {
   findById(id: string): Promise<Module | undefined>

@@ -1,4 +1,4 @@
-import { type SessionExamInstructor } from "../../../../domain/session/session-exam/session-exam-instructor/session-exam-instructor.entity"
+import { type SessionExamInstructor } from "@domain/session/session-exam/session-exam-instructor/session-exam-instructor.entity"
 
 export interface SessionExamInstructorRepository {
   findById(id: string): Promise<SessionExamInstructor | undefined>

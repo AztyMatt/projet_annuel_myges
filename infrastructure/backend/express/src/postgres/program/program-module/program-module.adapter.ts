@@ -1,8 +1,8 @@
 import { eq } from "drizzle-orm"
-import { type ProgramModuleRepository } from "../../../../../../../application/program/program-module/program-module.repository"
-import { type ProgramModule } from "../../../../../../../domain/program/program-module/program-module.entity"
-import { db } from "../../db"
-import { programModule as programModuleTable } from "../../schema/program-module"
+import { type ProgramModuleRepository } from "@application/program/program-module/program-module.repository"
+import { type ProgramModule } from "@domain/program/program-module/program-module.entity"
+import { db } from "@express/src/postgres/db"
+import { programModule as programModuleTable } from "@express/src/postgres/schema/program-module"
 
 function rowToProgramModule(row: typeof programModuleTable.$inferSelect): ProgramModule {
   return {

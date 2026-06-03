@@ -1,8 +1,8 @@
 import { eq } from "drizzle-orm"
-import { type GradeManualNotationRepository } from "../../../../../../../application/grade/grade-manual-notation/grade-manual-notation.repository"
-import { type GradeManualNotation } from "../../../../../../../domain/grade/grade-manual-notation/grade-manual-notation.entity"
-import { db } from "../../db"
-import { gradeManualNotation as gradeManualNotationTable } from "../../schema/grade"
+import { type GradeManualNotationRepository } from "@application/grade/grade-manual-notation/grade-manual-notation.repository"
+import { type GradeManualNotation } from "@domain/grade/grade-manual-notation/grade-manual-notation.entity"
+import { db } from "@express/src/postgres/db"
+import { gradeManualNotation as gradeManualNotationTable } from "@express/src/postgres/schema/grade"
 
 function rowToGradeManualNotation(row: typeof gradeManualNotationTable.$inferSelect): GradeManualNotation {
   return {

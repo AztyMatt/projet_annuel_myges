@@ -1,4 +1,4 @@
-import { type GradeManualNotation } from "../../../domain/grade/grade-manual-notation/grade-manual-notation.entity"
+import { type GradeManualNotation } from "@domain/grade/grade-manual-notation/grade-manual-notation.entity"
 
 export interface GradeManualNotationRepository {
   findById(id: string): Promise<GradeManualNotation | undefined>

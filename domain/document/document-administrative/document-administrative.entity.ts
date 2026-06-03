@@ -1,4 +1,4 @@
-import { type DocumentType } from "./document-administrative.enums"
+import { type DocumentType } from "@domain/document/document-administrative/document-administrative.enums"
 
 export type DocumentAdministrative = {
   id: string

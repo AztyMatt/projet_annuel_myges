@@ -1,10 +1,10 @@
 import { eq } from "drizzle-orm"
-import { type ExternalRepository } from "../../../../../../application/external/external.repository"
-import { type External } from "../../../../../../domain/external/external.entity"
-import { ExternalType } from "../../../../../../domain/external/external.enums"
-import { assertEnum } from "../assert-enum"
-import { db } from "../db"
-import { external as externalTable } from "../schema/external"
+import { type ExternalRepository } from "@application/external/external.repository"
+import { type External } from "@domain/external/external.entity"
+import { ExternalType } from "@domain/external/external.enums"
+import { assertEnum } from "@express/src/postgres/assert-enum"
+import { db } from "@express/src/postgres/db"
+import { external as externalTable } from "@express/src/postgres/schema/external"
 
 function rowToExternal(row: typeof externalTable.$inferSelect): External {
   return {

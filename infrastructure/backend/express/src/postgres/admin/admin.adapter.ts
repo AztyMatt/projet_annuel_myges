@@ -1,10 +1,10 @@
 import { eq } from "drizzle-orm"
-import { type AdminRepository } from "../../../../../../application/admin/admin.repository"
-import { type Admin } from "../../../../../../domain/admin/admin.entity"
-import { AdminRole } from "../../../../../../domain/admin/admin.enums"
-import { assertEnum } from "../assert-enum"
-import { db } from "../db"
-import { admin as adminTable } from "../schema/admin"
+import { type AdminRepository } from "@application/admin/admin.repository"
+import { type Admin } from "@domain/admin/admin.entity"
+import { AdminRole } from "@domain/admin/admin.enums"
+import { assertEnum } from "@express/src/postgres/assert-enum"
+import { db } from "@express/src/postgres/db"
+import { admin as adminTable } from "@express/src/postgres/schema/admin"
 
 function rowToAdmin(row: typeof adminTable.$inferSelect): Admin {
   return {

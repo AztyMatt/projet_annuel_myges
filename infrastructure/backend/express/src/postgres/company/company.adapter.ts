@@ -1,8 +1,8 @@
 import { asc, eq } from "drizzle-orm"
-import { type CompanyRepository } from "../../../../../../application/company/company.repository"
-import { type Company } from "../../../../../../domain/company/company.entity"
-import { db } from "../db"
-import { company as companyTable } from "../schema/company"
+import { type CompanyRepository } from "@application/company/company.repository"
+import { type Company } from "@domain/company/company.entity"
+import { db } from "@express/src/postgres/db"
+import { company as companyTable } from "@express/src/postgres/schema/company"
 
 function rowToCompany(row: typeof companyTable.$inferSelect): Company {
   return {

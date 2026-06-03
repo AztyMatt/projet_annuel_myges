@@ -1,8 +1,8 @@
 import { desc, eq } from "drizzle-orm"
-import { type ConversationRepository } from "../../../../../../application/conversation/conversation.repository"
-import { type Conversation } from "../../../../../../domain/conversation/conversation.entity"
-import { db } from "../db"
-import { conversation as conversationTable } from "../schema/conversation"
+import { type ConversationRepository } from "@application/conversation/conversation.repository"
+import { type Conversation } from "@domain/conversation/conversation.entity"
+import { db } from "@express/src/postgres/db"
+import { conversation as conversationTable } from "@express/src/postgres/schema/conversation"
 
 function rowToConversation(row: typeof conversationTable.$inferSelect): Conversation {
   return {

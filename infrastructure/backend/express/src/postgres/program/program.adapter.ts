@@ -1,8 +1,8 @@
 import { asc, eq } from "drizzle-orm"
-import { type ProgramRepository } from "../../../../../../application/program/program.repository"
-import { type Program } from "../../../../../../domain/program/program.entity"
-import { db } from "../db"
-import { program as programTable } from "../schema/program"
+import { type ProgramRepository } from "@application/program/program.repository"
+import { type Program } from "@domain/program/program.entity"
+import { db } from "@express/src/postgres/db"
+import { program as programTable } from "@express/src/postgres/schema/program"
 
 function rowToProgram(row: typeof programTable.$inferSelect): Program {
   return {

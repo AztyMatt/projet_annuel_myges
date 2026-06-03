@@ -1,9 +1,9 @@
 import { boolean, integer, pgTable, real, text, timestamp } from "drizzle-orm/pg-core"
-import { student } from "./student"
-import { users } from "./auth"
-import { assessment } from "./assessment"
-import { sessionExam } from "./session"
-import { module } from "./module"
+import { student } from "@express/src/postgres/schema/student"
+import { users } from "@express/src/postgres/schema/auth"
+import { assessment } from "@express/src/postgres/schema/assessment"
+import { sessionExam } from "@express/src/postgres/schema/session"
+import { module } from "@express/src/postgres/schema/module"
 
 export const manualNotation = pgTable("manual_notation", {
   id: text("id").primaryKey(),

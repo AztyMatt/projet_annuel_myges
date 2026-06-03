@@ -1,6 +1,6 @@
 import { pgTable, primaryKey, text, timestamp } from "drizzle-orm/pg-core"
-import { conversation } from "./conversation"
-import { users } from "./auth"
+import { conversation } from "@express/src/postgres/schema/conversation"
+import { users } from "@express/src/postgres/schema/auth"
 
 export const message = pgTable("message", {
   id: text("id").primaryKey(),

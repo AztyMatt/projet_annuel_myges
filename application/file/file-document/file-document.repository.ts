@@ -1,4 +1,4 @@
-import { type FileDocument } from "../../../domain/file/file-document/file-document.entity"
+import { type FileDocument } from "@domain/file/file-document/file-document.entity"
 
 export interface FileDocumentRepository {
   findById(id: string): Promise<FileDocument | undefined>

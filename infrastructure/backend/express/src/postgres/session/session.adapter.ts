@@ -1,9 +1,9 @@
 import { asc, eq } from "drizzle-orm"
-import { type SessionRepository } from "../../../../../../application/session/session.repository"
-import { type Session } from "../../../../../../domain/session/session.entity"
-import { type SessionMode } from "../../../../../../domain/session/session.enums"
-import { db } from "../db"
-import { session as sessionTable } from "../schema/session"
+import { type SessionRepository } from "@application/session/session.repository"
+import { type Session } from "@domain/session/session.entity"
+import { type SessionMode } from "@domain/session/session.enums"
+import { db } from "@express/src/postgres/db"
+import { session as sessionTable } from "@express/src/postgres/schema/session"
 
 function rowToSession(row: typeof sessionTable.$inferSelect): Session {
   return {

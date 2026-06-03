@@ -1,7 +1,7 @@
 import { boolean, integer, pgTable, text, timestamp } from "drizzle-orm/pg-core"
 
-import { course } from "./course"
-import { student } from "./student"
+import { course } from "@express/src/postgres/schema/course"
+import { student } from "@express/src/postgres/schema/student"
 
 export const assessment = pgTable("assessment", {
   id: text("id").primaryKey(),

@@ -1,10 +1,10 @@
 import { asc, eq } from "drizzle-orm"
-import { type DocumentApprenticeshipContractRepository } from "../../../../../../../application/document/document-apprenticeship-contract/document-apprenticeship-contract.repository"
-import { type DocumentApprenticeshipContract } from "../../../../../../../domain/document/document-apprenticeship-contract/document-apprenticeship-contract.entity"
-import { DocumentApprenticeshipContractType } from "../../../../../../../domain/document/document-apprenticeship-contract/document-apprenticeship-contract.enums"
-import { assertEnum } from "../../assert-enum"
-import { db } from "../../db"
-import { documentApprenticeshipContract as documentApprenticeshipContractTable } from "../../schema/document"
+import { type DocumentApprenticeshipContractRepository } from "@application/document/document-apprenticeship-contract/document-apprenticeship-contract.repository"
+import { type DocumentApprenticeshipContract } from "@domain/document/document-apprenticeship-contract/document-apprenticeship-contract.entity"
+import { DocumentApprenticeshipContractType } from "@domain/document/document-apprenticeship-contract/document-apprenticeship-contract.enums"
+import { assertEnum } from "@express/src/postgres/assert-enum"
+import { db } from "@express/src/postgres/db"
+import { documentApprenticeshipContract as documentApprenticeshipContractTable } from "@express/src/postgres/schema/document"
 
 function rowToDocumentApprenticeshipContract(row: typeof documentApprenticeshipContractTable.$inferSelect): DocumentApprenticeshipContract {
   return {

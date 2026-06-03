@@ -1,4 +1,4 @@
-import { type Instructor } from "../../domain/instructor/instructor.entity"
+import { type Instructor } from "@domain/instructor/instructor.entity"
 
 export interface InstructorRepository {
   findById(id: string): Promise<Instructor | undefined>

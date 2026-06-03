@@ -1,10 +1,10 @@
 import { desc, eq } from "drizzle-orm"
-import { type AuditLogRepository } from "../../../../../../application/audit-log/audit-log.repository"
-import { type AuditLog, type AuditLogValue } from "../../../../../../domain/audit-log/audit-log.entity"
-import { AuditLogAction } from "../../../../../../domain/audit-log/audit-log.enums"
-import { assertEnum } from "../assert-enum"
-import { db } from "../db"
-import { auditLog as auditLogTable } from "../schema/audit-log"
+import { type AuditLogRepository } from "@application/audit-log/audit-log.repository"
+import { type AuditLog, type AuditLogValue } from "@domain/audit-log/audit-log.entity"
+import { AuditLogAction } from "@domain/audit-log/audit-log.enums"
+import { assertEnum } from "@express/src/postgres/assert-enum"
+import { db } from "@express/src/postgres/db"
+import { auditLog as auditLogTable } from "@express/src/postgres/schema/audit-log"
 
 function rowToAuditLog(row: typeof auditLogTable.$inferSelect): AuditLog {
   return {

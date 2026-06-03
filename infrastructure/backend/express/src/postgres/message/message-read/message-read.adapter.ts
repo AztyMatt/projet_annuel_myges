@@ -1,8 +1,8 @@
 import { and, eq } from "drizzle-orm"
-import { type MessageReadRepository } from "../../../../../../../application/message/message-read/message-read.repository"
-import { type MessageRead } from "../../../../../../../domain/message/message-read/message-read.entity"
-import { db } from "../../db"
-import { messageRead as messageReadTable } from "../../schema/message"
+import { type MessageReadRepository } from "@application/message/message-read/message-read.repository"
+import { type MessageRead } from "@domain/message/message-read/message-read.entity"
+import { db } from "@express/src/postgres/db"
+import { messageRead as messageReadTable } from "@express/src/postgres/schema/message"
 
 function rowToMessageRead(row: typeof messageReadTable.$inferSelect): MessageRead {
   return {

@@ -1,5 +1,5 @@
-import { type User } from "../../domain/auth/user.entity"
-import { type Role } from "../../domain/auth/user.enums"
+import { type User } from "@domain/auth/user.entity"
+import { type Role } from "@domain/auth/user.enums"
 
 export interface TokenProvider {
   issue(user: User, role: Role): string

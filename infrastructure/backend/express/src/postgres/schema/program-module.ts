@@ -1,6 +1,6 @@
 import { pgTable, text } from "drizzle-orm/pg-core"
-import { program } from "./program"
-import { module } from "./module"
+import { program } from "@express/src/postgres/schema/program"
+import { module } from "@express/src/postgres/schema/module"
 
 export const programModule = pgTable("program_module", {
   id: text("id").primaryKey(),

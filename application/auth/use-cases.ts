@@ -7,17 +7,17 @@ import {
   MAX_FAILED_ATTEMPTS,
   needsPasswordReset,
   PASSWORD_MAX_AGE_DAYS,
-} from "../../domain/auth/security-policy"
-import { type User } from "../../domain/auth/user.entity"
-import { Role } from "../../domain/auth/user.enums"
-import { type AdminRepository } from "../admin/admin.repository"
-import { type InstructorRepository } from "../instructor/instructor.repository"
-import { type StudentRepository } from "../student/student.repository"
-import { type PasswordHasher } from "./password-hasher.port"
-import { type TokenProvider } from "./token-provider.port"
-import { type TotpProvider } from "./totp-provider.port"
-import { type UserRepository } from "./user.repository"
-import { type TwoFactorSessionRepository } from "./two-factor-session.repository"
+} from "@domain/auth/security-policy"
+import { type User } from "@domain/auth/user.entity"
+import { Role } from "@domain/auth/user.enums"
+import { type AdminRepository } from "@application/admin/admin.repository"
+import { type InstructorRepository } from "@application/instructor/instructor.repository"
+import { type StudentRepository } from "@application/student/student.repository"
+import { type PasswordHasher } from "@application/auth/password-hasher.port"
+import { type TokenProvider } from "@application/auth/token-provider.port"
+import { type TotpProvider } from "@application/auth/totp-provider.port"
+import { type UserRepository } from "@application/auth/user.repository"
+import { type TwoFactorSessionRepository } from "@application/auth/two-factor-session.repository"
 
 const MAX_2FA_ATTEMPTS = 5
 const TWO_FACTOR_SESSION_EXPIRY_MS = 5 * 60 * 1000

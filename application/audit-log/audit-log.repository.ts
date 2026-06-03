@@ -1,5 +1,5 @@
-import { type AuditLog } from "../../domain/audit-log/audit-log.entity"
-import { type AuditLogAction } from "../../domain/audit-log/audit-log.enums"
+import { type AuditLog } from "@domain/audit-log/audit-log.entity"
+import { type AuditLogAction } from "@domain/audit-log/audit-log.enums"
 
 export interface AuditLogRepository {
   findById(id: string): Promise<AuditLog | undefined>

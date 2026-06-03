@@ -1,4 +1,4 @@
-import { type AssessmentType } from "./assessment.enums"
+import { type AssessmentType } from "@domain/assessment/assessment.enums"
 
 export type Assessment = {
   id: string

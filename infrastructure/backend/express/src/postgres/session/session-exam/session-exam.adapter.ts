@@ -1,10 +1,10 @@
 import { eq } from "drizzle-orm"
-import { type SessionExamRepository } from "../../../../../../../application/session/session-exam/session-exam.repository"
-import { type SessionExam } from "../../../../../../../domain/session/session-exam/session-exam.entity"
-import { SessionExamType } from "../../../../../../../domain/session/session-exam/session-exam.enums"
-import { assertEnum } from "../../assert-enum"
-import { db } from "../../db"
-import { sessionExam as sessionExamTable } from "../../schema/session"
+import { type SessionExamRepository } from "@application/session/session-exam/session-exam.repository"
+import { type SessionExam } from "@domain/session/session-exam/session-exam.entity"
+import { SessionExamType } from "@domain/session/session-exam/session-exam.enums"
+import { assertEnum } from "@express/src/postgres/assert-enum"
+import { db } from "@express/src/postgres/db"
+import { sessionExam as sessionExamTable } from "@express/src/postgres/schema/session"
 
 function rowToSessionExam(row: typeof sessionExamTable.$inferSelect): SessionExam {
   return {

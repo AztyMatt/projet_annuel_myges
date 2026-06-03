@@ -1,8 +1,8 @@
 import { eq } from "drizzle-orm"
-import { type FileAssessmentRepository } from "../../../../../../../application/file/file-assessment/file-assessment.repository"
-import { type FileAssessment } from "../../../../../../../domain/file/file-assessment/file-assessment.entity"
-import { db } from "../../db"
-import { fileAssessment as fileAssessmentTable } from "../../schema/file"
+import { type FileAssessmentRepository } from "@application/file/file-assessment/file-assessment.repository"
+import { type FileAssessment } from "@domain/file/file-assessment/file-assessment.entity"
+import { db } from "@express/src/postgres/db"
+import { fileAssessment as fileAssessmentTable } from "@express/src/postgres/schema/file"
 
 function rowToFileAssessment(row: typeof fileAssessmentTable.$inferSelect): FileAssessment {
   return {

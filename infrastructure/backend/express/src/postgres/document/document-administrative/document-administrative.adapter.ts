@@ -1,10 +1,10 @@
 import { eq } from "drizzle-orm"
-import { type DocumentAdministrativeRepository } from "../../../../../../../application/document/document-administrative/document-administrative.repository"
-import { type DocumentAdministrative } from "../../../../../../../domain/document/document-administrative/document-administrative.entity"
-import { DocumentType } from "../../../../../../../domain/document/document-administrative/document-administrative.enums"
-import { assertEnum } from "../../assert-enum"
-import { db } from "../../db"
-import { documentAdministrative as documentAdministrativeTable } from "../../schema/document"
+import { type DocumentAdministrativeRepository } from "@application/document/document-administrative/document-administrative.repository"
+import { type DocumentAdministrative } from "@domain/document/document-administrative/document-administrative.entity"
+import { DocumentType } from "@domain/document/document-administrative/document-administrative.enums"
+import { assertEnum } from "@express/src/postgres/assert-enum"
+import { db } from "@express/src/postgres/db"
+import { documentAdministrative as documentAdministrativeTable } from "@express/src/postgres/schema/document"
 
 function rowToDocumentAdministrative(row: typeof documentAdministrativeTable.$inferSelect): DocumentAdministrative {
   return {

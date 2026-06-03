@@ -1,8 +1,8 @@
 import { desc, eq } from "drizzle-orm"
-import { type AcademicYearRepository } from "../../../../../../application/academic-year/academic-year.repository"
-import { type AcademicYear } from "../../../../../../domain/academic-year/academic-year.entity"
-import { db } from "../db"
-import { academicYear as academicYearTable } from "../schema/academic-year"
+import { type AcademicYearRepository } from "@application/academic-year/academic-year.repository"
+import { type AcademicYear } from "@domain/academic-year/academic-year.entity"
+import { db } from "@express/src/postgres/db"
+import { academicYear as academicYearTable } from "@express/src/postgres/schema/academic-year"
 
 function rowToAcademicYear(row: typeof academicYearTable.$inferSelect): AcademicYear {
   return {

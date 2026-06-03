@@ -1,6 +1,6 @@
 import { integer, pgTable, text } from "drizzle-orm/pg-core"
-import { program } from "./program"
-import { conversation } from "./conversation"
+import { program } from "@express/src/postgres/schema/program"
+import { conversation } from "@express/src/postgres/schema/conversation"
 
 export const classTable = pgTable("class", {
   id: text("id").primaryKey(),

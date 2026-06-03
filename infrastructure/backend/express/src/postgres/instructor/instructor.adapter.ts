@@ -1,10 +1,10 @@
 import { eq } from "drizzle-orm"
-import { type InstructorRepository } from "../../../../../../application/instructor/instructor.repository"
-import { type Instructor } from "../../../../../../domain/instructor/instructor.entity"
-import { InstructorContractType } from "../../../../../../domain/instructor/instructor.enums"
-import { assertEnum } from "../assert-enum"
-import { db } from "../db"
-import { instructor as instructorTable } from "../schema/instructor"
+import { type InstructorRepository } from "@application/instructor/instructor.repository"
+import { type Instructor } from "@domain/instructor/instructor.entity"
+import { InstructorContractType } from "@domain/instructor/instructor.enums"
+import { assertEnum } from "@express/src/postgres/assert-enum"
+import { db } from "@express/src/postgres/db"
+import { instructor as instructorTable } from "@express/src/postgres/schema/instructor"
 
 function rowToInstructor(row: typeof instructorTable.$inferSelect): Instructor {
   return {

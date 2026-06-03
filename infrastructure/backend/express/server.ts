@@ -1,8 +1,8 @@
-import { app } from "./src/app"
-import { SEED_ON_START } from "./src/auth/auth.config"
-import { seedUsers } from "./src/auth/seed.service"
+import { app } from "@express/src/app"
+import { SEED_ON_START } from "@express/src/auth/auth.config"
+import { seedUsers } from "@express/src/auth/seed.service"
 import { migrate } from "drizzle-orm/node-postgres/migrator"
-import { db } from "./src/postgres/db"
+import { db } from "@express/src/postgres/db"
 import path from "path"
 
 const PORT = process.env.BACKEND_PORT

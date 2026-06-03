@@ -1,10 +1,10 @@
 import { asc, eq } from "drizzle-orm"
-import { type AssessmentRepository } from "../../../../../../application/assessment/assessment.repository"
-import { type Assessment } from "../../../../../../domain/assessment/assessment.entity"
-import { AssessmentType } from "../../../../../../domain/assessment/assessment.enums"
-import { assertEnum } from "../assert-enum"
-import { db } from "../db"
-import { assessment as assessmentTable } from "../schema/assessment"
+import { type AssessmentRepository } from "@application/assessment/assessment.repository"
+import { type Assessment } from "@domain/assessment/assessment.entity"
+import { AssessmentType } from "@domain/assessment/assessment.enums"
+import { assertEnum } from "@express/src/postgres/assert-enum"
+import { db } from "@express/src/postgres/db"
+import { assessment as assessmentTable } from "@express/src/postgres/schema/assessment"
 
 function rowToAssessment(row: typeof assessmentTable.$inferSelect): Assessment {
   return {

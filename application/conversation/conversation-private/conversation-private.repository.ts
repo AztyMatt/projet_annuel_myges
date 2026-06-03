@@ -1,4 +1,4 @@
-import { type ConversationPrivate } from "../../../domain/conversation/conversation-private/conversation-private.entity"
+import { type ConversationPrivate } from "@domain/conversation/conversation-private/conversation-private.entity"
 
 export interface ConversationPrivateRepository {
   findById(id: string): Promise<ConversationPrivate | undefined>

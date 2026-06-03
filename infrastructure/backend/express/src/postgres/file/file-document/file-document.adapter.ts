@@ -1,10 +1,10 @@
 import { eq } from "drizzle-orm"
-import { type FileDocumentRepository } from "../../../../../../../application/file/file-document/file-document.repository"
-import { type FileDocument } from "../../../../../../../domain/file/file-document/file-document.entity"
-import { DocumentStatus } from "../../../../../../../domain/file/file-document/file-document.enums"
-import { assertEnum } from "../../assert-enum"
-import { db } from "../../db"
-import { fileDocument as fileDocumentTable } from "../../schema/file"
+import { type FileDocumentRepository } from "@application/file/file-document/file-document.repository"
+import { type FileDocument } from "@domain/file/file-document/file-document.entity"
+import { DocumentStatus } from "@domain/file/file-document/file-document.enums"
+import { assertEnum } from "@express/src/postgres/assert-enum"
+import { db } from "@express/src/postgres/db"
+import { fileDocument as fileDocumentTable } from "@express/src/postgres/schema/file"
 
 function rowToFileDocument(row: typeof fileDocumentTable.$inferSelect): FileDocument {
   return {

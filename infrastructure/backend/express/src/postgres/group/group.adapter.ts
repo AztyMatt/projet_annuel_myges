@@ -1,8 +1,8 @@
 import { asc, eq } from "drizzle-orm"
-import { type GroupRepository } from "../../../../../../application/group/group.repository"
-import { type Group } from "../../../../../../domain/group/group.entity"
-import { db } from "../db"
-import { group as groupTable } from "../schema/group"
+import { type GroupRepository } from "@application/group/group.repository"
+import { type Group } from "@domain/group/group.entity"
+import { db } from "@express/src/postgres/db"
+import { group as groupTable } from "@express/src/postgres/schema/group"
 
 function rowToGroup(row: typeof groupTable.$inferSelect): Group {
   return {

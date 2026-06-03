@@ -1,9 +1,9 @@
 import { pgTable, text } from "drizzle-orm/pg-core"
-import { instructor } from "./instructor"
-import { module } from "./module"
-import { group } from "./group"
-import { bloc } from "./bloc"
-import { conversation } from "./conversation"
+import { instructor } from "@express/src/postgres/schema/instructor"
+import { module } from "@express/src/postgres/schema/module"
+import { group } from "@express/src/postgres/schema/group"
+import { bloc } from "@express/src/postgres/schema/bloc"
+import { conversation } from "@express/src/postgres/schema/conversation"
 
 export const course = pgTable("course", {
   id: text("id").primaryKey(),

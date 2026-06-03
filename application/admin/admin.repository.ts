@@ -1,4 +1,4 @@
-import { type Admin } from "../../domain/admin/admin.entity"
+import { type Admin } from "@domain/admin/admin.entity"
 
 export interface AdminRepository {
   findById(id: string): Promise<Admin | undefined>
