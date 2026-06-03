@@ -7,73 +7,73 @@ import { cn } from "@/lib/utils";
 type Role = "etudiant" | "intervenant" | "scolarite" | "superadmin";
 
 const pageTitles: Record<string, string> = {
-  "/etudiant": "Tableau de bord",
-  "/etudiant/planning": "Mon planning",
-  "/etudiant/notes": "Mes notes",
-  "/etudiant/absences": "Mes absences",
-  "/etudiant/documents": "Mes documents",
-  "/intervenant": "Tableau de bord",
-  "/intervenant/planning": "Mon planning",
-  "/intervenant/supports": "Supports de cours",
-  "/scolarite": "Tableau de bord",
-  "/scolarite/etudiants": "Gestion des étudiants",
-  "/scolarite/notes": "Notes & jurys",
-  "/superadmin": "Tableau de bord",
-  "/superadmin/gestion": "Gestion des utilisateurs",
-  "/superadmin/securite": "Sécurité système",
-  "/messagerie": "Messagerie",
-  "/parametres": "Paramètres",
+    "/etudiant": "Tableau de bord",
+    "/etudiant/planning": "Mon planning",
+    "/etudiant/notes": "Mes notes",
+    "/etudiant/absences": "Mes absences",
+    "/etudiant/documents": "Mes documents",
+    "/intervenant": "Tableau de bord",
+    "/intervenant/planning": "Mon planning",
+    "/intervenant/supports": "Supports de cours",
+    "/scolarite": "Tableau de bord",
+    "/scolarite/etudiants": "Gestion des étudiants",
+    "/scolarite/notes": "Notes & jurys",
+    "/superadmin": "Tableau de bord",
+    "/superadmin/gestion": "Gestion des utilisateurs",
+    "/superadmin/securite": "Sécurité système",
+    "/messagerie": "Messagerie",
+    "/parametres": "Paramètres",
 };
 
 function getRole(pathname: string): Role {
-  if (pathname.startsWith("/intervenant")) return "intervenant";
-  if (pathname.startsWith("/scolarite")) return "scolarite";
-  if (pathname.startsWith("/superadmin")) return "superadmin";
-  return "etudiant";
+    if (pathname.startsWith("/intervenant")) return "intervenant";
+    if (pathname.startsWith("/scolarite")) return "scolarite";
+    if (pathname.startsWith("/superadmin")) return "superadmin";
+    return "etudiant";
 }
 
 const roleBadge: Record<Role, { label: string; className: string }> = {
-  etudiant: { label: "Étudiant", className: "bg-blue-50 text-blue-700 border border-blue-200" },
-  intervenant: { label: "Intervenant", className: "bg-emerald-50 text-emerald-700 border border-emerald-200" },
-  scolarite: { label: "Administration", className: "bg-orange-50 text-orange-700 border border-orange-200" },
-  superadmin: { label: "Super Admin", className: "bg-red-50 text-red-700 border border-red-200" },
+    etudiant: { label: "Étudiant", className: "bg-blue-50 text-blue-700 border border-blue-200" },
+    intervenant: { label: "Intervenant", className: "bg-emerald-50 text-emerald-700 border border-emerald-200" },
+    scolarite: { label: "Administration", className: "bg-orange-50 text-orange-700 border border-orange-200" },
+    superadmin: { label: "Super Admin", className: "bg-red-50 text-red-700 border border-red-200" },
 };
 
 export function TopBar() {
-  const pathname = usePathname();
-  const title = pageTitles[pathname] ?? "MyGES 2.0";
-  const role = getRole(pathname);
-  const badge = roleBadge[role];
+    const pathname = usePathname();
+    const title = pageTitles[pathname] ?? "MyGES 2.0";
+    const role = getRole(pathname);
+    const badge = roleBadge[role];
 
-  return (
-    <header className="fixed top-0 left-64 right-0 h-16 bg-white border-b border-gray-100 z-30 flex items-center px-6 gap-4 shadow-sm">
-      <div className="flex-1">
-        <h1 className="text-base font-bold text-gray-900 leading-none">{title}</h1>
-        <p className="text-xs text-gray-400 mt-0.5">MyGES 2.0</p>
-      </div>
+    return (
+        <header className="fixed top-0 left-64 right-0 h-16 bg-white border-b border-gray-100 z-30 flex items-center px-6 gap-4 shadow-sm">
+            <div className="flex-1">
+                <h1 className="text-base font-bold text-gray-900 leading-none">{title}</h1>
+                <p className="text-xs text-gray-400 mt-0.5">MyGES 2.0</p>
+            </div>
 
-      <div className="flex items-center gap-3">
-        {/* Search */}
-        <div className="relative w-52">
-          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Rechercher..."
-            className="w-full pl-8 pr-3 h-9 text-sm bg-gray-50 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
-          />
-        </div>
+            <div className="flex items-center gap-3">
+                {/* Search */}
+                <div className="relative w-52">
+                    <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input
+                        type="text"
+                        placeholder="Rechercher..."
+                        className="w-full pl-8 pr-3 h-9 text-sm bg-gray-50 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+                    />
+                </div>
 
-        {/* Role badge */}
-        <span className={cn("text-xs font-medium px-2.5 py-1 rounded-full", badge.className)}>
-          {badge.label}
-        </span>
+                {/* Role badge */}
+                <span className={cn("text-xs font-medium px-2.5 py-1 rounded-full", badge.className)}>
+                    {badge.label}
+                </span>
 
-        {/* Notifications */}
-        <button className="relative w-9 h-9 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-colors">
-          <Bell size={17} className="text-gray-600" />
-          <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full" />
-        </button>
-      </div>
-    </header>
-  );
+                {/* Notifications */}
+                <button className="relative w-9 h-9 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-colors">
+                    <Bell size={17} className="text-gray-600" />
+                    <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full" />
+                </button>
+            </div>
+        </header>
+    );
 }

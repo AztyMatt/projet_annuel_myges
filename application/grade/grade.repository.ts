@@ -1,9 +1,9 @@
-import { type Grade } from "@domain/grade/grade.entity"
+import { type Grade } from "@domain/grade/grade.entity";
 
 export interface GradeRepository {
-  findById(id: string): Promise<Grade | undefined>
-  findByStudentId(studentId: string): Promise<Grade[]>
-  save(grade: Grade): Promise<void>
-  deleteById(id: string): Promise<void>
-  list(): Promise<Grade[]>
+    findById(id: string): Promise<Grade | undefined>;
+    findByStudentId(studentId: string): Promise<Grade[]>;
+    save(grade: Grade): Promise<void>;
+    deleteById(id: string): Promise<void>;
+    list(): Promise<Grade[]>;
 }

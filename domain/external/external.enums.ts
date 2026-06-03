@@ -1,7 +1,7 @@
 export const ExternalType = {
-  INVIGILATOR: "Surveillant",
-  JURY: "Jury",
-  OTHER: "Autre",
-} as const
+    INVIGILATOR: "Surveillant",
+    JURY: "Jury",
+    OTHER: "Autre",
+} as const;
 
-export type ExternalType = typeof ExternalType[keyof typeof ExternalType]
+export type ExternalType = (typeof ExternalType)[keyof typeof ExternalType];

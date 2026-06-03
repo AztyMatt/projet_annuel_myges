@@ -1,6 +1,6 @@
 export const AssessmentType = {
-  CONTINUOUS: "Continu",
-  EXAM: "Examen",
-} as const
+    CONTINUOUS: "Continu",
+    EXAM: "Examen",
+} as const;
 
-export type AssessmentType = typeof AssessmentType[keyof typeof AssessmentType]
+export type AssessmentType = (typeof AssessmentType)[keyof typeof AssessmentType];

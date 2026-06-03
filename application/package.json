@@ -1,8 +1,8 @@
 {
-  "name": "@myges/application",
-  "version": "1.0.0",
-  "devDependencies": {
-    "@types/bcrypt": "^6.0.0",
-    "@types/next": "^8.0.7"
-  }
+    "name": "@myges/application",
+    "version": "1.0.0",
+    "devDependencies": {
+        "@types/bcrypt": "^6.0.0",
+        "@types/next": "^8.0.7"
+    }
 }

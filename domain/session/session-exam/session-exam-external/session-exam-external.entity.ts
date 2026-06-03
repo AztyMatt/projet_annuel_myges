@@ -1,5 +1,5 @@
 export type SessionExamExternal = {
-  id: string
-  sessionExamId: string
-  externalId: string
-}
+    id: string;
+    sessionExamId: string;
+    externalId: string;
+};

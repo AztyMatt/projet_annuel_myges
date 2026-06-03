@@ -4,26 +4,26 @@ export type ApplicationErrorScope =
     | "not_found"
     | "conflict"
     | "unprocessable"
-    | "infrastructure"
+    | "infrastructure";
 
 export type ApplicationErrorIssue = {
-    field?: string
-    message: string
-}
+    field?: string;
+    message: string;
+};
 
-export type ApplicationErrorMetadataValue = string | number | boolean | null
+export type ApplicationErrorMetadataValue = string | number | boolean | null;
 
-export type ApplicationErrorMetadata = Record<string, ApplicationErrorMetadataValue>
+export type ApplicationErrorMetadata = Record<string, ApplicationErrorMetadataValue>;
 
 export type ApplicationErrorDetail = {
-    scope: ApplicationErrorScope
-    issues?: ApplicationErrorIssue[]
-    metadata?: ApplicationErrorMetadata
-}
+    scope: ApplicationErrorScope;
+    issues?: ApplicationErrorIssue[];
+    metadata?: ApplicationErrorMetadata;
+};
 
 export type ApplicationErrorPayload = {
-    ok: false
-    code: string
-    message: string
-    data?: ApplicationErrorDetail
-}
+    ok: false;
+    code: string;
+    message: string;
+    data?: ApplicationErrorDetail;
+};

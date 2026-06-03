@@ -1,5 +1,5 @@
 export type GradeAssessment = {
-  id: string
-  gradeId: string
-  assessmentId: string
-}
+    id: string;
+    gradeId: string;
+    assessmentId: string;
+};

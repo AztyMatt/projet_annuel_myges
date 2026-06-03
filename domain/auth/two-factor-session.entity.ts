@@ -1,6 +1,6 @@
 export type TwoFactorSession = {
-  token: string
-  userId: string
-  attempts: number
-  createdAt: Date
-}
+    token: string;
+    userId: string;
+    attempts: number;
+    createdAt: Date;
+};

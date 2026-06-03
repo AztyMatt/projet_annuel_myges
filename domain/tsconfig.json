@@ -1,16 +1,16 @@
 {
-  "extends": "../tsconfig.base.json",
-  "compilerOptions": {
-    "composite": true,
-    "rootDir": ".",
-    "outDir": "dist",
-    "baseUrl": ".",
-    "paths": {
-      "@domain/*": ["./*"]
+    "extends": "../tsconfig.base.json",
+    "compilerOptions": {
+        "composite": true,
+        "rootDir": ".",
+        "outDir": "dist",
+        "baseUrl": ".",
+        "paths": {
+            "@domain/*": ["./*"]
+        },
+        "declaration": true,
+        "ignoreDeprecations": "6.0"
     },
-    "declaration": true,
-    "ignoreDeprecations": "6.0"
-  },
-  "include": ["**/*.ts"],
-  "exclude": ["dist", "node_modules"]
+    "include": ["**/*.ts"],
+    "exclude": ["dist", "node_modules"]
 }
