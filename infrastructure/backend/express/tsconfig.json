@@ -10,7 +10,7 @@
       "@application/*": ["../../../application/*"],
       "@domain/*": ["../../../domain/*"]
     },
-    "ignoreDeprecations": "5.0"
+    "ignoreDeprecations": "6.0"
   },
   "references": [{ "path": "../../../domain" }, { "path": "../../../application" }],
   "include": ["**/*.ts"],
