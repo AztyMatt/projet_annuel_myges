@@ -5,7 +5,7 @@ import { migrate } from "drizzle-orm/node-postgres/migrator"
 import { db } from "./src/postgres/db"
 import path from "path"
 
-const PORT = process.env.PORT
+const PORT = process.env.BACKEND_PORT
 
 const startServer = async (): Promise<void> => {
   await migrate(db, { migrationsFolder: path.join(__dirname, "drizzle") })
