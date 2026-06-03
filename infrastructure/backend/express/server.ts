@@ -1,27 +1,30 @@
 import { app } from "./src/app"
-import { SEED_ON_START, seedUsers } from "./src/auth/service"
-import { initDb } from "./src/db"
+import { SEED_ON_START } from "./src/auth/auth.config"
+import { seedUsers } from "./src/auth/seed.service"
+import { migrate } from "drizzle-orm/node-postgres/migrator"
+import { db } from "./src/postgres/db"
+import path from "path"
 
-const PORT = process.env.PORT || 3001
+const PORT = process.env.BACKEND_PORT
 
 const startServer = async (): Promise<void> => {
-  await initDb()
+  await migrate(db, { migrationsFolder: path.join(__dirname, "drizzle") })
 
   try {
     await seedUsers()
   } catch (error) {
-    console.error("[seed] Erreur pendant l'initialisation des comptes de test:", error)
+    console.error("[seed] Failed to seed test accounts:", error)
   }
 
   app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`)
     if (SEED_ON_START) {
-      console.log("[seed] Comptes de test activés (SEED_ON_START=true).")
+      console.log("[seed] Test accounts enabled (SEED_ON_START=true).")
     }
   })
 }
 
 startServer().catch((error) => {
-  console.error("[db] Impossible d'initialiser la base de données:", error)
+  console.error("[db] Failed to initialize database:", error)
   process.exit(1)
 })

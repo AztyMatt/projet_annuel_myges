@@ -10,7 +10,8 @@
       "@domain/*": ["../domain/*"]
     },
     "declaration": true,
-    "ignoreDeprecations": "5.0"
+    "types": ["node"],
+    "ignoreDeprecations": "6.0"
   },
   "references": [{ "path": "../domain" }],
   "include": ["**/*.ts"],

@@ -5,6 +5,7 @@
 - **Frontend** — Next.js
 - **Backend** — Express.js
 - **Database** — PostgreSQL
+- **ORM** — Drizzle
 - **Reverse proxy** — Nginx (dev) / Traefik (prod)
 - **Containerization** — Docker Compose (dev) / Kubernetes (prod)
 - **Secrets management** — [Infisical](https://app.infisical.com/organizations/34e46529-d43b-46e2-a72f-8f0f798856a8/projects/secret-management/eaa2be30-8c84-4edb-a020-179d170cc682/overview)
@@ -89,6 +90,33 @@ brew install infisical/get-cli/infisical
 infisical login
 ```
 
+## Database (Drizzle)
+
+Drizzle is used as the ORM (Object-Relational Mapper).
+Schemas are defined in `infrastructure/backend/express/src/postgres/schema/` and migrations are generated into `infrastructure/backend/express/drizzle/`.
+
+### Workflow
+
+```bash
+# After modifying a schema file, generate a new migration
+npm run db:generate
+
+# Apply pending migrations to the database
+npm run db:migrate
+```
+
+### Structure
+
+```
+infrastructure/backend/express/
+├── drizzle.config.ts               # Drizzle Kit config (dialect, schema glob, output folder)
+├── drizzle/                        # Generated SQL migrations (committed to git)
+└── src/postgres/
+    ├── schema/                     # One file per entity (table definitions)
+    ├── db.ts                       # Drizzle client (node-postgres pool)
+    └── <entity>/<entity>.adapter.ts  # Repository implementation per entity
+```
+
 ## Running the project
 
 ### Generate the .env
@@ -124,6 +152,17 @@ docker compose up
 #   Backend   → http://localhost:3001
 #   postgres  → localhost:5432
 ```
+
+### Seed accounts
+
+If `SEED_ON_START=true` and `SEED_PASSWORD` passes the strong password policy, the following accounts are created automatically on startup:
+
+| Email | Role | 2FA |
+|-------|------|-----|
+| `admin.seed@myges.fr` | `ADMINISTRATEUR` | No |
+| `superadmin.seed@myges.fr` | `SUPER_ADMINISTRATEUR` | Yes |
+
+Password for both accounts: value of `SEED_PASSWORD` in `.env`.
 
 ### Adding a dependency
 

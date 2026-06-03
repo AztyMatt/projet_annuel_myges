@@ -1,7 +1,7 @@
-export type ErrorLike = unknown;
+type ErrorInput = Error | { message: string } | string | number | boolean | null | undefined
 
 export function ensureError(
-  value: unknown,
+  value: ErrorInput,
   fallbackMessage = "Unexpected error"
 ): Error {
   if (value instanceof Error) return value;

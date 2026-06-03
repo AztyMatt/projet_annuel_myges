@@ -1,37 +1,47 @@
 import { type NextFunction, type Request, type Response } from "express"
-import { tokenProvider } from "./adapters"
-import { type Role } from "../../../../../domain/auth/user"
+import { tokenProvider } from "./token-provider.adapter"
+import { type Role } from "../../../../../domain/auth/user.enums"
 
 export type AuthRequest = Request & {
   auth?: { userId: string; role: Role; email: string }
 }
 
-export const requireAuth = (req: AuthRequest, res: Response, next: NextFunction): void => {
-  const authorization = req.headers.authorization
+export const requireAuth = (request: AuthRequest, response: Response, nextFunction: NextFunction): void => {
+  const authorization = request.headers.authorization
   if (!authorization?.startsWith("Bearer ")) {
-    res.status(401).json({ error: "Unauthorized" })
+    response.status(401).json({ error: "Unauthorized" })
     return
   }
   try {
     const token = authorization.slice("Bearer ".length)
     const payload = tokenProvider.verify(token)
-    req.auth = { userId: payload.sub, role: payload.role, email: payload.email }
-    next()
+    request.auth = { userId: payload.sub, role: payload.role, email: payload.email }
+    nextFunction()
   } catch {
-    res.status(401).json({ error: "Invalid token" })
+    response.status(401).json({ error: "Invalid token" })
   }
+}
+
+export const requireCronSecret = (request: Request, response: Response, nextFunction: NextFunction): void => {
+  const authorization = request.headers.authorization
+  const secret = process.env.CRON_SECRET
+  if (!secret || !authorization || authorization !== `Bearer ${secret}`) {
+    response.status(401).json({ error: "Unauthorized" })
+    return
+  }
+  nextFunction()
 }
 
 export const requireRole =
   (...allowedRoles: Role[]) =>
-  (req: AuthRequest, res: Response, next: NextFunction): void => {
-    if (!req.auth) {
-      res.status(401).json({ error: "Unauthorized" })
+  (request: AuthRequest, response: Response, nextFunction: NextFunction): void => {
+    if (!request.auth) {
+      response.status(401).json({ error: "Unauthorized" })
       return
     }
-    if (!allowedRoles.includes(req.auth.role)) {
-      res.status(403).json({ error: "Forbidden: insufficient role" })
+    if (!allowedRoles.includes(request.auth.role)) {
+      response.status(403).json({ error: "Forbidden: insufficient role" })
       return
     }
-    next()
+    nextFunction()
   }
