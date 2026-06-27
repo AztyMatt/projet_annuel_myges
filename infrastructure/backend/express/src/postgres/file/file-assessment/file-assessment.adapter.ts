@@ -10,7 +10,6 @@ function rowToFileAssessment(row: typeof fileAssessmentTable.$inferSelect): File
         assessmentId: row.assessmentId,
         assessmentGroupId: row.assessmentGroupId,
         fileId: row.fileId,
-        submittedAt: row.submittedAt,
     };
 }
 
@@ -41,7 +40,6 @@ export const fileAssessmentRepository: FileAssessmentRepository = {
                 assessmentId: fileAssessment.assessmentId,
                 assessmentGroupId: fileAssessment.assessmentGroupId,
                 fileId: fileAssessment.fileId,
-                submittedAt: fileAssessment.submittedAt,
             })
             .onConflictDoUpdate({
                 target: fileAssessmentTable.id,
@@ -49,7 +47,6 @@ export const fileAssessmentRepository: FileAssessmentRepository = {
                     assessmentId: fileAssessment.assessmentId,
                     assessmentGroupId: fileAssessment.assessmentGroupId,
                     fileId: fileAssessment.fileId,
-                    submittedAt: fileAssessment.submittedAt,
                 },
             });
     },

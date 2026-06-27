@@ -1,6 +1,6 @@
-export type FileAssessment = {
+export type FileAssessmentInstruction = {
     id: string;
     assessmentId: string;
-    assessmentGroupId: string;
     fileId: string;
+    uploadedAt: Date;
 };

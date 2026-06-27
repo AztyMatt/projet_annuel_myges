@@ -30,7 +30,6 @@ export const fileAssessment = pgTable("file_assessment", {
     fileId: text("file_id")
         .notNull()
         .references(() => file.id),
-    submittedAt: timestamp("submitted_at", { withTimezone: true }).notNull(),
 });
 
 export const fileCourse = pgTable("file_course", {
@@ -67,4 +66,15 @@ export const fileJustification = pgTable("file_justification", {
     processedBy: text("processed_by")
         .notNull()
         .references(() => admin.id),
+});
+
+export const fileAssessmentInstruction = pgTable("file_assessment_instruction", {
+    id: text("id").primaryKey(),
+    assessmentId: text("assessment_id")
+        .notNull()
+        .references(() => assessment.id),
+    fileId: text("file_id")
+        .notNull()
+        .references(() => file.id),
+    uploadedAt: timestamp("uploaded_at", { withTimezone: true }).notNull(),
 });

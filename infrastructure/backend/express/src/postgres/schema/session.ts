@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { boolean, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 import { course } from "@express/src/postgres/schema/course";
 import { classroom } from "@express/src/postgres/schema/classroom";
 import { assessment } from "@express/src/postgres/schema/assessment";
@@ -25,6 +25,7 @@ export const sessionExam = pgTable("session_exam", {
         .notNull()
         .references(() => session.id),
     type: text("type").notNull(),
+    isRetake: boolean("is_retake").notNull().default(false),
     assessmentId: text("assessment_id").references(() => assessment.id),
 });
 

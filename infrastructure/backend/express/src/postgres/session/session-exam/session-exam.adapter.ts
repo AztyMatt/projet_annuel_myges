@@ -11,6 +11,7 @@ function rowToSessionExam(row: typeof sessionExamTable.$inferSelect): SessionExa
         id: row.id,
         sessionId: row.sessionId,
         type: assertEnum(row.type, SessionExamType),
+        isRetake: row.isRetake,
         assessmentId: row.assessmentId,
     };
 }
@@ -35,6 +36,7 @@ export const sessionExamRepository: SessionExamRepository = {
                 id: sessionExam.id,
                 sessionId: sessionExam.sessionId,
                 type: sessionExam.type,
+                isRetake: sessionExam.isRetake,
                 assessmentId: sessionExam.assessmentId,
             })
             .onConflictDoUpdate({
@@ -42,6 +44,7 @@ export const sessionExamRepository: SessionExamRepository = {
                 set: {
                     sessionId: sessionExam.sessionId,
                     type: sessionExam.type,
+                    isRetake: sessionExam.isRetake,
                     assessmentId: sessionExam.assessmentId,
                 },
             });

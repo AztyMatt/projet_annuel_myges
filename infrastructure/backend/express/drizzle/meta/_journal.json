@@ -1,20 +1,27 @@
 {
-    "version": "7",
-    "dialect": "postgresql",
-    "entries": [
-        {
-            "idx": 0,
-            "version": "7",
-            "when": 1779812177163,
-            "tag": "0000_organic_blazing_skull",
-            "breakpoints": true
-        },
-        {
-            "idx": 1,
-            "version": "7",
-            "when": 1779814294740,
-            "tag": "0001_hesitant_gorgon",
-            "breakpoints": true
-        }
-    ]
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1779812177163,
+      "tag": "0000_organic_blazing_skull",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1779814294740,
+      "tag": "0001_hesitant_gorgon",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1782596618534,
+      "tag": "0002_noisy_felicia_hardy",
+      "breakpoints": true
+    }
+  ]
 }
