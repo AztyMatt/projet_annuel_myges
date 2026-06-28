@@ -15,7 +15,6 @@ export const session = pgTable("session", {
     endTime: timestamp("end_time", { withTimezone: true }).notNull(),
     mode: text("mode").notNull(),
     classroomId: text("classroom_id")
-        .notNull()
         .references(() => classroom.id),
 });
 

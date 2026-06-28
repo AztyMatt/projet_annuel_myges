@@ -9,8 +9,8 @@ import { external as externalTable } from "@express/src/postgres/schema/external
 function rowToExternal(row: typeof externalTable.$inferSelect): External {
     return {
         id: row.id,
-        firstName: row.firstName,
-        lastName: row.lastName,
+        firstname: row.firstname,
+        lastname: row.lastname,
         email: row.email,
         type: assertEnum(row.type, ExternalType),
     };
@@ -30,16 +30,16 @@ export const externalRepository: ExternalRepository = {
             .insert(externalTable)
             .values({
                 id: external.id,
-                firstName: external.firstName,
-                lastName: external.lastName,
+                firstname: external.firstname,
+                lastname: external.lastname,
                 email: external.email,
                 type: external.type,
             })
             .onConflictDoUpdate({
                 target: externalTable.id,
                 set: {
-                    firstName: external.firstName,
-                    lastName: external.lastName,
+                    firstname: external.firstname,
+                    lastname: external.lastname,
                     email: external.email,
                     type: external.type,
                 },

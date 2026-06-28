@@ -1,7 +1,7 @@
 export const DocumentStatus = {
-    PENDING: "En attente",
-    VALID: "Validé",
-    EXPIRED: "Expiré",
+    PENDING: "PENDING",
+    VALID: "VALID",
+    EXPIRED: "EXPIRED",
 } as const;
 
 export type DocumentStatus = (typeof DocumentStatus)[keyof typeof DocumentStatus];

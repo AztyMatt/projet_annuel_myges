@@ -1,8 +1,8 @@
 export const InstructorContractType = {
-    PERMANENT: "CDI",
-    FIXED_TERM: "CDD",
-    FREELANCE: "Freelance",
-    TEMPORARY: "Vacataire",
+    PERMANENT: "PERMANENT",
+    FIXED_TERM: "FIXED_TERM",
+    FREELANCE: "FREELANCE",
+    TEMPORARY: "TEMPORARY",
 } as const;
 
 export type InstructorContractType = (typeof InstructorContractType)[keyof typeof InstructorContractType];

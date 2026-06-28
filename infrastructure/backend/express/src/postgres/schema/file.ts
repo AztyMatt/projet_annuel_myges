@@ -64,7 +64,6 @@ export const fileJustification = pgTable("file_justification", {
         .references(() => file.id),
     validationStatus: text("validation_status").notNull(),
     processedBy: text("processed_by")
-        .notNull()
         .references(() => admin.id),
 });
 

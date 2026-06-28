@@ -6,6 +6,7 @@ import { messageRead as messageReadTable } from "@express/src/postgres/schema/me
 
 function rowToMessageRead(row: typeof messageReadTable.$inferSelect): MessageRead {
     return {
+        id: row.id,
         messageId: row.messageId,
         userId: row.userId,
         readAt: row.readAt,
@@ -33,12 +34,13 @@ export const messageReadRepository: MessageReadRepository = {
         await db
             .insert(messageReadTable)
             .values({
+                id: messageRead.id,
                 messageId: messageRead.messageId,
                 userId: messageRead.userId,
                 readAt: messageRead.readAt,
             })
             .onConflictDoUpdate({
-                target: [messageReadTable.messageId, messageReadTable.userId],
+                target: messageReadTable.id,
                 set: {
                     readAt: messageRead.readAt,
                 },

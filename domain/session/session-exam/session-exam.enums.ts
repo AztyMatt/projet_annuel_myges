@@ -1,6 +1,6 @@
 export const SessionExamType = {
-    WRITTEN: "Écrit",
-    DEFENSE: "Soutenance",
+    WRITTEN: "WRITTEN",
+    DEFENSE: "DEFENSE",
 } as const;
 
 export type SessionExamType = (typeof SessionExamType)[keyof typeof SessionExamType];
