@@ -26,6 +26,8 @@ type RoleKey = keyof typeof Role;
 
 type AuthUserView = {
     id: string;
+    firstname: string;
+    lastname: string;
     email: string;
     role: RoleKey;
 };
@@ -88,6 +90,8 @@ export type ListUsersResult = {
     kind: "users_listed";
     users: Array<{
         id: string;
+        firstname: string;
+        lastname: string;
         email: string;
         failedAttempts: number;
         lockedUntil: Date | null;
@@ -100,7 +104,7 @@ export type GdprExportResult =
     | { kind: "user_not_found" }
     | {
           kind: "data_exported";
-          data: { id: string; email: string; gdprConsentAt: Date; createdAt: Date; lastLoginAt: Date | null };
+          data: { id: string; firstname: string; lastname: string; email: string; gdprConsentAt: Date; createdAt: Date; lastLoginAt: Date | null };
       };
 
 export type DeleteAccountResult = { kind: "user_not_found" } | { kind: "account_deleted" };
@@ -128,13 +132,15 @@ export class AuthUseCases {
     }
 
     async signup(input: {
+        firstname?: string;
+        lastname?: string;
         email?: string;
         password?: string;
         enable2FA?: boolean;
         gdprConsent?: boolean;
     }): Promise<SignupResult> {
-        const { email, password, enable2FA = false, gdprConsent = false } = input;
-        if (!email || !password) return { kind: "missing_credentials" };
+        const { firstname, lastname, email, password, enable2FA = false, gdprConsent = false } = input;
+        if (!firstname || !lastname || !email || !password) return { kind: "missing_credentials" };
         if (!emailIsValid(email)) return { kind: "invalid_email" };
         if (!gdprConsent) return { kind: "missing_gdpr_consent" };
         if (!isStrongPassword(password)) return { kind: "weak_password" };
@@ -143,6 +149,8 @@ export class AuthUseCases {
         const twoFactorSecret = enable2FA ? this.totp.generateSecret(email.toLowerCase()) : null;
         const user: User = {
             id: randomUUID(),
+            firstname,
+            lastname,
             email: email.toLowerCase(),
             passwordHash: await this.hasher.hash(password),
             failedAttempts: 0,
@@ -260,6 +268,8 @@ export class AuthUseCases {
             kind: "user_found",
             user: {
                 id: user.id,
+                firstname: user.firstname,
+                lastname: user.lastname,
                 email: user.email,
                 role: this.roleToKey(role),
                 passwordExpiresInDays: Math.max(
@@ -297,6 +307,8 @@ export class AuthUseCases {
             kind: "users_listed",
             users: users.map((user) => ({
                 id: user.id,
+                firstname: user.firstname,
+                lastname: user.lastname,
                 email: user.email,
                 failedAttempts: user.failedAttempts,
                 lockedUntil: user.lockedUntil,
@@ -313,6 +325,8 @@ export class AuthUseCases {
             kind: "data_exported",
             data: {
                 id: user.id,
+                firstname: user.firstname,
+                lastname: user.lastname,
                 email: user.email,
                 gdprConsentAt: user.gdprConsentAt,
                 createdAt: user.createdAt,
@@ -341,7 +355,7 @@ export class AuthUseCases {
         return {
             kind: "authenticated",
             token: this.tokens.issue(user, role),
-            user: { id: user.id, email: user.email, role: this.roleToKey(role) },
+            user: { id: user.id, firstname: user.firstname, lastname: user.lastname, email: user.email, role: this.roleToKey(role) },
         };
     }
 }
