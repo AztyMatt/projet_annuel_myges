@@ -9,6 +9,8 @@ function rowToProgramModule(row: typeof programModuleTable.$inferSelect): Progra
         id: row.id,
         programId: row.programId,
         moduleId: row.moduleId,
+        coefficient: row.coefficient,
+        ectsCredits: row.ectsCredits,
     };
 }
 
@@ -32,12 +34,16 @@ export const programModuleRepository: ProgramModuleRepository = {
                 id: programModule.id,
                 programId: programModule.programId,
                 moduleId: programModule.moduleId,
+                coefficient: programModule.coefficient,
+                ectsCredits: programModule.ectsCredits,
             })
             .onConflictDoUpdate({
                 target: programModuleTable.id,
                 set: {
                     programId: programModule.programId,
                     moduleId: programModule.moduleId,
+                    coefficient: programModule.coefficient,
+                    ectsCredits: programModule.ectsCredits,
                 },
             });
     },

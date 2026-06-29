@@ -7,14 +7,16 @@ export type ModuleView = {
     id: string;
     name: string;
     code: string | null;
-    coefficient: number;
-    ectsCredits: number;
 };
 
-export type CreateModuleResult = MissingFields | { kind: "module_created"; module: ModuleView };
+export type CreateModuleResult =
+    | MissingFields
+    | { kind: "module_already_exists" }
+    | { kind: "module_created"; module: ModuleView };
 
 export type UpdateModuleResult =
     | NotFound
+    | { kind: "module_already_exists" }
     | { kind: "module_updated"; module: ModuleView };
 
 export type DeleteModuleResult = NotFound | { kind: "module_deleted" };
@@ -27,36 +29,30 @@ const toView = (m: Module): ModuleView => ({
     id: m.id,
     name: m.name,
     code: m.code,
-    coefficient: m.coefficient,
-    ectsCredits: m.ectsCredits,
 });
 
 export class ModuleUseCases {
     constructor(private readonly modules: ModuleRepository) {}
 
-    async create(input: {
-        name?: string;
-        code?: string;
-        coefficient?: number;
-        ectsCredits?: number;
-    }): Promise<CreateModuleResult> {
-        const { name, code, coefficient, ectsCredits } = input;
-        if (!name || coefficient === undefined || ectsCredits === undefined) return MissingFields;
-        const module: Module = { id: randomUUID(), name, code: code ?? null, coefficient, ectsCredits };
+    async create(input: { name?: string; code?: string }): Promise<CreateModuleResult> {
+        const { name, code } = input;
+        if (!name) return MissingFields;
+        const resolvedCode = code ?? null;
+        if (await this.modules.findByNameAndCode(name, resolvedCode)) return { kind: "module_already_exists" };
+        const module: Module = { id: randomUUID(), name, code: resolvedCode };
         await this.modules.save(module);
         return { kind: "module_created", module: toView(module) };
     }
 
-    async update(
-        id: string,
-        input: { name?: string; code?: string; coefficient?: number; ectsCredits?: number },
-    ): Promise<UpdateModuleResult> {
+    async update(id: string, input: { name?: string; code?: string }): Promise<UpdateModuleResult> {
         const module = await this.modules.findById(id);
         if (!module) return NotFound;
-        if (input.name !== undefined) module.name = input.name;
-        if (input.code !== undefined) module.code = input.code ?? null;
-        if (input.coefficient !== undefined) module.coefficient = input.coefficient;
-        if (input.ectsCredits !== undefined) module.ectsCredits = input.ectsCredits;
+        const newName = input.name !== undefined ? input.name : module.name;
+        const newCode = input.code !== undefined ? (input.code ?? null) : module.code;
+        const existing = await this.modules.findByNameAndCode(newName, newCode);
+        if (existing && existing.id !== id) return { kind: "module_already_exists" };
+        module.name = newName;
+        module.code = newCode;
         await this.modules.save(module);
         return { kind: "module_updated", module: toView(module) };
     }

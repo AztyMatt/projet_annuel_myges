@@ -5,13 +5,14 @@ import { type ProgramRepository } from "@application/program/program.repository"
 import { type ProgramModuleRepository } from "@application/program/program-module/program-module.repository";
 import { NotFound, MissingFields } from "@application/types/results";
 
-export type ProgramView = { id: string; name: string; code: string | null; periodId: string };
-export type ProgramModuleView = { id: string; programId: string; moduleId: string };
+export type ProgramView = { id: string; name: string; code: string; periodId: string };
+export type ProgramModuleView = { id: string; programId: string; moduleId: string; coefficient: number; ectsCredits: number };
 
-export type CreateProgramResult = MissingFields | { kind: "program_created"; program: ProgramView };
+export type CreateProgramResult = MissingFields | { kind: "program_already_exists" } | { kind: "program_created"; program: ProgramView };
 
 export type UpdateProgramResult =
     | NotFound
+    | { kind: "program_already_exists" }
     | { kind: "program_updated"; program: ProgramView };
 
 export type DeleteProgramResult = NotFound | { kind: "program_deleted" };
@@ -39,6 +40,8 @@ const toProgramModuleView = (pm: ProgramModule): ProgramModuleView => ({
     id: pm.id,
     programId: pm.programId,
     moduleId: pm.moduleId,
+    coefficient: pm.coefficient,
+    ectsCredits: pm.ectsCredits,
 });
 
 export class ProgramUseCases {
@@ -50,7 +53,8 @@ export class ProgramUseCases {
     async create(input: { name?: string; code?: string; periodId?: string }): Promise<CreateProgramResult> {
         const { name, code, periodId } = input;
         if (!name || !periodId) return MissingFields;
-        const program: Program = { id: randomUUID(), name, code: code ?? null, periodId };
+        if (await this.programs.findByNameAndCode(name, code ?? "")) return { kind: "program_already_exists" };
+        const program: Program = { id: randomUUID(), name, code: code ?? "", periodId };
         await this.programs.save(program);
         return { kind: "program_created", program: toProgramView(program) };
     }
@@ -61,8 +65,12 @@ export class ProgramUseCases {
     ): Promise<UpdateProgramResult> {
         const program = await this.programs.findById(id);
         if (!program) return NotFound;
-        if (input.name !== undefined) program.name = input.name;
-        if (input.code !== undefined) program.code = input.code ?? null;
+        const newName = input.name !== undefined ? input.name : program.name;
+        const newCode = input.code !== undefined ? (input.code ?? "") : program.code;
+        const existing = await this.programs.findByNameAndCode(newName, newCode);
+        if (existing && existing.id !== id) return { kind: "program_already_exists" };
+        program.name = newName;
+        program.code = newCode;
         if (input.periodId !== undefined) program.periodId = input.periodId;
         await this.programs.save(program);
         return { kind: "program_updated", program: toProgramView(program) };
@@ -91,10 +99,10 @@ export class ProgramUseCases {
         return { kind: "program_found", program: toProgramView(program) };
     }
 
-    async addModule(input: { programId?: string; moduleId?: string }): Promise<AddProgramModuleResult> {
-        const { programId, moduleId } = input;
-        if (!programId || !moduleId) return MissingFields;
-        const programModule: ProgramModule = { id: randomUUID(), programId, moduleId };
+    async addModule(input: { programId?: string; moduleId?: string; coefficient?: number; ectsCredits?: number }): Promise<AddProgramModuleResult> {
+        const { programId, moduleId, coefficient, ectsCredits } = input;
+        if (!programId || !moduleId || coefficient === undefined || ectsCredits === undefined) return MissingFields;
+        const programModule: ProgramModule = { id: randomUUID(), programId, moduleId, coefficient, ectsCredits };
         await this.programModules.save(programModule);
         return { kind: "program_module_created", programModule: toProgramModuleView(programModule) };
     }

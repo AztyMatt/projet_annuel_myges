@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq, isNull } from "drizzle-orm";
 import { type SessionRepository } from "@application/session/session.repository";
 import { type Session } from "@domain/session/session.entity";
 import { type SessionMode } from "@domain/session/session.enums";
@@ -36,6 +36,21 @@ export const sessionRepository: SessionRepository = {
             .where(eq(sessionTable.classroomId, classroomId))
             .orderBy(asc(sessionTable.startTime));
         return result.map(rowToSession);
+    },
+    async findBySlot(courseId, classroomId, startTime, endTime) {
+        const result = await db
+            .select()
+            .from(sessionTable)
+            .where(
+                and(
+                    eq(sessionTable.courseId, courseId),
+                    classroomId === null ? isNull(sessionTable.classroomId) : eq(sessionTable.classroomId, classroomId),
+                    eq(sessionTable.startTime, startTime),
+                    eq(sessionTable.endTime, endTime),
+                ),
+            )
+            .limit(1);
+        return result[0] ? rowToSession(result[0]) : undefined;
     },
     async save(session) {
         await db

@@ -1,4 +1,5 @@
-import { boolean, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { boolean, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 import { course } from "@express/src/postgres/schema/course";
 import { classroom } from "@express/src/postgres/schema/classroom";
 import { assessment } from "@express/src/postgres/schema/assessment";
@@ -16,7 +17,14 @@ export const session = pgTable("session", {
     mode: text("mode").notNull(),
     classroomId: text("classroom_id")
         .references(() => classroom.id),
-});
+}, (table) => ({
+    slotWithClassroom: uniqueIndex("session_slot_with_classroom_unique")
+        .on(table.courseId, table.classroomId, table.startTime, table.endTime)
+        .where(sql`${table.classroomId} IS NOT NULL`),
+    slotWithoutClassroom: uniqueIndex("session_slot_without_classroom_unique")
+        .on(table.courseId, table.startTime, table.endTime)
+        .where(sql`${table.classroomId} IS NULL`),
+}));
 
 export const sessionExam = pgTable("session_exam", {
     id: text("id").primaryKey(),

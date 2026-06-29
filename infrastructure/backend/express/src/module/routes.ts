@@ -19,7 +19,9 @@ moduleRouter.get("/modules/:id", requireAuth, async (req, res) => {
 moduleRouter.post("/modules", requireAuth, requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN), async (req, res) => {
     const result = await moduleUseCases.create(req.body);
     if (result.kind === "missing_fields")
-        return void res.status(400).json({ error: "name, coefficient and ectsCredits are required" });
+        return void res.status(400).json({ error: "name is required" });
+    if (result.kind === "module_already_exists")
+        return void res.status(409).json({ error: "A module with this name and code already exists" });
     res.status(201).json(result.module);
 });
 
@@ -30,6 +32,8 @@ moduleRouter.patch(
     async (req, res) => {
         const result = await moduleUseCases.update(String(req.params.id), req.body);
         if (result.kind === "not_found") return void res.status(404).json({ error: "Module not found" });
+        if (result.kind === "module_already_exists")
+            return void res.status(409).json({ error: "A module with this name and code already exists" });
         res.status(200).json(result.module);
     },
 );

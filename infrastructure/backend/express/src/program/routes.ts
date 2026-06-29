@@ -24,6 +24,8 @@ programRouter.post(
         const result = await programUseCases.create(req.body);
         if (result.kind === "missing_fields")
             return void res.status(400).json({ error: "name and periodId are required" });
+        if (result.kind === "program_already_exists")
+            return void res.status(409).json({ error: "A program with this name and code already exists" });
         res.status(201).json(result.program);
     },
 );
@@ -35,6 +37,8 @@ programRouter.patch(
     async (req, res) => {
         const result = await programUseCases.update(String(req.params.id), req.body);
         if (result.kind === "not_found") return void res.status(404).json({ error: "Program not found" });
+        if (result.kind === "program_already_exists")
+            return void res.status(409).json({ error: "A program with this name and code already exists" });
         res.status(200).json(result.program);
     },
 );
@@ -60,9 +64,9 @@ programRouter.post(
     requireAuth,
     requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN),
     async (req, res) => {
-        const result = await programUseCases.addModule({ programId: String(req.params.id), moduleId: req.body.moduleId });
+        const result = await programUseCases.addModule({ programId: String(req.params.id), ...req.body });
         if (result.kind === "missing_fields")
-            return void res.status(400).json({ error: "moduleId is required" });
+            return void res.status(400).json({ error: "moduleId, coefficient and ectsCredits are required" });
         res.status(201).json(result.programModule);
     },
 );
@@ -84,7 +88,7 @@ programRouter.post(
     async (req, res) => {
         const result = await programUseCases.addModule(req.body);
         if (result.kind === "missing_fields")
-            return void res.status(400).json({ error: "programId and moduleId are required" });
+            return void res.status(400).json({ error: "programId, moduleId, coefficient and ectsCredits are required" });
         res.status(201).json(result.programModule);
     },
 );

@@ -15,10 +15,12 @@ export type SessionView = {
 
 export type CreateSessionResult =
     | MissingFields
+    | { kind: "classroom_conflict" }
     | { kind: "session_created"; session: SessionView };
 
 export type UpdateSessionResult =
     | NotFound
+    | { kind: "classroom_conflict" }
     | { kind: "session_updated"; session: SessionView };
 
 export type DeleteSessionResult = NotFound | { kind: "session_deleted" };
@@ -50,6 +52,8 @@ export class SessionUseCases {
         if (!courseId || !startTime || !endTime || !mode || !classroomId) return MissingFields;
         const parsedStart = new Date(startTime);
         const parsedEnd = new Date(endTime);
+        if (await this.sessions.findBySlot(courseId, classroomId, parsedStart, parsedEnd))
+            return { kind: "classroom_conflict" };
         const session: Session = {
             id: randomUUID(),
             courseId,
@@ -74,10 +78,13 @@ export class SessionUseCases {
     ): Promise<UpdateSessionResult> {
         const session = await this.sessions.findById(id);
         if (!session) return NotFound;
+        const newCourseId = input.courseId !== undefined ? input.courseId : session.courseId;
         const newStart = input.startTime ? new Date(input.startTime) : session.startTime;
         const newEnd = input.endTime ? new Date(input.endTime) : session.endTime;
         const newClassroomId = input.classroomId !== undefined ? input.classroomId : session.classroomId;
-        if (input.courseId !== undefined) session.courseId = input.courseId;
+        const existing = await this.sessions.findBySlot(newCourseId, newClassroomId, newStart, newEnd);
+        if (existing && existing.id !== id) return { kind: "classroom_conflict" };
+        session.courseId = newCourseId;
         if (input.mode !== undefined) session.mode = input.mode;
         session.startTime = newStart;
         session.endTime = newEnd;

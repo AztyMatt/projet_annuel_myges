@@ -1,9 +1,9 @@
-import { integer, pgTable, text } from "drizzle-orm/pg-core";
+import { pgTable, text, unique } from "drizzle-orm/pg-core";
 
 export const module = pgTable("module", {
     id: text("id").primaryKey(),
     name: text("name").notNull(),
-    code: text("code"),
-    coefficient: integer("coefficient").notNull(),
-    ectsCredits: integer("ects_credits").notNull(),
-});
+    code: text("code").notNull().default(""),
+}, (table) => ({
+    nameCodeUnique: unique().on(table.name, table.code),
+}));
