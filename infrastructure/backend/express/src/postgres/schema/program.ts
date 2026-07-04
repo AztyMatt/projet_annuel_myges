@@ -1,4 +1,5 @@
-import { pgTable, text, unique } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { pgTable, text, unique, uniqueIndex } from "drizzle-orm/pg-core";
 import { period } from "@express/src/postgres/schema/period";
 
 export const program = pgTable("program", {
@@ -9,5 +10,6 @@ export const program = pgTable("program", {
         .notNull()
         .references(() => period.id),
 }, (table) => ({
-    nameUnique: unique().on(table.name, table.code),
+    nameCodeUnique: unique().on(table.name, table.code),
+    codeUnique: uniqueIndex("program_code_unique").on(table.code).where(sql`${table.code} != ''`),
 }));

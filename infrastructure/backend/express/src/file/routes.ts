@@ -73,6 +73,8 @@ fileRouter.post(
         const result = await fileUseCases.attachToCourse(req.body);
         if (result.kind === "missing_fields")
             return void res.status(400).json({ error: "name, fileId and courseId are required" });
+        if (result.kind === "file_course_already_exists")
+            return void res.status(409).json({ error: "This file is already attached to this course" });
         res.status(201).json(result.fileCourse);
     },
 );
@@ -115,6 +117,8 @@ fileRouter.post("/file-documents", requireAuth, async (req, res) => {
     const result = await fileUseCases.attachAsDocument(req.body);
     if (result.kind === "missing_fields")
         return void res.status(400).json({ error: "fileId, studentId and status are required" });
+    if (result.kind === "file_document_already_exists")
+        return void res.status(409).json({ error: "This file is already linked as a document for this student" });
     res.status(201).json(result.fileDocument);
 });
 
@@ -171,6 +175,8 @@ fileRouter.post("/file-justifications", requireAuth, async (req, res) => {
     const result = await fileUseCases.attachAsJustification(req.body);
     if (result.kind === "missing_fields")
         return void res.status(400).json({ error: "absenceId and fileId are required" });
+    if (result.kind === "file_justification_already_exists")
+        return void res.status(409).json({ error: "This file is already attached as a justification for this absence" });
     res.status(201).json(result.fileJustification);
 });
 
@@ -244,6 +250,8 @@ fileRouter.post("/file-assessments", requireAuth, async (req, res) => {
         return void res
             .status(400)
             .json({ error: "assessmentId, assessmentGroupId and fileId are required" });
+    if (result.kind === "file_assessment_already_exists")
+        return void res.status(409).json({ error: "This file has already been submitted for this assessment group" });
     res.status(201).json(result.fileAssessment);
 });
 
@@ -286,6 +294,8 @@ fileRouter.post(
         const result = await fileUseCases.uploadInstruction(req.body);
         if (result.kind === "missing_fields")
             return void res.status(400).json({ error: "assessmentId and fileId are required" });
+        if (result.kind === "file_assessment_instruction_already_exists")
+            return void res.status(409).json({ error: "This file is already attached as an instruction for this assessment" });
         res.status(201).json(result.instruction);
     },
 );

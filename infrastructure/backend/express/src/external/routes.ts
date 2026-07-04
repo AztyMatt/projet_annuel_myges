@@ -24,7 +24,7 @@ externalRouter.post(
         const result = await externalUseCases.create(req.body);
         if (result.kind === "missing_fields")
             return void res.status(400).json({ error: "firstname, lastname, email and type are required" });
-        if (result.kind === "email_already_exists")
+        if (result.kind === "external_already_exists")
             return void res.status(409).json({ error: "An external with this email already exists" });
         res.status(201).json(result.external);
     },

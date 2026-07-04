@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { type SessionExamInstructorRepository } from "@application/session/session-exam/session-exam-instructor/session-exam-instructor.repository";
 import { type SessionExamInstructor } from "@domain/session/session-exam/session-exam-instructor/session-exam-instructor.entity";
 import { db } from "@express/src/postgres/db";
@@ -34,6 +34,14 @@ export const sessionExamInstructorRepository: SessionExamInstructorRepository = 
             .from(sessionExamInstructorTable)
             .where(eq(sessionExamInstructorTable.instructorId, instructorId));
         return result.map(rowToSessionExamInstructor);
+    },
+    async findByExamAndInstructor(sessionExamId, instructorId) {
+        const result = await db
+            .select()
+            .from(sessionExamInstructorTable)
+            .where(and(eq(sessionExamInstructorTable.sessionExamId, sessionExamId), eq(sessionExamInstructorTable.instructorId, instructorId)))
+            .limit(1);
+        return result[0] ? rowToSessionExamInstructor(result[0]) : undefined;
     },
     async save(sessionExamInstructor) {
         await db

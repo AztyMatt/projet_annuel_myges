@@ -15,6 +15,7 @@ export type AbsenceView = {
 
 export type DeclareAbsenceResult =
     | MissingFields
+    | { kind: "absence_already_exists" }
     | { kind: "absence_declared"; absence: AbsenceView };
 
 export type ValidateAbsenceResult = NotFound | { kind: "absence_validated"; absence: AbsenceView };
@@ -42,6 +43,7 @@ export class AbsenceUseCases {
     async declare(input: { studentId?: string; sessionId?: string; reason?: string }): Promise<DeclareAbsenceResult> {
         const { studentId, sessionId, reason } = input;
         if (!studentId || !sessionId || !reason) return MissingFields;
+        if (await this.absences.findByStudentAndSession(studentId, sessionId)) return { kind: "absence_already_exists" };
         const absence: Absence = {
             id: randomUUID(),
             studentId,

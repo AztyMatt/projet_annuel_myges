@@ -13,6 +13,7 @@ export type InstructorView = {
 
 export type CreateInstructorResult =
     | MissingFields
+    | { kind: "user_already_instructor" }
     | { kind: "instructor_created"; instructor: InstructorView };
 
 export type UpdateInstructorResult =
@@ -42,6 +43,7 @@ export class InstructorUseCases {
     }): Promise<CreateInstructorResult> {
         const { userId, contractType, specialties } = input;
         if (!userId || !contractType) return MissingFields;
+        if (await this.instructors.findByUserId(userId)) return { kind: "user_already_instructor" };
         const instructor: Instructor = {
             id: randomUUID(),
             userId,

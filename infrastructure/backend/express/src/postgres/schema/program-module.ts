@@ -1,4 +1,4 @@
-import { integer, pgTable, text } from "drizzle-orm/pg-core";
+import { integer, pgTable, text, unique } from "drizzle-orm/pg-core";
 import { program } from "@express/src/postgres/schema/program";
 import { module } from "@express/src/postgres/schema/module";
 
@@ -12,4 +12,6 @@ export const programModule = pgTable("program_module", {
         .references(() => module.id),
     coefficient: integer("coefficient").notNull(),
     ectsCredits: integer("ects_credits").notNull(),
-});
+}, (table) => ({
+    linkUnique: unique().on(table.programId, table.moduleId),
+}));

@@ -7,6 +7,7 @@ export type StudentView = { id: string; userId: string; programId: string };
 
 export type CreateStudentResult =
     | MissingFields
+    | { kind: "user_already_student" }
     | { kind: "student_created"; student: StudentView };
 
 export type UpdateStudentResult =
@@ -27,6 +28,7 @@ export class StudentUseCases {
     async create(input: { userId?: string; programId?: string }): Promise<CreateStudentResult> {
         const { userId, programId } = input;
         if (!userId || !programId) return MissingFields;
+        if (await this.students.findByUserId(userId)) return { kind: "user_already_student" };
         const student: Student = { id: randomUUID(), userId, programId };
         await this.students.save(student);
         return { kind: "student_created", student: toView(student) };

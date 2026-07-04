@@ -20,6 +20,8 @@ periodRouter.post("/periods", requireAuth, requireRole(AdminRole.ADMIN, AdminRol
     const result = await periodUseCases.create(req.body);
     if (result.kind === "missing_fields")
         return void res.status(400).json({ error: "order, startDate, endDate and academicYearId are required" });
+    if (result.kind === "period_order_already_exists")
+        return void res.status(409).json({ error: "A period with this order already exists for this academic year" });
     res.status(201).json(result.period);
 });
 

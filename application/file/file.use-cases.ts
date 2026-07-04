@@ -67,6 +67,7 @@ export type ListFilesResult = { kind: "files_listed"; files: FileView[] };
 
 export type AttachFileCourseResult =
     | MissingFields
+    | { kind: "file_course_already_exists" }
     | { kind: "file_course_attached"; fileCourse: FileCourseView };
 
 export type DeleteFileCourseResult = NotFound | { kind: "file_course_deleted" };
@@ -79,6 +80,7 @@ export type ListFileCoursesResult = { kind: "file_courses_listed"; fileCourses: 
 
 export type AttachFileDocumentResult =
     | MissingFields
+    | { kind: "file_document_already_exists" }
     | { kind: "file_document_attached"; fileDocument: FileDocumentView };
 
 export type ValidateFileDocumentResult =
@@ -102,6 +104,7 @@ export type ListFileDocumentsResult = {
 
 export type AttachFileJustificationResult =
     | MissingFields
+    | { kind: "file_justification_already_exists" }
     | { kind: "file_justification_attached"; fileJustification: FileJustificationView };
 
 export type ValidateFileJustificationResult =
@@ -127,6 +130,7 @@ export type ListFileJustificationsResult = {
 
 export type SubmitFileAssessmentResult =
     | MissingFields
+    | { kind: "file_assessment_already_exists" }
     | { kind: "file_assessment_submitted"; fileAssessment: FileAssessmentView };
 
 export type DeleteFileAssessmentResult =
@@ -151,6 +155,7 @@ export type FileAssessmentInstructionView = {
 
 export type UploadAssessmentInstructionResult =
     | MissingFields
+    | { kind: "file_assessment_instruction_already_exists" }
     | { kind: "instruction_uploaded"; instruction: FileAssessmentInstructionView };
 
 export type DeleteAssessmentInstructionResult =
@@ -278,6 +283,7 @@ export class FileUseCases {
     }): Promise<AttachFileCourseResult> {
         const { name, fileId, courseId } = input;
         if (!name || !fileId || !courseId) return MissingFields;
+        if (await this.fileCourses.findByFileAndCourse(fileId, courseId)) return { kind: "file_course_already_exists" };
         const entry: FileCourse = { id: randomUUID(), name, fileId, courseId };
         await this.fileCourses.save(entry);
         return { kind: "file_course_attached", fileCourse: toFileCourseView(entry) };
@@ -313,6 +319,7 @@ export class FileUseCases {
     }): Promise<AttachFileDocumentResult> {
         const { fileId, studentId, status } = input;
         if (!fileId || !studentId || !status) return MissingFields;
+        if (await this.fileDocuments.findByFileAndStudent(fileId, studentId)) return { kind: "file_document_already_exists" };
         const entry: FileDocument = { id: randomUUID(), fileId, studentId, status };
         await this.fileDocuments.save(entry);
         return { kind: "file_document_attached", fileDocument: toFileDocumentView(entry) };
@@ -363,6 +370,7 @@ export class FileUseCases {
     }): Promise<AttachFileJustificationResult> {
         const { absenceId, fileId } = input;
         if (!absenceId || !fileId) return MissingFields;
+        if (await this.fileJustifications.findByAbsenceAndFile(absenceId, fileId)) return { kind: "file_justification_already_exists" };
         const entry: FileJustification = {
             id: randomUUID(),
             absenceId,
@@ -417,6 +425,7 @@ export class FileUseCases {
     }): Promise<SubmitFileAssessmentResult> {
         const { assessmentId, assessmentGroupId, fileId } = input;
         if (!assessmentId || !assessmentGroupId || !fileId) return MissingFields;
+        if (await this.fileAssessments.findByGroupAndFile(assessmentGroupId, fileId)) return { kind: "file_assessment_already_exists" };
         const entry: FileAssessment = {
             id: randomUUID(),
             assessmentId,
@@ -456,6 +465,7 @@ export class FileUseCases {
     }): Promise<UploadAssessmentInstructionResult> {
         const { assessmentId, fileId } = input;
         if (!assessmentId || !fileId) return MissingFields;
+        if (await this.fileAssessmentInstructions.findByAssessmentAndFile(assessmentId, fileId)) return { kind: "file_assessment_instruction_already_exists" };
         const entry: FileAssessmentInstruction = {
             id: randomUUID(),
             assessmentId,

@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { type ManualNotationRepository } from "@application/grade/grade-manual-notation/manual-notation/manual-notation.repository";
 import { type ManualNotation } from "@domain/grade/grade-manual-notation/manual-notation/manual-notation.entity";
 import { db } from "@express/src/postgres/db";
@@ -20,6 +20,14 @@ export const manualNotationRepository: ManualNotationRepository = {
     async findByModuleId(moduleId) {
         const result = await db.select().from(manualNotationTable).where(eq(manualNotationTable.moduleId, moduleId));
         return result.map(rowToManualNotation);
+    },
+    async findByModuleAndName(moduleId, name) {
+        const result = await db
+            .select()
+            .from(manualNotationTable)
+            .where(and(eq(manualNotationTable.moduleId, moduleId), eq(manualNotationTable.name, name)))
+            .limit(1);
+        return result[0] ? rowToManualNotation(result[0]) : undefined;
     },
     async save(manualNotation) {
         await db

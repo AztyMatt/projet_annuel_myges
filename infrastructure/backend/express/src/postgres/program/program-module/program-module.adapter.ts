@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { type ProgramModuleRepository } from "@application/program/program-module/program-module.repository";
 import { type ProgramModule } from "@domain/program/program-module/program-module.entity";
 import { db } from "@express/src/postgres/db";
@@ -26,6 +26,14 @@ export const programModuleRepository: ProgramModuleRepository = {
     async findByModuleId(moduleId) {
         const result = await db.select().from(programModuleTable).where(eq(programModuleTable.moduleId, moduleId));
         return result.map(rowToProgramModule);
+    },
+    async findByProgramAndModule(programId, moduleId) {
+        const result = await db
+            .select()
+            .from(programModuleTable)
+            .where(and(eq(programModuleTable.programId, programId), eq(programModuleTable.moduleId, moduleId)))
+            .limit(1);
+        return result[0] ? rowToProgramModule(result[0]) : undefined;
     },
     async save(programModule) {
         await db

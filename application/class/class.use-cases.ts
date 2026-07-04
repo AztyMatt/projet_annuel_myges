@@ -11,7 +11,7 @@ export type ClassView = {
     conversationId: string;
 };
 
-export type CreateClassResult = MissingFields | { kind: "class_created"; class: ClassView };
+export type CreateClassResult = MissingFields | { kind: "class_number_already_exists" } | { kind: "class_created"; class: ClassView };
 
 export type UpdateClassResult =
     | NotFound
@@ -43,6 +43,7 @@ export class ClassUseCases {
         const { number, programId, size, conversationId } = input;
         if (number === undefined || !programId || size === undefined || !conversationId)
             return MissingFields;
+        if (await this.classes.findByProgramAndNumber(programId, number)) return { kind: "class_number_already_exists" };
         const cls: Class = { id: randomUUID(), number, programId, size, conversationId };
         await this.classes.save(cls);
         return { kind: "class_created", class: toView(cls) };

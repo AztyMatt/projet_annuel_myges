@@ -12,6 +12,7 @@ export type AcademicYearView = {
 
 export type CreateAcademicYearResult =
     | MissingFields
+    | { kind: "academic_year_already_exists" }
     | { kind: "academic_year_created"; academicYear: AcademicYearView };
 
 export type UpdateAcademicYearResult =
@@ -43,6 +44,7 @@ export class AcademicYearUseCases {
     }): Promise<CreateAcademicYearResult> {
         const { startDate, endDate, isCurrent = false } = input;
         if (!startDate || !endDate) return MissingFields;
+        if (await this.academicYears.findByDates(new Date(startDate), new Date(endDate))) return { kind: "academic_year_already_exists" };
         const academicYear: AcademicYear = {
             id: randomUUID(),
             startDate: new Date(startDate),

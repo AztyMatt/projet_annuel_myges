@@ -39,12 +39,7 @@ export const messageReadRepository: MessageReadRepository = {
                 userId: messageRead.userId,
                 readAt: messageRead.readAt,
             })
-            .onConflictDoUpdate({
-                target: messageReadTable.id,
-                set: {
-                    readAt: messageRead.readAt,
-                },
-            });
+            .onConflictDoNothing();
     },
     async deleteByMessageIdAndUserId(messageId, userId) {
         await db

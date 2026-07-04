@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { type GradeManualNotationRepository } from "@application/grade/grade-manual-notation/grade-manual-notation.repository";
 import { type GradeManualNotation } from "@domain/grade/grade-manual-notation/grade-manual-notation.entity";
 import { db } from "@express/src/postgres/db";
@@ -34,6 +34,14 @@ export const gradeManualNotationRepository: GradeManualNotationRepository = {
             .from(gradeManualNotationTable)
             .where(eq(gradeManualNotationTable.gradeManualId, gradeManualId));
         return result.map(rowToGradeManualNotation);
+    },
+    async findByGradeAndManualNotation(gradeId, gradeManualId) {
+        const result = await db
+            .select()
+            .from(gradeManualNotationTable)
+            .where(and(eq(gradeManualNotationTable.gradeId, gradeId), eq(gradeManualNotationTable.gradeManualId, gradeManualId)))
+            .limit(1);
+        return result[0] ? rowToGradeManualNotation(result[0]) : undefined;
     },
     async save(gradeManualNotation) {
         await db

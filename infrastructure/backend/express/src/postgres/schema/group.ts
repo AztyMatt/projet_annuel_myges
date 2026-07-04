@@ -1,4 +1,4 @@
-import { pgTable, text } from "drizzle-orm/pg-core";
+import { pgTable, text, unique } from "drizzle-orm/pg-core";
 import { classTable } from "@express/src/postgres/schema/class";
 import { student } from "@express/src/postgres/schema/student";
 
@@ -8,7 +8,9 @@ export const group = pgTable("group", {
         .notNull()
         .references(() => classTable.id),
     name: text("name").notNull(),
-});
+}, (table) => ({
+    nameUnique: unique().on(table.classId, table.name),
+}));
 
 export const studentGroup = pgTable("student_group", {
     id: text("id").primaryKey(),
@@ -18,4 +20,6 @@ export const studentGroup = pgTable("student_group", {
     groupId: text("group_id")
         .notNull()
         .references(() => group.id),
-});
+}, (table) => ({
+    membershipUnique: unique().on(table.studentId, table.groupId),
+}));

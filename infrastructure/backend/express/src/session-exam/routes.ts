@@ -101,6 +101,8 @@ sessionExamRouter.post(
         const result = await sessionExamUseCases.addStudent(req.body);
         if (result.kind === "missing_fields")
             return void res.status(400).json({ error: "sessionExamId and studentId are required" });
+        if (result.kind === "student_already_registered")
+            return void res.status(409).json({ error: "Student is already registered for this session exam" });
         res.status(201).json(result.sessionExamStudent);
     },
 );
@@ -155,6 +157,8 @@ sessionExamRouter.post(
         const result = await sessionExamUseCases.addInstructor(req.body);
         if (result.kind === "missing_fields")
             return void res.status(400).json({ error: "sessionExamId and instructorId are required" });
+        if (result.kind === "instructor_already_in_jury")
+            return void res.status(409).json({ error: "Instructor is already in the jury for this session exam" });
         res.status(201).json(result.sessionExamInstructor);
     },
 );
@@ -207,6 +211,8 @@ sessionExamRouter.post(
         const result = await sessionExamUseCases.addExternal(req.body);
         if (result.kind === "missing_fields")
             return void res.status(400).json({ error: "sessionExamId and externalId are required" });
+        if (result.kind === "external_already_in_jury")
+            return void res.status(409).json({ error: "External is already in the jury for this session exam" });
         res.status(201).json(result.sessionExamExternal);
     },
 );

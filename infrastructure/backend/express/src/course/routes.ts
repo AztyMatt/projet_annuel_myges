@@ -37,6 +37,8 @@ courseRouter.post(
             return void res
                 .status(400)
                 .json({ error: "instructorId, moduleId, classId, blocId and conversationId are required" });
+        if (result.kind === "course_already_exists")
+            return void res.status(409).json({ error: "A course with this instructor, module and group already exists" });
         res.status(201).json(result.course);
     },
 );

@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { boolean, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { boolean, pgTable, text, timestamp, unique, uniqueIndex } from "drizzle-orm/pg-core";
 import { course } from "@express/src/postgres/schema/course";
 import { classroom } from "@express/src/postgres/schema/classroom";
 import { assessment } from "@express/src/postgres/schema/assessment";
@@ -30,6 +30,7 @@ export const sessionExam = pgTable("session_exam", {
     id: text("id").primaryKey(),
     sessionId: text("session_id")
         .notNull()
+        .unique()
         .references(() => session.id),
     type: text("type").notNull(),
     isRetake: boolean("is_retake").notNull().default(false),
@@ -44,7 +45,9 @@ export const sessionExamExternal = pgTable("session_exam_external", {
     externalId: text("external_id")
         .notNull()
         .references(() => external.id),
-});
+}, (table) => ({
+    memberUnique: unique().on(table.sessionExamId, table.externalId),
+}));
 
 export const sessionExamInstructor = pgTable("session_exam_instructor", {
     id: text("id").primaryKey(),
@@ -54,7 +57,9 @@ export const sessionExamInstructor = pgTable("session_exam_instructor", {
     instructorId: text("instructor_id")
         .notNull()
         .references(() => instructor.id),
-});
+}, (table) => ({
+    memberUnique: unique().on(table.sessionExamId, table.instructorId),
+}));
 
 export const sessionExamStudent = pgTable("session_exam_student", {
     id: text("id").primaryKey(),
@@ -64,4 +69,6 @@ export const sessionExamStudent = pgTable("session_exam_student", {
     studentId: text("student_id")
         .notNull()
         .references(() => student.id),
-});
+}, (table) => ({
+    memberUnique: unique().on(table.sessionExamId, table.studentId),
+}));

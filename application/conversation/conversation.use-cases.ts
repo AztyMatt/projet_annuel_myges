@@ -26,6 +26,7 @@ export type ListConversationsResult = { kind: "conversations_listed"; conversati
 
 export type CreateConversationPrivateResult =
     | MissingFields
+    | { kind: "conversation_already_exists" }
     | { kind: "conversation_private_created"; conversationPrivate: ConversationPrivateView };
 
 export type DeleteConversationPrivateResult =
@@ -90,6 +91,7 @@ export class ConversationUseCases {
     }): Promise<CreateConversationPrivateResult> {
         const { adminId, studentId, conversationId } = input;
         if (!adminId || !studentId || !conversationId) return MissingFields;
+        if (await this.conversationPrivates.findByAdminAndStudent(adminId, studentId)) return { kind: "conversation_already_exists" };
         const entry: ConversationPrivate = { id: randomUUID(), adminId, studentId, conversationId };
         await this.conversationPrivates.save(entry);
         return { kind: "conversation_private_created", conversationPrivate: toConversationPrivateView(entry) };

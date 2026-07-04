@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { type GradeAssessmentRepository } from "@application/grade/grade-assessment/grade-assessment.repository";
 import { type GradeAssessment } from "@domain/grade/grade-assessment/grade-assessment.entity";
 import { db } from "@express/src/postgres/db";
@@ -27,6 +27,14 @@ export const gradeAssessmentRepository: GradeAssessmentRepository = {
             .from(gradeAssessmentTable)
             .where(eq(gradeAssessmentTable.assessmentId, assessmentId));
         return result.map(rowToGradeAssessment);
+    },
+    async findByGradeAndAssessment(gradeId, assessmentId) {
+        const result = await db
+            .select()
+            .from(gradeAssessmentTable)
+            .where(and(eq(gradeAssessmentTable.gradeId, gradeId), eq(gradeAssessmentTable.assessmentId, assessmentId)))
+            .limit(1);
+        return result[0] ? rowToGradeAssessment(result[0]) : undefined;
     },
     async save(gradeAssessment) {
         await db

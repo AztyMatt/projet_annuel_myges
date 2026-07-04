@@ -5,7 +5,7 @@ import { NotFound, MissingFields } from "@application/types/results";
 
 export type BlocView = { id: string; name: string; programId: string };
 
-export type CreateBlocResult = MissingFields | { kind: "bloc_created"; bloc: BlocView };
+export type CreateBlocResult = MissingFields | { kind: "bloc_already_exists" } | { kind: "bloc_created"; bloc: BlocView };
 
 export type UpdateBlocResult =
     | NotFound
@@ -25,6 +25,7 @@ export class BlocUseCases {
     async create(input: { name?: string; programId?: string }): Promise<CreateBlocResult> {
         const { name, programId } = input;
         if (!name || !programId) return MissingFields;
+        if (await this.blocs.findByProgramAndName(programId, name)) return { kind: "bloc_already_exists" };
         const bloc: Bloc = { id: randomUUID(), name, programId };
         await this.blocs.save(bloc);
         return { kind: "bloc_created", bloc: toView(bloc) };

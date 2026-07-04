@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, unique } from "drizzle-orm/pg-core";
 import { conversation } from "@express/src/postgres/schema/conversation";
 import { users } from "@express/src/postgres/schema/auth";
 
@@ -23,4 +23,6 @@ export const messageRead = pgTable("message_read", {
         .notNull()
         .references(() => users.id),
     readAt: timestamp("read_at", { withTimezone: true }).notNull(),
-});
+}, (table) => ({
+    readUnique: unique().on(table.messageId, table.userId),
+}));

@@ -20,6 +20,8 @@ groupRouter.post("/groups", requireAuth, requireRole(AdminRole.ADMIN, AdminRole.
     const result = await groupUseCases.create(req.body);
     if (result.kind === "missing_fields")
         return void res.status(400).json({ error: "classId and name are required" });
+    if (result.kind === "group_already_exists")
+        return void res.status(409).json({ error: "A group with this name already exists in this class" });
     res.status(201).json(result.group);
 });
 
@@ -58,6 +60,8 @@ groupRouter.post(
         const result = await groupUseCases.addStudent({ groupId: String(req.params.id), studentId: req.body.studentId });
         if (result.kind === "missing_fields")
             return void res.status(400).json({ error: "studentId is required" });
+        if (result.kind === "student_already_in_group")
+            return void res.status(409).json({ error: "Student is already in this group" });
         res.status(201).json(result.studentGroup);
     },
 );
@@ -91,6 +95,8 @@ groupRouter.post(
         const result = await groupUseCases.addStudent(req.body);
         if (result.kind === "missing_fields")
             return void res.status(400).json({ error: "studentId and groupId are required" });
+        if (result.kind === "student_already_in_group")
+            return void res.status(409).json({ error: "Student is already in this group" });
         res.status(201).json(result.studentGroup);
     },
 );

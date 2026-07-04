@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { type FileAssessmentInstructionRepository } from "@application/file/file-assessment-instruction/file-assessment-instruction.repository";
 import { type FileAssessmentInstruction } from "@domain/file/file-assessment-instruction/file-assessment-instruction.entity";
 import { db } from "@express/src/postgres/db";
@@ -37,6 +37,14 @@ export const fileAssessmentInstructionRepository: FileAssessmentInstructionRepos
             .from(fileAssessmentInstructionTable)
             .where(eq(fileAssessmentInstructionTable.fileId, fileId));
         return result.map(rowToFileAssessmentInstruction);
+    },
+    async findByAssessmentAndFile(assessmentId, fileId) {
+        const result = await db
+            .select()
+            .from(fileAssessmentInstructionTable)
+            .where(and(eq(fileAssessmentInstructionTable.assessmentId, assessmentId), eq(fileAssessmentInstructionTable.fileId, fileId)))
+            .limit(1);
+        return result[0] ? rowToFileAssessmentInstruction(result[0]) : undefined;
     },
     async save(instruction) {
         await db

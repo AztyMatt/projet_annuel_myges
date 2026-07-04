@@ -54,6 +54,7 @@ export type ListSessionExamsResult = { kind: "session_exams_listed"; sessionExam
 
 export type AddSessionExamStudentResult =
     | MissingFields
+    | { kind: "student_already_registered" }
     | { kind: "session_exam_student_added"; sessionExamStudent: SessionExamStudentView };
 
 export type DeleteSessionExamStudentResult =
@@ -71,6 +72,7 @@ export type ListSessionExamStudentsResult = {
 
 export type AddSessionExamInstructorResult =
     | MissingFields
+    | { kind: "instructor_already_in_jury" }
     | { kind: "session_exam_instructor_added"; sessionExamInstructor: SessionExamInstructorView };
 
 export type DeleteSessionExamInstructorResult =
@@ -88,6 +90,7 @@ export type ListSessionExamInstructorsResult = {
 
 export type AddSessionExamExternalResult =
     | MissingFields
+    | { kind: "external_already_in_jury" }
     | { kind: "session_exam_external_added"; sessionExamExternal: SessionExamExternalView };
 
 export type DeleteSessionExamExternalResult =
@@ -203,6 +206,7 @@ export class SessionExamUseCases {
     }): Promise<AddSessionExamStudentResult> {
         const { sessionExamId, studentId } = input;
         if (!sessionExamId || !studentId) return MissingFields;
+        if (await this.sessionExamStudents.findByExamAndStudent(sessionExamId, studentId)) return { kind: "student_already_registered" };
         const entry: SessionExamStudent = { id: randomUUID(), sessionExamId, studentId };
         await this.sessionExamStudents.save(entry);
         return { kind: "session_exam_student_added", sessionExamStudent: toSessionExamStudentView(entry) };
@@ -243,6 +247,7 @@ export class SessionExamUseCases {
     }): Promise<AddSessionExamInstructorResult> {
         const { sessionExamId, instructorId } = input;
         if (!sessionExamId || !instructorId) return MissingFields;
+        if (await this.sessionExamInstructors.findByExamAndInstructor(sessionExamId, instructorId)) return { kind: "instructor_already_in_jury" };
         const entry: SessionExamInstructor = { id: randomUUID(), sessionExamId, instructorId };
         await this.sessionExamInstructors.save(entry);
         return {
@@ -289,6 +294,7 @@ export class SessionExamUseCases {
     }): Promise<AddSessionExamExternalResult> {
         const { sessionExamId, externalId } = input;
         if (!sessionExamId || !externalId) return MissingFields;
+        if (await this.sessionExamExternals.findByExamAndExternal(sessionExamId, externalId)) return { kind: "external_already_in_jury" };
         const entry: SessionExamExternal = { id: randomUUID(), sessionExamId, externalId };
         await this.sessionExamExternals.save(entry);
         return {

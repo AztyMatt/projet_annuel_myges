@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { type ExternalRepository } from "@application/external/external.repository";
 import { type External } from "@domain/external/external.entity";
 import { ExternalType } from "@domain/external/external.enums";
@@ -21,8 +21,12 @@ export const externalRepository: ExternalRepository = {
         const result = await db.select().from(externalTable).where(eq(externalTable.id, id)).limit(1);
         return result[0] ? rowToExternal(result[0]) : undefined;
     },
-    async findByEmail(email) {
-        const result = await db.select().from(externalTable).where(eq(externalTable.email, email)).limit(1);
+    async findByIdentity(firstname, lastname, email) {
+        const result = await db
+            .select()
+            .from(externalTable)
+            .where(and(eq(externalTable.firstname, firstname), eq(externalTable.lastname, lastname), eq(externalTable.email, email)))
+            .limit(1);
         return result[0] ? rowToExternal(result[0]) : undefined;
     },
     async save(external) {

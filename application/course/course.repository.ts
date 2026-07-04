@@ -6,6 +6,7 @@ export interface CourseRepository {
     findByModuleId(moduleId: string): Promise<Course[]>;
     findByGroupId(groupId: string): Promise<Course[]>;
     findByBlocId(blocId: string): Promise<Course[]>;
+    findByInstructorModuleGroup(instructorId: string, moduleId: string, groupId: string): Promise<Course | undefined>;
     save(course: Course): Promise<void>;
     deleteById(id: string): Promise<void>;
     list(): Promise<Course[]>;

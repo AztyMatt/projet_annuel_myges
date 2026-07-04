@@ -19,6 +19,8 @@ campusRouter.get("/campuses/:id", requireAuth, async (req, res) => {
 campusRouter.post("/campuses", requireAuth, requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN), async (req, res) => {
     const result = await campusUseCases.create(req.body);
     if (result.kind === "missing_fields") return void res.status(400).json({ error: "name and address are required" });
+    if (result.kind === "campus_already_exists")
+        return void res.status(409).json({ error: "A campus with this name already exists" });
     res.status(201).json(result.campus);
 });
 

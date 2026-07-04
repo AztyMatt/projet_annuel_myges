@@ -24,6 +24,8 @@ classroomRouter.post(
         const result = await classroomUseCases.create(req.body);
         if (result.kind === "missing_fields")
             return void res.status(400).json({ error: "name, capacity and campusId are required" });
+        if (result.kind === "classroom_already_exists")
+            return void res.status(409).json({ error: "A classroom with this name already exists in this campus" });
         res.status(201).json(result.classroom);
     },
 );

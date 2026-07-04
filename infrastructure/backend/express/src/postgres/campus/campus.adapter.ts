@@ -17,6 +17,10 @@ export const campusRepository: CampusRepository = {
         const result = await db.select().from(campusTable).where(eq(campusTable.id, id)).limit(1);
         return result[0] ? rowToCampus(result[0]) : undefined;
     },
+    async findByName(name) {
+        const result = await db.select().from(campusTable).where(eq(campusTable.name, name)).limit(1);
+        return result[0] ? rowToCampus(result[0]) : undefined;
+    },
     async save(campus) {
         await db
             .insert(campusTable)

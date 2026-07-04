@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { type BlocRepository } from "@application/bloc/bloc.repository";
 import { type Bloc } from "@domain/bloc/bloc.entity";
 import { db } from "@express/src/postgres/db";
@@ -20,6 +20,14 @@ export const blocRepository: BlocRepository = {
     async findByProgramId(programId) {
         const result = await db.select().from(blocTable).where(eq(blocTable.programId, programId));
         return result.map(rowToBloc);
+    },
+    async findByProgramAndName(programId, name) {
+        const result = await db
+            .select()
+            .from(blocTable)
+            .where(and(eq(blocTable.programId, programId), eq(blocTable.name, name)))
+            .limit(1);
+        return result[0] ? rowToBloc(result[0]) : undefined;
     },
     async save(bloc) {
         await db

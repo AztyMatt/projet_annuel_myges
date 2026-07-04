@@ -31,6 +31,7 @@ export type AssessmentGroupMemberView = {
 
 export type CreateAssessmentResult =
     | MissingFields
+    | { kind: "assessment_already_exists" }
     | { kind: "assessment_created"; assessment: AssessmentView };
 
 export type UpdateAssessmentResult =
@@ -68,6 +69,7 @@ export type ListAssessmentGroupsResult = {
 
 export type AddAssessmentGroupMemberResult =
     | MissingFields
+    | { kind: "member_already_exists" }
     | { kind: "assessment_group_member_added"; member: AssessmentGroupMemberView };
 
 export type DeleteAssessmentGroupMemberResult =
@@ -122,6 +124,7 @@ export class AssessmentUseCases {
         const { courseId, title, type, isPublished = false, dueDate, maxGroupSize } = input;
         if (!courseId || !title || !type || !dueDate || maxGroupSize === undefined)
             return MissingFields;
+        if (await this.assessments.findByCourseAndTitle(courseId, title, new Date(dueDate))) return { kind: "assessment_already_exists" };
         const assessment: Assessment = {
             id: randomUUID(),
             courseId,
@@ -221,6 +224,7 @@ export class AssessmentUseCases {
     }): Promise<AddAssessmentGroupMemberResult> {
         const { assessmentGroupId, studentId } = input;
         if (!assessmentGroupId || !studentId) return MissingFields;
+        if (await this.assessmentGroupMembers.findByGroupAndStudent(assessmentGroupId, studentId)) return { kind: "member_already_exists" };
         const member: AssessmentGroupMember = { id: randomUUID(), assessmentGroupId, studentId };
         await this.assessmentGroupMembers.save(member);
         return {

@@ -12,7 +12,7 @@ export type CourseView = {
     conversationId: string;
 };
 
-export type CreateCourseResult = MissingFields | { kind: "course_created"; course: CourseView };
+export type CreateCourseResult = MissingFields | { kind: "course_already_exists" } | { kind: "course_created"; course: CourseView };
 
 export type UpdateCourseResult =
     | NotFound
@@ -45,6 +45,7 @@ export class CourseUseCases {
     }): Promise<CreateCourseResult> {
         const { instructorId, moduleId, groupId, blocId, conversationId } = input;
         if (!instructorId || !moduleId || !groupId || !blocId || !conversationId) return MissingFields;
+        if (await this.courses.findByInstructorModuleGroup(instructorId, moduleId, groupId)) return { kind: "course_already_exists" };
         const course: Course = { id: randomUUID(), instructorId, moduleId, groupId, blocId, conversationId };
         await this.courses.save(course);
         return { kind: "course_created", course: toView(course) };

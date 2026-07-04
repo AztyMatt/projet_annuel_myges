@@ -30,6 +30,8 @@ academicYearRouter.post(
         const result = await academicYearUseCases.create(req.body);
         if (result.kind === "missing_fields")
             return void res.status(400).json({ error: "startDate and endDate are required" });
+        if (result.kind === "academic_year_already_exists")
+            return void res.status(409).json({ error: "An academic year with these dates already exists" });
         res.status(201).json(result.academicYear);
     },
 );

@@ -102,6 +102,8 @@ conversationRouter.post(
             return void res
                 .status(400)
                 .json({ error: "adminId, studentId and conversationId are required" });
+        if (result.kind === "conversation_already_exists")
+            return void res.status(409).json({ error: "A private conversation already exists between this admin and student" });
         res.status(201).json(result.conversationPrivate);
     },
 );

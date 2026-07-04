@@ -7,6 +7,7 @@ export type CampusView = { id: string; name: string; address: string };
 
 export type CreateCampusResult =
     | MissingFields
+    | { kind: "campus_already_exists" }
     | { kind: "campus_created"; campus: CampusView };
 
 export type UpdateCampusResult =
@@ -27,6 +28,7 @@ export class CampusUseCases {
     async create(input: { name?: string; address?: string }): Promise<CreateCampusResult> {
         const { name, address } = input;
         if (!name || !address) return MissingFields;
+        if (await this.campuses.findByName(name)) return { kind: "campus_already_exists" };
         const campus: Campus = { id: randomUUID(), name, address };
         await this.campuses.save(campus);
         return { kind: "campus_created", campus: toView(campus) };

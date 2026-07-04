@@ -7,6 +7,7 @@ export type ClassroomView = { id: string; name: string; capacity: number; campus
 
 export type CreateClassroomResult =
     | MissingFields
+    | { kind: "classroom_already_exists" }
     | { kind: "classroom_created"; classroom: ClassroomView };
 
 export type UpdateClassroomResult =
@@ -32,6 +33,7 @@ export class ClassroomUseCases {
     async create(input: { name?: string; capacity?: number; campusId?: string }): Promise<CreateClassroomResult> {
         const { name, capacity, campusId } = input;
         if (!name || capacity === undefined || !campusId) return MissingFields;
+        if (await this.classrooms.findByCampusAndName(campusId, name)) return { kind: "classroom_already_exists" };
         const classroom: Classroom = { id: randomUUID(), name, capacity, campusId };
         await this.classrooms.save(classroom);
         return { kind: "classroom_created", classroom: toView(classroom) };

@@ -14,6 +14,7 @@ export type ExternalView = {
 
 export type CreateExternalResult =
     | MissingFields
+    | { kind: "external_already_exists" }
     | { kind: "external_created"; external: ExternalView };
 
 export type UpdateExternalResult =
@@ -45,6 +46,7 @@ export class ExternalUseCases {
     }): Promise<CreateExternalResult> {
         const { firstname, lastname, email, type } = input;
         if (!firstname || !lastname || !email || !type) return MissingFields;
+        if (await this.externals.findByIdentity(firstname, lastname, email)) return { kind: "external_already_exists" };
         const external: External = { id: randomUUID(), firstname, lastname, email, type };
         await this.externals.save(external);
         return { kind: "external_created", external: toView(external) };

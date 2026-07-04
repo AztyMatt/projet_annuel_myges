@@ -32,6 +32,8 @@ assessmentRouter.post(
             return void res
                 .status(400)
                 .json({ error: "courseId, title, type, dueDate and maxGroupSize are required" });
+        if (result.kind === "assessment_already_exists")
+            return void res.status(409).json({ error: "An assessment with this title and due date already exists for this course" });
         res.status(201).json(result.assessment);
     },
 );
@@ -142,10 +144,8 @@ assessmentRouter.post("/assessment-group-members", requireAuth, async (req, res)
     const result = await assessmentUseCases.addGroupMember(req.body);
     if (result.kind === "missing_fields")
         return void res.status(400).json({ error: "assessmentGroupId and studentId are required" });
-    if (result.kind === "not_found")
-        return void res.status(404).json({ error: "Assessment group, assessment or course not found" });
-    if (result.kind === "student_not_in_group")
-        return void res.status(403).json({ error: "Student does not belong to the group of this course" });
+    if (result.kind === "member_already_exists")
+        return void res.status(409).json({ error: "Student is already a member of this assessment group" });
     res.status(201).json(result.member);
 });
 

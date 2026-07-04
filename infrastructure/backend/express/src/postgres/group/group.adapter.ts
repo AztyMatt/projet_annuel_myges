@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { type GroupRepository } from "@application/group/group.repository";
 import { type Group } from "@domain/group/group.entity";
 import { db } from "@express/src/postgres/db";
@@ -20,6 +20,14 @@ export const groupRepository: GroupRepository = {
     async findByClassId(classId) {
         const result = await db.select().from(groupTable).where(eq(groupTable.classId, classId));
         return result.map(rowToGroup);
+    },
+    async findByClassAndName(classId, name) {
+        const result = await db
+            .select()
+            .from(groupTable)
+            .where(and(eq(groupTable.classId, classId), eq(groupTable.name, name)))
+            .limit(1);
+        return result[0] ? rowToGroup(result[0]) : undefined;
     },
     async save(group) {
         await db

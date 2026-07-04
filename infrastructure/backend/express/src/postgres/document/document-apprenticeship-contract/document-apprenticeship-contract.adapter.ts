@@ -43,6 +43,14 @@ export const documentApprenticeshipContractRepository: DocumentApprenticeshipCon
             .where(eq(documentApprenticeshipContractTable.companyId, companyId));
         return result.map(rowToDocumentApprenticeshipContract);
     },
+    async findByFileDocument(fileDocumentId) {
+        const result = await db
+            .select()
+            .from(documentApprenticeshipContractTable)
+            .where(eq(documentApprenticeshipContractTable.fileDocumentId, fileDocumentId))
+            .limit(1);
+        return result[0] ? rowToDocumentApprenticeshipContract(result[0]) : undefined;
+    },
     async save(documentApprenticeshipContract) {
         await db
             .insert(documentApprenticeshipContractTable)

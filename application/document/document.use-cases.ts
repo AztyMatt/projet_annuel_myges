@@ -46,6 +46,7 @@ export type ListDocumentAdministrativesResult = {
 
 export type CreateDocumentApprenticeshipContractResult =
     | MissingFields
+    | { kind: "contract_already_exists" }
     | { kind: "document_apprenticeship_contract_created"; contract: DocumentApprenticeshipContractView };
 
 export type UpdateDocumentApprenticeshipContractResult =
@@ -155,6 +156,7 @@ export class DocumentUseCases {
         const { fileDocumentId, companyId, type, startDate, endDate } = input;
         if (!fileDocumentId || !companyId || !type || !startDate || !endDate)
             return MissingFields;
+        if (await this.documentApprenticeshipContracts.findByFileDocument(fileDocumentId)) return { kind: "contract_already_exists" };
         const entry: DocumentApprenticeshipContract = {
             id: randomUUID(),
             fileDocumentId,

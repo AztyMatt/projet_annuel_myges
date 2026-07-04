@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, unique } from "drizzle-orm/pg-core";
 import { fileDocument } from "@express/src/postgres/schema/file";
 import { company } from "@express/src/postgres/schema/company";
 
@@ -15,6 +15,7 @@ export const documentApprenticeshipContract = pgTable("document_apprenticeship_c
     id: text("id").primaryKey(),
     fileDocumentId: text("file_document_id")
         .notNull()
+        .unique()
         .references(() => fileDocument.id),
     companyId: text("company_id")
         .notNull()

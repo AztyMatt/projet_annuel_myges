@@ -20,6 +20,8 @@ blocRouter.post("/blocs", requireAuth, requireRole(AdminRole.ADMIN, AdminRole.SU
     const result = await blocUseCases.create(req.body);
     if (result.kind === "missing_fields")
         return void res.status(400).json({ error: "name and programId are required" });
+    if (result.kind === "bloc_already_exists")
+        return void res.status(409).json({ error: "A bloc with this name already exists in this program" });
     res.status(201).json(result.bloc);
 });
 

@@ -128,6 +128,8 @@ documentRouter.post(
             return void res
                 .status(400)
                 .json({ error: "fileDocumentId, companyId, type, startDate and endDate are required" });
+        if (result.kind === "contract_already_exists")
+            return void res.status(409).json({ error: "An apprenticeship contract already exists for this file document" });
         res.status(201).json(result.contract);
     },
 );

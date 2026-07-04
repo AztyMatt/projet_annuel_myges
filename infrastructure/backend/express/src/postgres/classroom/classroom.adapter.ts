@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { type ClassroomRepository } from "@application/classroom/classroom.repository";
 import { type Classroom } from "@domain/classroom/classroom.entity";
 import { db } from "@express/src/postgres/db";
@@ -21,6 +21,14 @@ export const classroomRepository: ClassroomRepository = {
     async findByCampusId(campusId) {
         const result = await db.select().from(classroomTable).where(eq(classroomTable.campusId, campusId));
         return result.map(rowToClassroom);
+    },
+    async findByCampusAndName(campusId, name) {
+        const result = await db
+            .select()
+            .from(classroomTable)
+            .where(and(eq(classroomTable.campusId, campusId), eq(classroomTable.name, name)))
+            .limit(1);
+        return result[0] ? rowToClassroom(result[0]) : undefined;
     },
     async save(classroom) {
         await db

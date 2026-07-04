@@ -8,7 +8,7 @@ function rowToModule(row: typeof moduleTable.$inferSelect): Module {
     return {
         id: row.id,
         name: row.name,
-        code: row.code === "" ? null : row.code,
+        code: row.code,
     };
 }
 
@@ -21,7 +21,7 @@ export const moduleRepository: ModuleRepository = {
         const result = await db
             .select()
             .from(moduleTable)
-            .where(and(eq(moduleTable.name, name), eq(moduleTable.code, code ?? "")))
+            .where(and(eq(moduleTable.name, name), eq(moduleTable.code, code)))
             .limit(1);
         return result[0] ? rowToModule(result[0]) : undefined;
     },
@@ -31,13 +31,13 @@ export const moduleRepository: ModuleRepository = {
             .values({
                 id: moduleEntity.id,
                 name: moduleEntity.name,
-                code: moduleEntity.code ?? "",
+                code: moduleEntity.code,
             })
             .onConflictDoUpdate({
                 target: moduleTable.id,
                 set: {
                     name: moduleEntity.name,
-                    code: moduleEntity.code ?? "",
+                    code: moduleEntity.code,
                 },
             });
     },

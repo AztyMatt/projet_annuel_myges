@@ -15,6 +15,7 @@ export type CompanyView = {
 
 export type CreateCompanyResult =
     | MissingFields
+    | { kind: "siret_already_exists" }
     | { kind: "company_created"; company: CompanyView };
 
 export type UpdateCompanyResult =
@@ -50,6 +51,7 @@ export class CompanyUseCases {
     }): Promise<CreateCompanyResult> {
         const { name, siret, address, contactName, contactNumber, contactEmail } = input;
         if (!name || !siret || !address || !contactName) return MissingFields;
+        if (await this.companies.findBySiret(siret)) return { kind: "siret_already_exists" };
         const company: Company = {
             id: randomUUID(),
             name,

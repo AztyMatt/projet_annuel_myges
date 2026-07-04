@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { BasicStatus } from "@domain/absence/absence.enums";
 import { assertEnum } from "@express/src/postgres/assert-enum";
 import { type FileJustificationRepository } from "@application/file/file-justification/file-justification.repository";
@@ -33,6 +33,14 @@ export const fileJustificationRepository: FileJustificationRepository = {
             .select()
             .from(fileJustificationTable)
             .where(eq(fileJustificationTable.fileId, fileId))
+            .limit(1);
+        return result[0] ? rowToFileJustification(result[0]) : undefined;
+    },
+    async findByAbsenceAndFile(absenceId, fileId) {
+        const result = await db
+            .select()
+            .from(fileJustificationTable)
+            .where(and(eq(fileJustificationTable.absenceId, absenceId), eq(fileJustificationTable.fileId, fileId)))
             .limit(1);
         return result[0] ? rowToFileJustification(result[0]) : undefined;
     },

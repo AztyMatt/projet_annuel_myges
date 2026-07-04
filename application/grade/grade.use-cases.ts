@@ -60,6 +60,7 @@ export type ListGradesResult = { kind: "grades_listed"; grades: GradeView[] };
 
 export type LinkGradeAssessmentResult =
     | MissingFields
+    | { kind: "grade_assessment_already_exists" }
     | { kind: "grade_assessment_linked"; gradeAssessment: GradeAssessmentView };
 
 export type DeleteGradeAssessmentResult =
@@ -77,6 +78,7 @@ export type ListGradeAssessmentsResult = {
 
 export type LinkGradeSessionExamResult =
     | MissingFields
+    | { kind: "grade_session_exam_already_exists" }
     | { kind: "grade_session_exam_linked"; gradeSessionExam: GradeSessionExamView };
 
 export type DeleteGradeSessionExamResult =
@@ -94,6 +96,7 @@ export type ListGradeSessionExamsResult = {
 
 export type LinkGradeManualNotationResult =
     | MissingFields
+    | { kind: "grade_manual_notation_already_exists" }
     | { kind: "grade_manual_notation_linked"; gradeManualNotation: GradeManualNotationView };
 
 export type DeleteGradeManualNotationResult =
@@ -111,6 +114,7 @@ export type ListGradeManualNotationsResult = {
 
 export type CreateManualNotationResult =
     | MissingFields
+    | { kind: "notation_already_exists" }
     | { kind: "manual_notation_created"; manualNotation: ManualNotationView };
 
 export type UpdateManualNotationResult =
@@ -240,6 +244,7 @@ export class GradeUseCases {
     }): Promise<LinkGradeAssessmentResult> {
         const { gradeId, assessmentId } = input;
         if (!gradeId || !assessmentId) return MissingFields;
+        if (await this.gradeAssessments.findByGradeAndAssessment(gradeId, assessmentId)) return { kind: "grade_assessment_already_exists" };
         const entry: GradeAssessment = { id: randomUUID(), gradeId, assessmentId };
         await this.gradeAssessments.save(entry);
         return { kind: "grade_assessment_linked", gradeAssessment: toGradeAssessmentView(entry) };
@@ -274,6 +279,7 @@ export class GradeUseCases {
     }): Promise<LinkGradeSessionExamResult> {
         const { gradeId, sessionExamId } = input;
         if (!gradeId || !sessionExamId) return MissingFields;
+        if (await this.gradeSessionExams.findByGradeAndSessionExam(gradeId, sessionExamId)) return { kind: "grade_session_exam_already_exists" };
         const entry: GradeSessionExam = { id: randomUUID(), gradeId, sessionExamId };
         await this.gradeSessionExams.save(entry);
         return { kind: "grade_session_exam_linked", gradeSessionExam: toGradeSessionExamView(entry) };
@@ -308,6 +314,7 @@ export class GradeUseCases {
     }): Promise<LinkGradeManualNotationResult> {
         const { gradeId, gradeManualId } = input;
         if (!gradeId || !gradeManualId) return MissingFields;
+        if (await this.gradeManualNotations.findByGradeAndManualNotation(gradeId, gradeManualId)) return { kind: "grade_manual_notation_already_exists" };
         const entry: GradeManualNotation = { id: randomUUID(), gradeId, gradeManualId };
         await this.gradeManualNotations.save(entry);
         return {
@@ -354,6 +361,7 @@ export class GradeUseCases {
     }): Promise<CreateManualNotationResult> {
         const { moduleId, name } = input;
         if (!moduleId || !name) return MissingFields;
+        if (await this.manualNotations.findByModuleAndName(moduleId, name)) return { kind: "notation_already_exists" };
         const entry: ManualNotation = { id: randomUUID(), moduleId, name };
         await this.manualNotations.save(entry);
         return { kind: "manual_notation_created", manualNotation: toManualNotationView(entry) };

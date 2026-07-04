@@ -6,7 +6,7 @@ import { NotFound, MissingFields } from "@application/types/results";
 export type ModuleView = {
     id: string;
     name: string;
-    code: string | null;
+    code: string;
 };
 
 export type CreateModuleResult =
@@ -37,7 +37,7 @@ export class ModuleUseCases {
     async create(input: { name?: string; code?: string }): Promise<CreateModuleResult> {
         const { name, code } = input;
         if (!name) return MissingFields;
-        const resolvedCode = code ?? null;
+        const resolvedCode = code ?? "";
         if (await this.modules.findByNameAndCode(name, resolvedCode)) return { kind: "module_already_exists" };
         const module: Module = { id: randomUUID(), name, code: resolvedCode };
         await this.modules.save(module);
@@ -48,7 +48,7 @@ export class ModuleUseCases {
         const module = await this.modules.findById(id);
         if (!module) return NotFound;
         const newName = input.name !== undefined ? input.name : module.name;
-        const newCode = input.code !== undefined ? (input.code ?? null) : module.code;
+        const newCode = input.code !== undefined ? input.code : module.code;
         const existing = await this.modules.findByNameAndCode(newName, newCode);
         if (existing && existing.id !== id) return { kind: "module_already_exists" };
         module.name = newName;

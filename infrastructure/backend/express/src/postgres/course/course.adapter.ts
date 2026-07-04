@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { type CourseRepository } from "@application/course/course.repository";
 import { type Course } from "@domain/course/course.entity";
 import { db } from "@express/src/postgres/db";
@@ -35,6 +35,20 @@ export const courseRepository: CourseRepository = {
     async findByBlocId(blocId) {
         const result = await db.select().from(courseTable).where(eq(courseTable.blocId, blocId));
         return result.map(rowToCourse);
+    },
+    async findByInstructorModuleGroup(instructorId, moduleId, groupId) {
+        const result = await db
+            .select()
+            .from(courseTable)
+            .where(
+                and(
+                    eq(courseTable.instructorId, instructorId),
+                    eq(courseTable.moduleId, moduleId),
+                    eq(courseTable.groupId, groupId),
+                ),
+            )
+            .limit(1);
+        return result[0] ? rowToCourse(result[0]) : undefined;
     },
     async save(course) {
         await db

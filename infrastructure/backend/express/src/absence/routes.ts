@@ -47,6 +47,8 @@ absenceRouter.post("/absences", requireAuth, async (req: AuthRequest, res) => {
     const result = await absenceUseCases.declare(req.body);
     if (result.kind === "missing_fields")
         return void res.status(400).json({ error: "studentId, sessionId and reason are required" });
+    if (result.kind === "absence_already_exists")
+        return void res.status(409).json({ error: "Absence already declared for this student and session" });
     res.status(201).json(result.absence);
 });
 

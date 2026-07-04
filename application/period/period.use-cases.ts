@@ -11,7 +11,7 @@ export type PeriodView = {
     academicYearId: string;
 };
 
-export type CreatePeriodResult = MissingFields | { kind: "period_created"; period: PeriodView };
+export type CreatePeriodResult = MissingFields | { kind: "period_order_already_exists" } | { kind: "period_created"; period: PeriodView };
 
 export type UpdatePeriodResult =
     | NotFound
@@ -42,6 +42,7 @@ export class PeriodUseCases {
     }): Promise<CreatePeriodResult> {
         const { order, startDate, endDate, academicYearId } = input;
         if (order === undefined || !startDate || !endDate || !academicYearId) return MissingFields;
+        if (await this.periods.findByAcademicYearAndOrder(academicYearId, order)) return { kind: "period_order_already_exists" };
         const period: Period = {
             id: randomUUID(),
             order,

@@ -32,8 +32,8 @@ sessionRouter.post(
             return void res
                 .status(400)
                 .json({ error: "courseId, startTime, endTime, mode and classroomId are required" });
-        if (result.kind === "classroom_conflict")
-            return void res.status(409).json({ error: "Classroom is already booked for this time slot" });
+        if (result.kind === "session_already_exists")
+            return void res.status(409).json({ error: "A session with this course, classroom and time slot already exists" });
         res.status(201).json(result.session);
     },
 );
@@ -45,8 +45,8 @@ sessionRouter.patch(
     async (req, res) => {
         const result = await sessionUseCases.update(String(req.params.id), req.body);
         if (result.kind === "not_found") return void res.status(404).json({ error: "Session not found" });
-        if (result.kind === "classroom_conflict")
-            return void res.status(409).json({ error: "Classroom is already booked for this time slot" });
+        if (result.kind === "session_already_exists")
+            return void res.status(409).json({ error: "A session with this course, classroom and time slot already exists" });
         res.status(200).json(result.session);
     },
 );

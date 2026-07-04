@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { type AssessmentRepository } from "@application/assessment/assessment.repository";
 import { type Assessment } from "@domain/assessment/assessment.entity";
 import { AssessmentType } from "@domain/assessment/assessment.enums";
@@ -30,6 +30,20 @@ export const assessmentRepository: AssessmentRepository = {
             .where(eq(assessmentTable.courseId, courseId))
             .orderBy(asc(assessmentTable.dueDate));
         return result.map(rowToAssessment);
+    },
+    async findByCourseAndTitle(courseId, title, dueDate) {
+        const result = await db
+            .select()
+            .from(assessmentTable)
+            .where(
+                and(
+                    eq(assessmentTable.courseId, courseId),
+                    eq(assessmentTable.title, title),
+                    eq(assessmentTable.dueDate, dueDate),
+                ),
+            )
+            .limit(1);
+        return result[0] ? rowToAssessment(result[0]) : undefined;
     },
     async save(assessment) {
         await db

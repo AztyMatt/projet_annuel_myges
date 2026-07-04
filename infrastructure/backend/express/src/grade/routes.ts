@@ -58,8 +58,6 @@ gradeRouter.patch(
         if (!req.auth) return void res.status(401).json({ error: "Unauthorized" });
         const result = await gradeUseCases.update(String(req.params.id), { ...req.body, enteredBy: req.auth.userId });
         if (result.kind === "not_found") return void res.status(404).json({ error: "Grade not found" });
-        if (result.kind === "grade_locked")
-            return void res.status(423).json({ error: "Grade is locked and cannot be modified" });
         res.status(200).json(result.grade);
     },
 );
@@ -116,6 +114,8 @@ gradeRouter.post(
         const result = await gradeUseCases.linkAssessment(req.body);
         if (result.kind === "missing_fields")
             return void res.status(400).json({ error: "gradeId and assessmentId are required" });
+        if (result.kind === "grade_assessment_already_exists")
+            return void res.status(409).json({ error: "This grade is already linked to this assessment" });
         res.status(201).json(result.gradeAssessment);
     },
 );
@@ -164,6 +164,8 @@ gradeRouter.post(
         const result = await gradeUseCases.linkSessionExam(req.body);
         if (result.kind === "missing_fields")
             return void res.status(400).json({ error: "gradeId and sessionExamId are required" });
+        if (result.kind === "grade_session_exam_already_exists")
+            return void res.status(409).json({ error: "This grade is already linked to this session exam" });
         res.status(201).json(result.gradeSessionExam);
     },
 );
@@ -216,6 +218,8 @@ gradeRouter.post(
         const result = await gradeUseCases.linkManualNotation(req.body);
         if (result.kind === "missing_fields")
             return void res.status(400).json({ error: "gradeId and gradeManualId are required" });
+        if (result.kind === "grade_manual_notation_already_exists")
+            return void res.status(409).json({ error: "This grade is already linked to this manual notation" });
         res.status(201).json(result.gradeManualNotation);
     },
 );
@@ -263,6 +267,8 @@ gradeRouter.post(
         const result = await gradeUseCases.createManualNotation(req.body);
         if (result.kind === "missing_fields")
             return void res.status(400).json({ error: "moduleId and name are required" });
+        if (result.kind === "notation_already_exists")
+            return void res.status(409).json({ error: "A manual notation with this name already exists for this module" });
         res.status(201).json(result.manualNotation);
     },
 );

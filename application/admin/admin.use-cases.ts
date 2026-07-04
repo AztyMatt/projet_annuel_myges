@@ -13,6 +13,7 @@ export type AdminView = {
 
 export type CreateAdminResult =
     | MissingFields
+    | { kind: "user_already_admin" }
     | { kind: "admin_created"; admin: AdminView };
 
 export type UpdateAdminResult =
@@ -38,6 +39,7 @@ export class AdminUseCases {
     async create(input: { userId?: string; role?: AdminRole; instructorId?: string }): Promise<CreateAdminResult> {
         const { userId, role, instructorId } = input;
         if (!userId || !role) return MissingFields;
+        if (await this.admins.findByUserId(userId)) return { kind: "user_already_admin" };
         const admin: Admin = { id: randomUUID(), userId, role, instructorId: instructorId ?? null };
         await this.admins.save(admin);
         return { kind: "admin_created", admin: toView(admin) };

@@ -22,6 +22,8 @@ classRouter.post("/classes", requireAuth, requireRole(AdminRole.ADMIN, AdminRole
         return void res
             .status(400)
             .json({ error: "number, programId, size and conversationId are required" });
+    if (result.kind === "class_number_already_exists")
+        return void res.status(409).json({ error: "A class with this number already exists in this program" });
     res.status(201).json(result.class);
 });
 

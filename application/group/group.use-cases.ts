@@ -8,7 +8,7 @@ import { NotFound, MissingFields } from "@application/types/results";
 export type GroupView = { id: string; classId: string; name: string };
 export type StudentGroupView = { id: string; studentId: string; groupId: string };
 
-export type CreateGroupResult = MissingFields | { kind: "group_created"; group: GroupView };
+export type CreateGroupResult = MissingFields | { kind: "group_already_exists" } | { kind: "group_created"; group: GroupView };
 
 export type UpdateGroupResult =
     | NotFound
@@ -22,6 +22,7 @@ export type ListGroupsResult = { kind: "groups_listed"; groups: GroupView[] };
 
 export type AddStudentResult =
     | MissingFields
+    | { kind: "student_already_in_group" }
     | { kind: "student_group_created"; studentGroup: StudentGroupView };
 
 export type RemoveStudentResult = NotFound | { kind: "student_group_deleted" };
@@ -45,6 +46,7 @@ export class GroupUseCases {
     async create(input: { classId?: string; name?: string }): Promise<CreateGroupResult> {
         const { classId, name } = input;
         if (!classId || !name) return MissingFields;
+        if (await this.groups.findByClassAndName(classId, name)) return { kind: "group_already_exists" };
         const group: Group = { id: randomUUID(), classId, name };
         await this.groups.save(group);
         return { kind: "group_created", group: toGroupView(group) };
@@ -85,6 +87,7 @@ export class GroupUseCases {
     async addStudent(input: { studentId?: string; groupId?: string }): Promise<AddStudentResult> {
         const { studentId, groupId } = input;
         if (!studentId || !groupId) return MissingFields;
+        if (await this.studentGroups.findByStudentAndGroup(studentId, groupId)) return { kind: "student_already_in_group" };
         const studentGroup: StudentGroup = { id: randomUUID(), studentId, groupId };
         await this.studentGroups.save(studentGroup);
         return { kind: "student_group_created", studentGroup: toStudentGroupView(studentGroup) };

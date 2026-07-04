@@ -66,3 +66,8 @@ routers.forEach((router) => app.use("/api", router));
 app.get("/api/hello", (_request, response) => {
     response.json({ message: "Hello from Express!" });
 });
+
+app.use((err: { code?: string }, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    if (err.code === "23505") return void res.status(409).json({ error: "Conflict: this entry already exists" });
+    res.status(500).json({ error: "Internal server error" });
+});

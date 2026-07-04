@@ -1,4 +1,4 @@
-import { boolean, integer, pgTable, real, text, timestamp } from "drizzle-orm/pg-core";
+import { boolean, integer, pgTable, real, text, timestamp, unique } from "drizzle-orm/pg-core";
 import { student } from "@express/src/postgres/schema/student";
 import { users } from "@express/src/postgres/schema/auth";
 import { assessment } from "@express/src/postgres/schema/assessment";
@@ -11,7 +11,9 @@ export const manualNotation = pgTable("manual_notation", {
         .notNull()
         .references(() => module.id),
     name: text("name").notNull(),
-});
+}, (table) => ({
+    nameUnique: unique().on(table.moduleId, table.name),
+}));
 
 export const grade = pgTable("grade", {
     id: text("id").primaryKey(),
@@ -34,7 +36,9 @@ export const gradeAssessment = pgTable("grade_assessment", {
     assessmentId: text("assessment_id")
         .notNull()
         .references(() => assessment.id),
-});
+}, (table) => ({
+    linkUnique: unique().on(table.gradeId, table.assessmentId),
+}));
 
 export const gradeManualNotation = pgTable("grade_manual_notation", {
     id: text("id").primaryKey(),
@@ -44,7 +48,9 @@ export const gradeManualNotation = pgTable("grade_manual_notation", {
     gradeManualId: text("grade_manual_id")
         .notNull()
         .references(() => manualNotation.id),
-});
+}, (table) => ({
+    linkUnique: unique().on(table.gradeId, table.gradeManualId),
+}));
 
 export const gradeSessionExam = pgTable("grade_session_exam", {
     id: text("id").primaryKey(),
@@ -54,4 +60,6 @@ export const gradeSessionExam = pgTable("grade_session_exam", {
     sessionExamId: text("session_exam_id")
         .notNull()
         .references(() => sessionExam.id),
-});
+}, (table) => ({
+    linkUnique: unique().on(table.gradeId, table.sessionExamId),
+}));
