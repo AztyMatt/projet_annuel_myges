@@ -1,4 +1,5 @@
 import {
+    type Enable2faResult,
     type GetMeResult,
     type LoginResult,
     type ResetPasswordResult,
@@ -7,6 +8,7 @@ import {
 } from "@application/auth/auth.use-cases";
 import { Router } from "express";
 import { requireAuth, requireCronSecret, requireRole, type AuthRequest } from "@express/src/auth/middleware";
+import { tokenProvider } from "@express/src/auth/token-provider.adapter";
 import { AdminRole } from "@domain/admin/admin.enums";
 import { authUseCases } from "@express/src/container";
 
@@ -22,13 +24,18 @@ type LoginResponseBody =
     | { error: string }
     | { error: string; lockedUntil?: string }
     | { error: string; passwordResetRequired: true }
-    | { error: string; setup2FARequired: true }
+    | { error: string; setup2FARequired: true; setupSessionToken?: string }
     | { twoFactorRequired: true; tempSessionToken: string }
     | { token: string; user: AuthUserView };
 
 type Verify2faResponseBody = { error: string } | { token: string; user: AuthUserView };
 
 type ResetPasswordResponseBody = { error: string } | { message: string };
+
+type Enable2faResponseBody =
+    | { error: string }
+    | { totpSecret: string; totpProvisioningUri: string }
+    | { message: string };
 
 type GetMeResponseBody =
     | { error: string }
@@ -93,7 +100,11 @@ const loginResponse = (result: LoginResult): { status: number; body: LoginRespon
         case "super_admin_2fa_required":
             return {
                 status: 403,
-                body: { error: "Super admin must enable TOTP 2FA.", setup2FARequired: result.setup2FARequired },
+                body: {
+                    error: "Super admin must enable TOTP 2FA.",
+                    setup2FARequired: result.setup2FARequired,
+                    setupSessionToken: result.setupSessionToken,
+                },
             };
         case "two_factor_required":
             return { status: 200, body: { twoFactorRequired: true, tempSessionToken: result.tempSessionToken } };
@@ -145,6 +156,28 @@ const getMeResponse = (result: GetMeResult): { status: number; body: GetMeRespon
     }
 };
 
+const enable2faResponse = (result: Enable2faResult): { status: number; body: Enable2faResponseBody } => {
+    switch (result.kind) {
+        case "unauthorized":
+            return { status: 401, body: { error: "Unauthorized" } };
+        case "invalid_session":
+            return { status: 401, body: { error: "Invalid or expired setup session" } };
+        case "already_enabled":
+            return { status: 409, body: { error: "Two-factor authentication is already enabled" } };
+        case "missing_code":
+            return { status: 400, body: { error: "TOTP code is required to confirm activation" } };
+        case "invalid_totp_code":
+            return { status: 401, body: { error: "Invalid TOTP code" } };
+        case "setup_initiated":
+            return {
+                status: 200,
+                body: { totpSecret: result.totpSecret, totpProvisioningUri: result.totpProvisioningUri },
+            };
+        case "two_factor_enabled":
+            return { status: 200, body: { message: "Two-factor authentication enabled" } };
+    }
+};
+
 authRouter.post("/auth/signup", async (request, response) => {
     const httpResponse = signupResponse(await authUseCases.signup(request.body));
     response.status(httpResponse.status).json(httpResponse.body);
@@ -157,6 +190,23 @@ authRouter.post("/auth/login", async (request, response) => {
 
 authRouter.post("/auth/login/2fa", async (request, response) => {
     const httpResponse = verify2faResponse(await authUseCases.verify2fa(request.body));
+    response.status(httpResponse.status).json(httpResponse.body);
+});
+
+authRouter.post("/auth/2fa/enable", async (request: AuthRequest, response) => {
+    const { code, setupSessionToken } = request.body as { code?: string; setupSessionToken?: string };
+    const authorization = request.headers.authorization;
+    let userId: string | undefined;
+    if (authorization?.startsWith("Bearer ")) {
+        try {
+            userId = tokenProvider.verify(authorization.slice("Bearer ".length)).sub;
+        } catch {
+            userId = undefined;
+        }
+    }
+
+    const result = await authUseCases.enable2fa({ userId, setupSessionToken, code });
+    const httpResponse = enable2faResponse(result);
     response.status(httpResponse.status).json(httpResponse.body);
 });
 

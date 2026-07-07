@@ -30,8 +30,8 @@ Next.js (frontend) · Express.js (backend) · PostgreSQL + Drizzle (ORM) · Dock
 - [x] Mot de passe fort (12 caractères min., maj./min./chiffre/symbole) — `domain/auth/security-policy.ts` (`isStrongPassword`)
 - [x] Renouvellement obligatoire tous les 60 jours — `PASSWORD_MAX_AGE_DAYS = 60`, vérifié à chaque login (`needsPasswordReset`)
 - [x] Blocage après tentatives infructueuses — 5 tentatives (`MAX_FAILED_ATTEMPTS`) → verrouillage 15 min (`LOCK_DURATION_MS`), déverrouillage automatique après délai (pas d'action admin nécessaire)
-- [~] Authentification à deux facteurs (TOTP) — fonctionne à l'inscription (`enable2FA`) et au login (`totp-provider.adapter.ts`), **obligatoire pour `SUPER_ADMIN`**
-  - [ ] **Aucun endpoint pour activer la 2FA sur un compte déjà existant** → bloque définitivement tout `SUPER_ADMIN` créé sans 2FA (ne peut jamais se connecter). Endpoint `POST /auth/2fa/enable` + page `/2fa/setup` à créer en priorité
+- [x] Authentification à deux facteurs (TOTP) — fonctionne à l'inscription (`enable2FA`), au login (`totp-provider.adapter.ts`) et à l'activation sur compte existant (`POST /auth/2fa/enable`), **obligatoire pour `SUPER_ADMIN`**
+  - [x] Endpoint pour activer la 2FA sur un compte déjà existant — `POST /auth/2fa/enable` + page `/2fa/setup`
 - [ ] Confirmation par SMS (Twilio) en alternative au TOTP — non implémenté (non bloquant : un seul moyen de 2FA suffit)
 - [ ] OIDC/OAuth2 (Google, Facebook...) — non implémenté. `cahierDesCharges.md` §5.1 le marque explicitement **"(optionnel)"** → à confirmer à l'oral si un seul mode d'authentification (email/mdp) suffit pour la partie "Authentification Avancée" du sujet
 - [ ] Lien magique — non implémenté (idem, marqué optionnel dans le cahier des charges interne)
@@ -121,7 +121,7 @@ Next.js (frontend) · Express.js (backend) · PostgreSQL + Drizzle (ORM) · Dock
 Ces gaps backend conditionnent des pages listées en section 11 — à traiter en parallèle du travail front, pas après :
 
 - [ ] Endpoint mot de passe oublié par email (token à usage unique)
-- [ ] Endpoint d'activation de la 2FA sur un compte existant (`POST /auth/2fa/enable`)
+- [x] Endpoint d'activation de la 2FA sur un compte existant (`POST /auth/2fa/enable`)
 - [ ] Upload réel de fichiers (multipart + stockage disque/S3), au-delà de la simple création de métadonnées `POST /files`
 - [ ] Mécanisme de notifications temps réel (WebSocket) pour planning/notes/documents
 - [ ] Un moyen de lister les comptes en attente d'attribution de rôle (`pending_role_assignment`) — aujourd'hui `GET /admin/security/users` retourne tous les comptes mais ne distingue pas explicitement "sans rôle" des autres
@@ -178,8 +178,7 @@ Seulement 4 rôles (pas les 6-7 décrits dans `cahierDesCharges.md` §2, l'admin
   - Contenu actuel (à conserver) : champs email (pré-rempli si redirigé depuis `/login`), ancien mot de passe, nouveau mot de passe + confirmation, indicateur de force
   - À ajouter : si la page est ouverte avec un paramètre `?token=...` (lien reçu par email via `/forgot-password`), afficher un **second formulaire** sans champ "ancien mot de passe" (juste nouveau mot de passe + confirmation) — les deux usages ("renouvellement expiré" et "mot de passe oublié") ne doivent pas être confondus dans le même formulaire
 
-- [ ] **`/2fa/setup`** — 🆕, dépend d'un endpoint backend à créer (section 10)
-  - Contenu : QR code à scanner + secret affiché en texte (fallback si l'app ne peut pas scanner) · champ de saisie du code à 6 chiffres pour confirmer l'activation avant validation définitive · bouton "Valider et continuer"
+- [x] **`/2fa/setup`** — QR code + secret TOTP + confirmation par code à 6 chiffres
 
 ### 11.2 Commun à tous les rôles connectés
 
