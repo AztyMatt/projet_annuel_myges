@@ -5,5 +5,5 @@ export type FileJustification = {
     absenceId: string;
     fileId: string;
     validationStatus: BasicStatus;
-    processedBy: string;
+    processedBy: string | null;
 };

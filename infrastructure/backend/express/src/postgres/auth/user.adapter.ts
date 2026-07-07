@@ -7,6 +7,8 @@ import { users } from "@express/src/postgres/schema/auth";
 function rowToUser(row: typeof users.$inferSelect): User {
     return {
         id: row.id,
+        firstname: row.firstname,
+        lastname: row.lastname,
         email: row.email,
         passwordHash: row.passwordHash,
         failedAttempts: row.failedAttempts,
@@ -34,6 +36,8 @@ export const userRepository: UserRepository = {
             .insert(users)
             .values({
                 id: user.id,
+                firstname: user.firstname,
+                lastname: user.lastname,
                 email: user.email,
                 passwordHash: user.passwordHash,
                 failedAttempts: user.failedAttempts,
@@ -48,6 +52,8 @@ export const userRepository: UserRepository = {
             .onConflictDoUpdate({
                 target: users.id,
                 set: {
+                    firstname: user.firstname,
+                    lastname: user.lastname,
                     email: user.email,
                     passwordHash: user.passwordHash,
                     failedAttempts: user.failedAttempts,

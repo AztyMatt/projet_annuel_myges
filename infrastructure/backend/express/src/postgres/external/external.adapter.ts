@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { type ExternalRepository } from "@application/external/external.repository";
 import { type External } from "@domain/external/external.entity";
 import { ExternalType } from "@domain/external/external.enums";
@@ -9,8 +9,8 @@ import { external as externalTable } from "@express/src/postgres/schema/external
 function rowToExternal(row: typeof externalTable.$inferSelect): External {
     return {
         id: row.id,
-        firstName: row.firstName,
-        lastName: row.lastName,
+        firstname: row.firstname,
+        lastname: row.lastname,
         email: row.email,
         type: assertEnum(row.type, ExternalType),
     };
@@ -21,8 +21,12 @@ export const externalRepository: ExternalRepository = {
         const result = await db.select().from(externalTable).where(eq(externalTable.id, id)).limit(1);
         return result[0] ? rowToExternal(result[0]) : undefined;
     },
-    async findByEmail(email) {
-        const result = await db.select().from(externalTable).where(eq(externalTable.email, email)).limit(1);
+    async findByIdentity(firstname, lastname, email) {
+        const result = await db
+            .select()
+            .from(externalTable)
+            .where(and(eq(externalTable.firstname, firstname), eq(externalTable.lastname, lastname), eq(externalTable.email, email)))
+            .limit(1);
         return result[0] ? rowToExternal(result[0]) : undefined;
     },
     async save(external) {
@@ -30,16 +34,16 @@ export const externalRepository: ExternalRepository = {
             .insert(externalTable)
             .values({
                 id: external.id,
-                firstName: external.firstName,
-                lastName: external.lastName,
+                firstname: external.firstname,
+                lastname: external.lastname,
                 email: external.email,
                 type: external.type,
             })
             .onConflictDoUpdate({
                 target: externalTable.id,
                 set: {
-                    firstName: external.firstName,
-                    lastName: external.lastName,
+                    firstname: external.firstname,
+                    lastname: external.lastname,
                     email: external.email,
                     type: external.type,
                 },

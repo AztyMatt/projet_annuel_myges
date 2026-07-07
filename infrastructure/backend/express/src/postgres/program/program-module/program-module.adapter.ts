@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { type ProgramModuleRepository } from "@application/program/program-module/program-module.repository";
 import { type ProgramModule } from "@domain/program/program-module/program-module.entity";
 import { db } from "@express/src/postgres/db";
@@ -9,6 +9,8 @@ function rowToProgramModule(row: typeof programModuleTable.$inferSelect): Progra
         id: row.id,
         programId: row.programId,
         moduleId: row.moduleId,
+        coefficient: row.coefficient,
+        ectsCredits: row.ectsCredits,
     };
 }
 
@@ -25,6 +27,14 @@ export const programModuleRepository: ProgramModuleRepository = {
         const result = await db.select().from(programModuleTable).where(eq(programModuleTable.moduleId, moduleId));
         return result.map(rowToProgramModule);
     },
+    async findByProgramAndModule(programId, moduleId) {
+        const result = await db
+            .select()
+            .from(programModuleTable)
+            .where(and(eq(programModuleTable.programId, programId), eq(programModuleTable.moduleId, moduleId)))
+            .limit(1);
+        return result[0] ? rowToProgramModule(result[0]) : undefined;
+    },
     async save(programModule) {
         await db
             .insert(programModuleTable)
@@ -32,12 +42,16 @@ export const programModuleRepository: ProgramModuleRepository = {
                 id: programModule.id,
                 programId: programModule.programId,
                 moduleId: programModule.moduleId,
+                coefficient: programModule.coefficient,
+                ectsCredits: programModule.ectsCredits,
             })
             .onConflictDoUpdate({
                 target: programModuleTable.id,
                 set: {
                     programId: programModule.programId,
                     moduleId: programModule.moduleId,
+                    coefficient: programModule.coefficient,
+                    ectsCredits: programModule.ectsCredits,
                 },
             });
     },

@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { type FileCourseRepository } from "@application/file/file-course/file-course.repository";
 import { type FileCourse } from "@domain/file/file-course/file-course.entity";
 import { db } from "@express/src/postgres/db";
@@ -25,6 +25,14 @@ export const fileCourseRepository: FileCourseRepository = {
     async findByFileId(fileId) {
         const result = await db.select().from(fileCourseTable).where(eq(fileCourseTable.fileId, fileId));
         return result.map(rowToFileCourse);
+    },
+    async findByFileAndCourse(fileId, courseId) {
+        const result = await db
+            .select()
+            .from(fileCourseTable)
+            .where(and(eq(fileCourseTable.fileId, fileId), eq(fileCourseTable.courseId, courseId)))
+            .limit(1);
+        return result[0] ? rowToFileCourse(result[0]) : undefined;
     },
     async save(fileCourse) {
         await db

@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { type ClassRepository } from "@application/class/class.repository";
 import { type Class } from "@domain/class/class.entity";
 import { db } from "@express/src/postgres/db";
@@ -22,6 +22,14 @@ export const classRepository: ClassRepository = {
     async findByProgramId(programId) {
         const result = await db.select().from(classTable).where(eq(classTable.programId, programId));
         return result.map(rowToClass);
+    },
+    async findByProgramAndNumber(programId, number) {
+        const result = await db
+            .select()
+            .from(classTable)
+            .where(and(eq(classTable.programId, programId), eq(classTable.number, number)))
+            .limit(1);
+        return result[0] ? rowToClass(result[0]) : undefined;
     },
     async save(classInstance) {
         await db

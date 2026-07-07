@@ -1,4 +1,4 @@
-import { integer, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { integer, pgTable, text, timestamp, unique } from "drizzle-orm/pg-core";
 import { academicYear } from "@express/src/postgres/schema/academic-year";
 
 export const period = pgTable("period", {
@@ -9,4 +9,6 @@ export const period = pgTable("period", {
     academicYearId: text("academic_year_id")
         .notNull()
         .references(() => academicYear.id),
-});
+}, (table) => ({
+    orderUnique: unique().on(table.academicYearId, table.order),
+}));

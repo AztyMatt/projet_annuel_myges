@@ -1,4 +1,4 @@
-import { integer, pgTable, text } from "drizzle-orm/pg-core";
+import { integer, pgTable, text, unique } from "drizzle-orm/pg-core";
 import { campus } from "@express/src/postgres/schema/campus";
 
 export const classroom = pgTable("classroom", {
@@ -8,4 +8,6 @@ export const classroom = pgTable("classroom", {
     campusId: text("campus_id")
         .notNull()
         .references(() => campus.id),
-});
+}, (table) => ({
+    nameUnique: unique().on(table.campusId, table.name),
+}));

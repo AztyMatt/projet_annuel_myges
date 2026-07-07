@@ -4,6 +4,7 @@ import { users } from "@express/src/postgres/schema/auth";
 export const instructor = pgTable("instructor", {
     id: text("id").primaryKey(),
     userId: text("user_id")
+        .unique()
         .notNull()
         .references(() => users.id),
     contractType: text("contract_type").notNull(),

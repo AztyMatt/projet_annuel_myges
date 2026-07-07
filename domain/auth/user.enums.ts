@@ -2,8 +2,8 @@ import { AdminRole } from "@domain/admin/admin.enums";
 
 export const Role = {
     ...AdminRole,
-    STUDENT: "Étudiant",
-    INSTRUCTOR: "Enseignant",
+    STUDENT: "STUDENT",
+    INSTRUCTOR: "INSTRUCTOR",
 } as const;
 
 export type Role = (typeof Role)[keyof typeof Role];

@@ -1,4 +1,4 @@
-import { integer, pgTable, text } from "drizzle-orm/pg-core";
+import { integer, pgTable, text, unique } from "drizzle-orm/pg-core";
 import { program } from "@express/src/postgres/schema/program";
 import { conversation } from "@express/src/postgres/schema/conversation";
 
@@ -12,4 +12,6 @@ export const classTable = pgTable("class", {
     conversationId: text("conversation_id")
         .notNull()
         .references(() => conversation.id),
-});
+}, (table) => ({
+    numberUnique: unique().on(table.programId, table.number),
+}));

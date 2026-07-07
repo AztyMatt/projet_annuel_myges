@@ -3,5 +3,4 @@ export type FileAssessment = {
     assessmentId: string;
     assessmentGroupId: string;
     fileId: string;
-    submittedAt: Date;
 };

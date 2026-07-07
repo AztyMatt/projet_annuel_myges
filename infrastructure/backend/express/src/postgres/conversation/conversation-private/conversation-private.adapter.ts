@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { type ConversationPrivateRepository } from "@application/conversation/conversation-private/conversation-private.repository";
 import { type ConversationPrivate } from "@domain/conversation/conversation-private/conversation-private.entity";
 import { db } from "@express/src/postgres/db";
@@ -43,6 +43,14 @@ export const conversationPrivateRepository: ConversationPrivateRepository = {
             .from(conversationPrivateTable)
             .where(eq(conversationPrivateTable.studentId, studentId));
         return result.map(rowToConversationPrivate);
+    },
+    async findByAdminAndStudent(adminId, studentId) {
+        const result = await db
+            .select()
+            .from(conversationPrivateTable)
+            .where(and(eq(conversationPrivateTable.adminId, adminId), eq(conversationPrivateTable.studentId, studentId)))
+            .limit(1);
+        return result[0] ? rowToConversationPrivate(result[0]) : undefined;
     },
     async save(conversationPrivate) {
         await db

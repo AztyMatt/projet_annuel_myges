@@ -1,7 +1,7 @@
 export const BasicStatus = {
-    PENDING: "En attente",
-    VALIDATED: "Validé",
-    REJECTED: "Rejeté",
+    PENDING: "PENDING",
+    VALIDATED: "VALIDATED",
+    REJECTED: "REJECTED",
 } as const;
 
 export type BasicStatus = (typeof BasicStatus)[keyof typeof BasicStatus];

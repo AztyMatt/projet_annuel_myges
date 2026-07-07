@@ -1,4 +1,4 @@
-import { integer, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { integer, pgTable, text, timestamp, unique } from "drizzle-orm/pg-core";
 import { users } from "@express/src/postgres/schema/auth";
 import { assessment, assessmentGroup } from "@express/src/postgres/schema/assessment";
 import { admin } from "@express/src/postgres/schema/admin";
@@ -30,8 +30,9 @@ export const fileAssessment = pgTable("file_assessment", {
     fileId: text("file_id")
         .notNull()
         .references(() => file.id),
-    submittedAt: timestamp("submitted_at", { withTimezone: true }).notNull(),
-});
+}, (table) => ({
+    submissionUnique: unique().on(table.assessmentGroupId, table.fileId),
+}));
 
 export const fileCourse = pgTable("file_course", {
     id: text("id").primaryKey(),
@@ -42,7 +43,9 @@ export const fileCourse = pgTable("file_course", {
     courseId: text("course_id")
         .notNull()
         .references(() => course.id),
-});
+}, (table) => ({
+    linkUnique: unique().on(table.fileId, table.courseId),
+}));
 
 export const fileDocument = pgTable("file_document", {
     id: text("id").primaryKey(),
@@ -53,7 +56,9 @@ export const fileDocument = pgTable("file_document", {
         .notNull()
         .references(() => student.id),
     status: text("status").notNull(),
-});
+}, (table) => ({
+    linkUnique: unique().on(table.fileId, table.studentId),
+}));
 
 export const fileJustification = pgTable("file_justification", {
     id: text("id").primaryKey(),
@@ -65,6 +70,20 @@ export const fileJustification = pgTable("file_justification", {
         .references(() => file.id),
     validationStatus: text("validation_status").notNull(),
     processedBy: text("processed_by")
-        .notNull()
         .references(() => admin.id),
-});
+}, (table) => ({
+    linkUnique: unique().on(table.absenceId, table.fileId),
+}));
+
+export const fileAssessmentInstruction = pgTable("file_assessment_instruction", {
+    id: text("id").primaryKey(),
+    assessmentId: text("assessment_id")
+        .notNull()
+        .references(() => assessment.id),
+    fileId: text("file_id")
+        .notNull()
+        .references(() => file.id),
+    uploadedAt: timestamp("uploaded_at", { withTimezone: true }).notNull(),
+}, (table) => ({
+    linkUnique: unique().on(table.assessmentId, table.fileId),
+}));

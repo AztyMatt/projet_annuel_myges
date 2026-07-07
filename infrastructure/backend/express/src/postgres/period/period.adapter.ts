@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { type PeriodRepository } from "@application/period/period.repository";
 import { type Period } from "@domain/period/period.entity";
 import { db } from "@express/src/postgres/db";
@@ -26,6 +26,14 @@ export const periodRepository: PeriodRepository = {
             .where(eq(periodTable.academicYearId, academicYearId))
             .orderBy(asc(periodTable.order));
         return result.map(rowToPeriod);
+    },
+    async findByAcademicYearAndOrder(academicYearId, order) {
+        const result = await db
+            .select()
+            .from(periodTable)
+            .where(and(eq(periodTable.academicYearId, academicYearId), eq(periodTable.order, order)))
+            .limit(1);
+        return result[0] ? rowToPeriod(result[0]) : undefined;
     },
     async save(period) {
         await db

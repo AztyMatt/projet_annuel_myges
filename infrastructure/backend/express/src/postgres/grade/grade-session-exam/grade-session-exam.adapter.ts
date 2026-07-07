@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { type GradeSessionExamRepository } from "@application/grade/grade-session-exam/grade-session-exam.repository";
 import { type GradeSessionExam } from "@domain/grade/grade-session-exam/grade-session-exam.entity";
 import { db } from "@express/src/postgres/db";
@@ -27,6 +27,14 @@ export const gradeSessionExamRepository: GradeSessionExamRepository = {
             .from(gradeSessionExamTable)
             .where(eq(gradeSessionExamTable.sessionExamId, sessionExamId));
         return result.map(rowToGradeSessionExam);
+    },
+    async findByGradeAndSessionExam(gradeId, sessionExamId) {
+        const result = await db
+            .select()
+            .from(gradeSessionExamTable)
+            .where(and(eq(gradeSessionExamTable.gradeId, gradeId), eq(gradeSessionExamTable.sessionExamId, sessionExamId)))
+            .limit(1);
+        return result[0] ? rowToGradeSessionExam(result[0]) : undefined;
     },
     async save(gradeSessionExam) {
         await db

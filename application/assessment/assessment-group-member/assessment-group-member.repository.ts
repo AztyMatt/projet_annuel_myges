@@ -4,6 +4,7 @@ export interface AssessmentGroupMemberRepository {
     findById(id: string): Promise<AssessmentGroupMember | undefined>;
     findByAssessmentGroupId(assessmentGroupId: string): Promise<AssessmentGroupMember[]>;
     findByStudentId(studentId: string): Promise<AssessmentGroupMember[]>;
+    findByGroupAndStudent(assessmentGroupId: string, studentId: string): Promise<AssessmentGroupMember | undefined>;
     save(member: AssessmentGroupMember): Promise<void>;
     deleteById(id: string): Promise<void>;
 }

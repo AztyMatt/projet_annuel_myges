@@ -6,5 +6,5 @@ export type Session = {
     startTime: Date;
     endTime: Date;
     mode: SessionMode;
-    classroomId: string;
+    classroomId: string | null;
 };

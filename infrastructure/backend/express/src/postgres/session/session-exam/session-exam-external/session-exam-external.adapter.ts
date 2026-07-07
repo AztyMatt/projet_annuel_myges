@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { type SessionExamExternalRepository } from "@application/session/session-exam/session-exam-external/session-exam-external.repository";
 import { type SessionExamExternal } from "@domain/session/session-exam/session-exam-external/session-exam-external.entity";
 import { db } from "@express/src/postgres/db";
@@ -34,6 +34,14 @@ export const sessionExamExternalRepository: SessionExamExternalRepository = {
             .from(sessionExamExternalTable)
             .where(eq(sessionExamExternalTable.externalId, externalId));
         return result.map(rowToSessionExamExternal);
+    },
+    async findByExamAndExternal(sessionExamId, externalId) {
+        const result = await db
+            .select()
+            .from(sessionExamExternalTable)
+            .where(and(eq(sessionExamExternalTable.sessionExamId, sessionExamId), eq(sessionExamExternalTable.externalId, externalId)))
+            .limit(1);
+        return result[0] ? rowToSessionExamExternal(result[0]) : undefined;
     },
     async save(sessionExamExternal) {
         await db

@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { type FileDocumentRepository } from "@application/file/file-document/file-document.repository";
 import { type FileDocument } from "@domain/file/file-document/file-document.entity";
 import { DocumentStatus } from "@domain/file/file-document/file-document.enums";
@@ -26,6 +26,14 @@ export const fileDocumentRepository: FileDocumentRepository = {
     },
     async findByFileId(fileId) {
         const result = await db.select().from(fileDocumentTable).where(eq(fileDocumentTable.fileId, fileId)).limit(1);
+        return result[0] ? rowToFileDocument(result[0]) : undefined;
+    },
+    async findByFileAndStudent(fileId, studentId) {
+        const result = await db
+            .select()
+            .from(fileDocumentTable)
+            .where(and(eq(fileDocumentTable.fileId, fileId), eq(fileDocumentTable.studentId, studentId)))
+            .limit(1);
         return result[0] ? rowToFileDocument(result[0]) : undefined;
     },
     async save(fileDocument) {

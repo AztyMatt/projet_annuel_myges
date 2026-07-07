@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { type ModuleRepository } from "@application/module/module.repository";
 import { type Module } from "@domain/module/module.entity";
 import { db } from "@express/src/postgres/db";
@@ -9,14 +9,20 @@ function rowToModule(row: typeof moduleTable.$inferSelect): Module {
         id: row.id,
         name: row.name,
         code: row.code,
-        coefficient: row.coefficient,
-        ectsCredits: row.ectsCredits,
     };
 }
 
 export const moduleRepository: ModuleRepository = {
     async findById(id) {
         const result = await db.select().from(moduleTable).where(eq(moduleTable.id, id)).limit(1);
+        return result[0] ? rowToModule(result[0]) : undefined;
+    },
+    async findByNameAndCode(name, code) {
+        const result = await db
+            .select()
+            .from(moduleTable)
+            .where(and(eq(moduleTable.name, name), eq(moduleTable.code, code)))
+            .limit(1);
         return result[0] ? rowToModule(result[0]) : undefined;
     },
     async save(moduleEntity) {
@@ -26,16 +32,12 @@ export const moduleRepository: ModuleRepository = {
                 id: moduleEntity.id,
                 name: moduleEntity.name,
                 code: moduleEntity.code,
-                coefficient: moduleEntity.coefficient,
-                ectsCredits: moduleEntity.ectsCredits,
             })
             .onConflictDoUpdate({
                 target: moduleTable.id,
                 set: {
                     name: moduleEntity.name,
                     code: moduleEntity.code,
-                    coefficient: moduleEntity.coefficient,
-                    ectsCredits: moduleEntity.ectsCredits,
                 },
             });
     },

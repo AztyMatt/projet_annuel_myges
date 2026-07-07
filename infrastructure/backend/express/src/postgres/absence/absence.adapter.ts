@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { type AbsenceRepository } from "@application/absence/absence.repository";
 import { type Absence } from "@domain/absence/absence.entity";
 import { BasicStatus } from "@domain/absence/absence.enums";
@@ -33,6 +33,14 @@ export const absenceRepository: AbsenceRepository = {
     async findBySessionId(sessionId) {
         const result = await db.select().from(absenceTable).where(eq(absenceTable.sessionId, sessionId));
         return result.map(rowToAbsence);
+    },
+    async findByStudentAndSession(studentId, sessionId) {
+        const result = await db
+            .select()
+            .from(absenceTable)
+            .where(and(eq(absenceTable.studentId, studentId), eq(absenceTable.sessionId, sessionId)))
+            .limit(1);
+        return result[0] ? rowToAbsence(result[0]) : undefined;
     },
     async save(absence) {
         await db

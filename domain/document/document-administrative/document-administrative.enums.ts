@@ -1,12 +1,12 @@
 export const DocumentType = {
-    SCHOOL_CERTIFICATE: "Certificat de scolarité",
-    ENROLLMENT_CERTIFICATE: "Attestation d'inscription",
-    TRANSCRIPTS: "Relevé de notes",
-    OFFICIAL_SCHOOL_DOCUMENTS: "Documents officiels de l'école",
-    AGREEMENT: "Convention",
-    AMENDMENTS: "Avenants",
-    COMPANY_DOCUMENTS: "Documents d'entreprise",
-    OTHER: "Autre",
+    SCHOOL_CERTIFICATE: "SCHOOL_CERTIFICATE",
+    ENROLLMENT_CERTIFICATE: "ENROLLMENT_CERTIFICATE",
+    TRANSCRIPTS: "TRANSCRIPTS",
+    OFFICIAL_DOCUMENTS_ISSUED_BY_THE_SCHOOL: "OFFICIAL_DOCUMENTS_ISSUED_BY_THE_SCHOOL",
+    AGREEMENT: "AGREEMENT",
+    AMENDMENTS: "AMENDMENTS",
+    COMPANY_DOCUMENTS: "COMPANY_DOCUMENTS",
+    OTHER: "OTHER",
 } as const;
 
 export type DocumentType = (typeof DocumentType)[keyof typeof DocumentType];

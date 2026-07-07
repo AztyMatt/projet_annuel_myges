@@ -9,7 +9,8 @@ COPY infrastructure/backend/express/package*.json ./infrastructure/backend/expre
 # ---- Dev ----
 FROM base AS dev
 RUN npm ci
-CMD ["npx", "tsx", "watch", "infrastructure/backend/express/server.ts"]
+WORKDIR /app/infrastructure/backend/express
+CMD ["npx", "tsx", "watch", "server.ts"]
 
 # ---- Builder ----
 FROM base AS builder

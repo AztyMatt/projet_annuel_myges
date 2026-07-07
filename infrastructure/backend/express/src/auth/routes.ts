@@ -4,7 +4,7 @@ import {
     type ResetPasswordResult,
     type SignupResult,
     type Verify2faResult,
-} from "@application/auth/use-cases";
+} from "@application/auth/auth.use-cases";
 import { Router } from "express";
 import { requireAuth, requireCronSecret, requireRole, type AuthRequest } from "@express/src/auth/middleware";
 import { AdminRole } from "@domain/admin/admin.enums";
@@ -12,7 +12,7 @@ import { authUseCases } from "@express/src/container";
 
 export const authRouter = Router();
 
-type AuthUserView = { id: string; email: string; role: string };
+type AuthUserView = { id: string; firstname: string; lastname: string; email: string; role: string };
 
 type SignupResponseBody =
     | { error: string }
@@ -32,12 +32,12 @@ type ResetPasswordResponseBody = { error: string } | { message: string };
 
 type GetMeResponseBody =
     | { error: string }
-    | { id: string; email: string; role: string; passwordExpiresInDays: number; twoFactorEnabled: boolean };
+    | { id: string; firstname: string; lastname: string; email: string; role: string; passwordExpiresInDays: number; twoFactorEnabled: boolean };
 
 const signupResponse = (result: SignupResult): { status: number; body: SignupResponseBody } => {
     switch (result.kind) {
         case "missing_credentials":
-            return { status: 400, body: { error: "Email and password are required" } };
+            return { status: 400, body: { error: "firstname, lastname, email and password are required" } };
         case "invalid_email":
             return { status: 400, body: { error: "Invalid email format" } };
         case "missing_gdpr_consent":

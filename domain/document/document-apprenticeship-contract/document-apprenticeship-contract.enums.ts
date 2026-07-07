@@ -1,6 +1,6 @@
 export const DocumentApprenticeshipContractType = {
-    APPRENTICESHIP: "Apprentissage",
-    PROFESSIONALIZATION: "Professionnalisation",
+    APPRENTICESHIP: "APPRENTICESHIP",
+    PROFESSIONALIZATION: "PROFESSIONALIZATION",
 } as const;
 
 export type DocumentApprenticeshipContractType =

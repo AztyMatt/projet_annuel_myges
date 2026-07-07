@@ -32,6 +32,8 @@ const createSeedAdmin = async ({
     const twoFactorSecret = enable2FA ? totpProvider.generateSecret(normalizedEmail) : null;
     const user: User = {
         id: randomUUID(),
+        firstname: "Seed",
+        lastname: "Admin",
         email: normalizedEmail,
         passwordHash: await passwordHasher.hash(password),
         failedAttempts: 0,

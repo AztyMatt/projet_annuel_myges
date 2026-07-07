@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { type StudentGroupRepository } from "@application/group/student-group/student-group.repository";
 import { type StudentGroup } from "@domain/group/student-group/student-group.entity";
 import { db } from "@express/src/postgres/db";
@@ -24,6 +24,14 @@ export const studentGroupRepository: StudentGroupRepository = {
     async findByGroupId(groupId) {
         const result = await db.select().from(studentGroupTable).where(eq(studentGroupTable.groupId, groupId));
         return result.map(rowToStudentGroup);
+    },
+    async findByStudentAndGroup(studentId, groupId) {
+        const result = await db
+            .select()
+            .from(studentGroupTable)
+            .where(and(eq(studentGroupTable.studentId, studentId), eq(studentGroupTable.groupId, groupId)))
+            .limit(1);
+        return result[0] ? rowToStudentGroup(result[0]) : undefined;
     },
     async save(studentGroup) {
         await db

@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { type FileAssessmentRepository } from "@application/file/file-assessment/file-assessment.repository";
 import { type FileAssessment } from "@domain/file/file-assessment/file-assessment.entity";
 import { db } from "@express/src/postgres/db";
@@ -10,7 +10,6 @@ function rowToFileAssessment(row: typeof fileAssessmentTable.$inferSelect): File
         assessmentId: row.assessmentId,
         assessmentGroupId: row.assessmentGroupId,
         fileId: row.fileId,
-        submittedAt: row.submittedAt,
     };
 }
 
@@ -33,6 +32,14 @@ export const fileAssessmentRepository: FileAssessmentRepository = {
             .where(eq(fileAssessmentTable.assessmentGroupId, assessmentGroupId));
         return result.map(rowToFileAssessment);
     },
+    async findByGroupAndFile(assessmentGroupId, fileId) {
+        const result = await db
+            .select()
+            .from(fileAssessmentTable)
+            .where(and(eq(fileAssessmentTable.assessmentGroupId, assessmentGroupId), eq(fileAssessmentTable.fileId, fileId)))
+            .limit(1);
+        return result[0] ? rowToFileAssessment(result[0]) : undefined;
+    },
     async save(fileAssessment) {
         await db
             .insert(fileAssessmentTable)
@@ -41,7 +48,6 @@ export const fileAssessmentRepository: FileAssessmentRepository = {
                 assessmentId: fileAssessment.assessmentId,
                 assessmentGroupId: fileAssessment.assessmentGroupId,
                 fileId: fileAssessment.fileId,
-                submittedAt: fileAssessment.submittedAt,
             })
             .onConflictDoUpdate({
                 target: fileAssessmentTable.id,
@@ -49,7 +55,6 @@ export const fileAssessmentRepository: FileAssessmentRepository = {
                     assessmentId: fileAssessment.assessmentId,
                     assessmentGroupId: fileAssessment.assessmentGroupId,
                     fileId: fileAssessment.fileId,
-                    submittedAt: fileAssessment.submittedAt,
                 },
             });
     },

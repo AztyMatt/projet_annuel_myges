@@ -4,6 +4,7 @@ export interface StudentGroupRepository {
     findById(id: string): Promise<StudentGroup | undefined>;
     findByStudentId(studentId: string): Promise<StudentGroup[]>;
     findByGroupId(groupId: string): Promise<StudentGroup[]>;
+    findByStudentAndGroup(studentId: string, groupId: string): Promise<StudentGroup | undefined>;
     save(studentGroup: StudentGroup): Promise<void>;
     deleteById(id: string): Promise<void>;
 }

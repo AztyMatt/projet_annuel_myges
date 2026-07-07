@@ -4,5 +4,6 @@ export type SessionExam = {
     id: string;
     sessionId: string;
     type: SessionExamType;
+    isRetake: boolean;
     assessmentId: string | null;
 };

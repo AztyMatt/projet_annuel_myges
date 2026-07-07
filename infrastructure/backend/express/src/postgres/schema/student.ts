@@ -5,6 +5,7 @@ import { program } from "@express/src/postgres/schema/program";
 export const student = pgTable("student", {
     id: text("id").primaryKey(),
     userId: text("user_id")
+        .unique()
         .notNull()
         .references(() => users.id),
     programId: text("program_id")

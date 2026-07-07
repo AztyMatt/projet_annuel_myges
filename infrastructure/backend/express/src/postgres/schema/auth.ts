@@ -2,6 +2,8 @@ import { boolean, integer, pgTable, text, timestamp } from "drizzle-orm/pg-core"
 
 export const users = pgTable("users", {
     id: text("id").primaryKey(),
+    firstname: text("firstname").notNull(),
+    lastname: text("lastname").notNull(),
     email: text("email").unique().notNull(),
     passwordHash: text("password_hash").notNull(),
     failedAttempts: integer("failed_attempts").notNull().default(0),

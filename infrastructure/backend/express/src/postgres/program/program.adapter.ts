@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { type ProgramRepository } from "@application/program/program.repository";
 import { type Program } from "@domain/program/program.entity";
 import { db } from "@express/src/postgres/db";
@@ -21,6 +21,14 @@ export const programRepository: ProgramRepository = {
     async findByPeriodId(periodId) {
         const result = await db.select().from(programTable).where(eq(programTable.periodId, periodId));
         return result.map(rowToProgram);
+    },
+    async findByNameAndCode(name, code) {
+        const result = await db
+            .select()
+            .from(programTable)
+            .where(and(eq(programTable.name, name), eq(programTable.code, code)))
+            .limit(1);
+        return result[0] ? rowToProgram(result[0]) : undefined;
     },
     async save(program) {
         await db

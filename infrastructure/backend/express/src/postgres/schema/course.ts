@@ -1,4 +1,4 @@
-import { pgTable, text } from "drizzle-orm/pg-core";
+import { pgTable, text, unique } from "drizzle-orm/pg-core";
 import { instructor } from "@express/src/postgres/schema/instructor";
 import { module } from "@express/src/postgres/schema/module";
 import { group } from "@express/src/postgres/schema/group";
@@ -22,4 +22,6 @@ export const course = pgTable("course", {
     conversationId: text("conversation_id")
         .notNull()
         .references(() => conversation.id),
-});
+}, (table) => ({
+    courseUnique: unique().on(table.instructorId, table.moduleId, table.groupId),
+}));
