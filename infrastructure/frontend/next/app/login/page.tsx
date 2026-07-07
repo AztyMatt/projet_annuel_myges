@@ -56,11 +56,17 @@ export default function LoginPage() {
                 token?: string;
                 user?: { role?: string };
                 passwordResetRequired?: boolean;
+                setup2FARequired?: boolean;
+                setupSessionToken?: string;
             };
 
             if (!response.ok) {
                 if (payload.passwordResetRequired) {
                     router.push(`/reset-password?email=${encodeURIComponent(email)}`);
+                    return;
+                }
+                if (payload.setup2FARequired && payload.setupSessionToken) {
+                    router.push(`/2fa/setup?token=${encodeURIComponent(payload.setupSessionToken)}`);
                     return;
                 }
                 setError(payload.error ?? "Connexion impossible.");

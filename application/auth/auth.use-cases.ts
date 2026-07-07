@@ -59,7 +59,7 @@ export type LoginResult =
     | { kind: "pending_role_assignment" }
     | { kind: "account_locked"; lockedUntil: Date | null }
     | { kind: "password_expired"; passwordResetRequired: true }
-    | { kind: "super_admin_2fa_required"; setup2FARequired: true }
+    | { kind: "super_admin_2fa_required"; setup2FARequired: true; setupSessionToken: string }
     | { kind: "two_factor_required"; tempSessionToken: string }
     | AuthenticatedResult;
 
@@ -108,6 +108,15 @@ export type GdprExportResult =
       };
 
 export type DeleteAccountResult = { kind: "user_not_found" } | { kind: "account_deleted" };
+
+export type Enable2faResult =
+    | { kind: "unauthorized" }
+    | { kind: "invalid_session" }
+    | { kind: "already_enabled" }
+    | { kind: "missing_code" }
+    | { kind: "invalid_totp_code" }
+    | { kind: "setup_initiated"; totpSecret: string; totpProvisioningUri: string }
+    | { kind: "two_factor_enabled" };
 
 export class AuthUseCases {
     constructor(
@@ -204,8 +213,14 @@ export class AuthUseCases {
 
         if (needsPasswordReset(user.passwordUpdatedAt))
             return { kind: "password_expired", passwordResetRequired: true };
-        if (role === Role.SUPER_ADMIN && !user.twoFactorEnabled)
-            return { kind: "super_admin_2fa_required", setup2FARequired: true };
+        if (role === Role.SUPER_ADMIN && !user.twoFactorEnabled) {
+            const session = await this.twoFactorSessions.create(user.id);
+            return {
+                kind: "super_admin_2fa_required",
+                setup2FARequired: true,
+                setupSessionToken: session.token,
+            };
+        }
         if (user.twoFactorEnabled) {
             const session = await this.twoFactorSessions.create(user.id);
             return { kind: "two_factor_required", tempSessionToken: session.token };
@@ -333,6 +348,48 @@ export class AuthUseCases {
                 lastLoginAt: user.lastLoginAt,
             },
         };
+    }
+
+    async enable2fa(input: {
+        userId?: string;
+        setupSessionToken?: string;
+        code?: string;
+    }): Promise<Enable2faResult> {
+        const userId = await this.resolveEnable2faUserId(input.userId, input.setupSessionToken);
+        if (!userId) return { kind: "unauthorized" };
+
+        const user = await this.users.findById(userId);
+        if (!user) return { kind: "unauthorized" };
+        if (user.twoFactorEnabled) return { kind: "already_enabled" };
+
+        if (!input.code) {
+            user.twoFactorSecret = this.totp.generateSecret(user.email);
+            await this.users.save(user);
+            return {
+                kind: "setup_initiated",
+                totpSecret: user.twoFactorSecret,
+                totpProvisioningUri: this.totp.buildProvisioningUri(user.email, user.twoFactorSecret),
+            };
+        }
+
+        if (!user.twoFactorSecret) return { kind: "invalid_session" };
+        if (!this.totp.verify(user.twoFactorSecret, input.code)) return { kind: "invalid_totp_code" };
+
+        user.twoFactorEnabled = true;
+        await this.users.save(user);
+        if (input.setupSessionToken) await this.twoFactorSessions.delete(input.setupSessionToken);
+        return { kind: "two_factor_enabled" };
+    }
+
+    private async resolveEnable2faUserId(
+        userId?: string,
+        setupSessionToken?: string,
+    ): Promise<string | undefined> {
+        if (userId) return userId;
+        if (!setupSessionToken) return undefined;
+        const notBefore = new Date(Date.now() - TWO_FACTOR_SESSION_EXPIRY_MS);
+        const session = await this.twoFactorSessions.find(setupSessionToken, notBefore);
+        return session?.userId;
     }
 
     async cleanupExpiredSessions(): Promise<void> {

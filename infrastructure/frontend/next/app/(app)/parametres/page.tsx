@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { User, Lock, Bell, Shield, Trash2, Eye, EyeOff, CheckCircle, Smartphone } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -224,10 +225,18 @@ export default function Parametres() {
                                 {!twoFA && (
                                     <div className="flex items-center gap-3 p-4 bg-orange-50 border border-orange-200 rounded-xl">
                                         <Smartphone size={18} className="text-orange-500 flex-shrink-0" />
-                                        <p className="text-sm text-orange-700">
-                                            Activez la 2FA pour renforcer la sécurité de votre compte. Scannez le QR
-                                            code avec votre application TOTP.
-                                        </p>
+                                        <div className="flex-1">
+                                            <p className="text-sm text-orange-700">
+                                                Activez la 2FA pour renforcer la sécurité de votre compte. Scannez le QR
+                                                code avec votre application TOTP.
+                                            </p>
+                                            <Link
+                                                href="/2fa/setup"
+                                                className="inline-block mt-3 px-4 py-2 bg-[#001944] text-white text-xs font-semibold rounded-lg hover:bg-[#002C6E] transition-colors"
+                                            >
+                                                Configurer la 2FA
+                                            </Link>
+                                        </div>
                                     </div>
                                 )}
                             </div>
