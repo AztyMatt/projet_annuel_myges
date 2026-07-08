@@ -321,10 +321,11 @@ Fusionne les responsabilités "Scolarité / Pédagogique / Relations Entreprises
   - Modal "Attribuer un rôle" sur un compte en attente : Étudiant (+ filière), Intervenant (+ type de contrat), Admin (+ `ADMIN`/`SUPER_ADMIN`) → `POST /students`, `/instructors`, `/admins`
   - Sur un compte admin existant : changer son niveau (`PATCH /admins/:id`) ou le retirer (`DELETE /admins/:id`, ne supprime pas le compte `user`)
 
-- [ ] **`/superadmin/securite`** — 🆕 référencée dans le `Sidebar`, aucune page réelle aujourd'hui — audit et traçabilité §3.8
-  - Contenu : tableau paginé de l'audit-log (date, utilisateur, action `CREATE`/`UPDATE`/`DELETE`/`VALIDATE`/`REJECT`/`FREEZE`/`LOGIN`/`OTHER`, entité concernée, ancienne/nouvelle valeur en diff simplifié) · filtres par utilisateur, entité, action, plage de dates
-  - Consultation seule, pas d'action d'écriture sur cette page
-  - Endpoint : `GET /audit-logs` (+ filtres)
+- [x] **`/superadmin/securite`** — audit et traçabilité §3.8, construite
+  - Tableau paginé côté client (20/page) de `GET /audit-logs` (pas de pagination serveur) : date, utilisateur (libellé générique, gap section 10), action (badge coloré par type), entité + id tronqué
+  - Filtres client : utilisateur (id), entité (nom), action, plage de dates (du/au) — combinables, bouton réinitialiser
+  - Ligne dépliable : diff simplifié avant/après (`oldValue`/`newValue` en JSON brut, pas de diff champ-par-champ)
+  - Consultation seule, aucune action d'écriture
 
 ### 11.7 Points d'architecture transverses à traiter en même temps que les pages
 
@@ -341,6 +342,6 @@ Fusionne les responsabilités "Scolarité / Pédagogique / Relations Entreprises
 3. ~~`/intervenant/notes` (régression à corriger, fonctionnalité cœur du métier)~~ ✅ fait — au passage, `Sidebar.tsx` affichait un nom/rôle **en dur** ("Lucas Martin", "Sophie Bernard"...) au lieu de l'utilisateur réellement connecté (`GET /users/me`) : corrigé en même temps, avec l'entrée de menu manquante
 4. ~~Zone Administration (`/scolarite/*`)~~ ✅ fait — les 13 pages (année académique, campus, formations, classes, intervenants, cours, planning, étudiants, absences, documents, entreprises, externes, examens) sont construites. `Sidebar.tsx` mis à jour avec les 13 entrées de menu correspondantes
 5. ~~`/etudiant/cours` + `/etudiant/evaluations` + `/intervenant/evaluations` (boucle supports/rendus complète)~~ ✅ fait — `Sidebar.tsx`/`TopBar.tsx` mis à jour avec les 3 entrées de menu/titres correspondants
-6. `/superadmin/securite` (audit-log détaillé, filtres)
+6. ~~`/superadmin/securite` (audit-log détaillé, filtres)~~ ✅ fait
 7. `/forgot-password` + `/2fa/setup` une fois les endpoints back correspondants ajoutés (section 10) — `/2fa/setup` fait entretemps, `/forgot-password` reste à faire
 8. Composants à mutualiser (table générique, modal de confirmation, toast, badge de statut) — reste à faire, plusieurs pages dupliquent aujourd'hui des patterns similaires (chargement/erreur, jointures grade→module)
