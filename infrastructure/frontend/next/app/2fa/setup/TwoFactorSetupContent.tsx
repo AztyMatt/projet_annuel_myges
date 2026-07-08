@@ -20,27 +20,16 @@ export default function TwoFactorSetupPage() {
     const [error, setError] = useState("");
     const [submitting, setSubmitting] = useState(false);
 
-    const authHeaders = useCallback((): HeadersInit => {
-        const headers: HeadersInit = { "Content-Type": "application/json" };
-        const token = typeof window !== "undefined" ? localStorage.getItem("myges_token") : null;
-        if (token) headers.Authorization = `Bearer ${token}`;
-        return headers;
-    }, []);
-
+    // Aucun header à construire manuellement : si l'utilisateur est déjà connecté, le middleware
+    // attache automatiquement l'Authorization à partir du cookie httpOnly. Sinon, le backend
+    // accepte `setupSessionToken` seul (cas "super_admin_2fa_required" avant même la connexion).
     const initSetup = useCallback(async () => {
-        const token = typeof window !== "undefined" ? localStorage.getItem("myges_token") : null;
-        if (!setupSessionToken && !token) {
-            setState("error");
-            setError("Session invalide. Reconnectez-vous pour configurer la 2FA.");
-            return;
-        }
-
         setState("loading");
         setError("");
         try {
             const response = await fetch("/api/auth/2fa/enable", {
                 method: "POST",
-                headers: authHeaders(),
+                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(setupSessionToken ? { setupSessionToken } : {}),
             });
             const payload = (await response.json()) as {
@@ -68,7 +57,7 @@ export default function TwoFactorSetupPage() {
             setState("error");
             setError("Serveur indisponible.");
         }
-    }, [authHeaders, setupSessionToken]);
+    }, [setupSessionToken]);
 
     useEffect(() => {
         void initSetup();
@@ -81,7 +70,7 @@ export default function TwoFactorSetupPage() {
         try {
             const response = await fetch("/api/auth/2fa/enable", {
                 method: "POST",
-                headers: authHeaders(),
+                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     ...(setupSessionToken ? { setupSessionToken } : {}),
                     code,
@@ -95,9 +84,11 @@ export default function TwoFactorSetupPage() {
             }
 
             setState("success");
-            const hasAuthToken = typeof window !== "undefined" && localStorage.getItem("myges_token");
+            // Avec setupSessionToken : l'utilisateur venait du blocage "super_admin_2fa_required" au
+            // login, pas encore connecté → retour à /login. Sans : il était déjà connecté (activation
+            // volontaire depuis /parametres) → retour à /parametres.
             setTimeout(() => {
-                router.push(hasAuthToken ? "/parametres" : "/login");
+                router.push(setupSessionToken ? "/login" : "/parametres");
             }, 2000);
         } catch {
             setError("Erreur lors de la validation du code.");

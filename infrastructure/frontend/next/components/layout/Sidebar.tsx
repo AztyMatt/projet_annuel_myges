@@ -120,11 +120,12 @@ export function Sidebar() {
     const user = roleConfig[role];
     const RoleIcon = user.icon;
 
-    const handleLogout = () => {
-        if (typeof window !== "undefined") {
-            localStorage.removeItem("myges_role");
+    const handleLogout = async () => {
+        try {
+            await fetch("/api/auth/logout", { method: "POST" });
+        } finally {
+            router.push("/login");
         }
-        router.push("/login");
     };
 
     return (

@@ -43,7 +43,7 @@ Next.js (frontend) · Express.js (backend) · PostgreSQL + Drizzle (ORM) · Dock
   - [x] Export des données personnelles — `GET /gdpr/export`
   - [x] Suppression de compte — `DELETE /users/me`
   - [ ] Pages légales (CGU/CGV/politique de cookies) — bonus, voir section 9
-- [ ] **Garde des routes front par rôle** — `middleware.ts` ne fait que le proxy `/api/*`, **aucune page n'est protégée côté Next.js** : n'importe qui peut ouvrir `/superadmin/gestion` sans jeton valide. Le token est stocké en `localStorage` (illisible depuis le middleware Edge) → décider entre garde côté client (fetch `/users/me` dans le layout) ou migration vers un cookie `httpOnly` (recommandé, plus robuste)
+- [x] **Garde des routes front par rôle** — le token est désormais un cookie `httpOnly` posé par `app/api/auth/login/route.ts` / `login/2fa/route.ts` (jamais exposé au JS) ; `middleware.ts` vérifie sa signature (`jose`) et bloque/redirige avant le rendu de toute page sous `/etudiant`, `/intervenant`, `/scolarite`, `/superadmin`, `/parametres`, `/messagerie` si absent ou si le rôle ne correspond pas
 
 ## 2. Infrastructure (obligatoire — `cahierDesCharges.md` §6, `Sujet.pdf` "Infrastructure")
 
@@ -333,13 +333,14 @@ Zone la moins couverte aujourd'hui. Fusionne les responsabilités "Scolarité / 
 
 ### 11.7 Points d'architecture transverses à traiter en même temps que les pages
 
-- [ ] Client API centralisé (`lib/api.ts`) : pose le header `Authorization`, gère les 401 (redirection `/login`), normalise les erreurs — actuellement chaque page fait son propre `fetch("/api/...")`
-- [ ] Garde de route par rôle (cf. section 1, gap sécurité) — décider cookie httpOnly + `middleware.ts` (recommandé) vs vérif client dans `(app)/layout.tsx`
+- [x] Client API centralisé (`lib/api.ts`) : `api.get/post/patch/delete` normalisent les erreurs (`ApiError`) et redirigent vers `/login` sur 401. Le header `Authorization` n'a plus besoin d'être posé par les pages : le cookie httpOnly suffit, le middleware l'attache lui-même en le relayant vers le backend. Pas encore utilisé par les pages existantes (elles seront migrées au fil de l'étape 2 de l'ordre de construction)
+- [x] Garde de route par rôle — cookie `httpOnly` (`myges_token`) posé par `app/api/auth/login/route.ts` et `app/api/auth/login/2fa/route.ts`, vérifié par `middleware.ts` via `lib/auth.ts` (`jose`, vérification de signature, pas juste un décodage) ; déconnexion via `POST /api/auth/logout` (`Sidebar.tsx`)
+  - [ ] À vérifier avant déploiement prod : `JWT_SECRET` doit être accessible au pod frontend k8s (les deux `InfisicalSecret` CRD `backend`/`frontend` pointent déjà sur le même `secretsPath: "/"`, donc a priori déjà synchronisé — à confirmer dans Infisical)
 - [ ] Composants à mutualiser avant de dupliquer page par page : table triable/filtrable générique, modal de confirmation, dropzone d'upload de fichier, switch/toggle, toast succès/erreur, badge de statut (vert validé, rouge manquant/rejeté, orange en attente)
 
 ### Ordre de construction conseillé (frontend)
 
-1. Client API + garde de route (base commune)
+1. ~~Client API + garde de route (base commune)~~ ✅ fait — `lib/api.ts`, `lib/auth.ts`, `middleware.ts`, `app/api/auth/{login,login/2fa,logout}`
 2. Reconnecter les pages `[~]` existantes (dashboards, planning, notes, absences, documents, messagerie, paramètres)
 3. `/intervenant/notes` (régression à corriger, fonctionnalité cœur du métier)
 4. Zone Administration (`/scolarite/*`) dans l'ordre : année académique → campus → formations/modules → classes/groupes → cours (affectation intervenant) → planning/sessions → examens → étudiants → absences/documents → entreprises

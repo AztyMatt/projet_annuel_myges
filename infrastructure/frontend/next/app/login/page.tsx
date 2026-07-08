@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ChangeEvent } from "react";
+import { useState, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -24,20 +24,10 @@ export default function LoginPage() {
         SUPER_ADMIN: "/superadmin",
     };
 
-    const roleToLegacyStorage: Record<string, string> = {
-        STUDENT: "etudiant",
-        INSTRUCTOR: "intervenant",
-        ADMIN: "scolarite",
-        SUPER_ADMIN: "superadmin",
-    };
-
-    const completeLogin = (token: string, role: string) => {
-        const route = roleToRoute[role] ?? "/login";
-        if (typeof window !== "undefined") {
-            localStorage.setItem("myges_token", token);
-            localStorage.setItem("myges_role", roleToLegacyStorage[role] ?? "etudiant");
-        }
-        router.push(route);
+    // Le token n'est plus manipulé ici : /api/auth/login le transforme en cookie httpOnly avant
+    // même que cette page ne reçoive la réponse (voir app/api/auth/login/route.ts).
+    const completeLogin = (role: string) => {
+        router.push(roleToRoute[role] ?? "/login");
     };
 
     const handleLogin = async () => {
@@ -53,7 +43,6 @@ export default function LoginPage() {
                 error?: string;
                 twoFactorRequired?: boolean;
                 tempSessionToken?: string;
-                token?: string;
                 user?: { role?: string };
                 passwordResetRequired?: boolean;
                 setup2FARequired?: boolean;
@@ -79,8 +68,8 @@ export default function LoginPage() {
                 return;
             }
 
-            if (payload.token && payload.user?.role) {
-                completeLogin(payload.token, payload.user.role);
+            if (payload.user?.role) {
+                completeLogin(payload.user.role);
                 return;
             }
 
@@ -103,7 +92,6 @@ export default function LoginPage() {
             });
             const payload = (await response.json()) as {
                 error?: string;
-                token?: string;
                 user?: { role?: string };
             };
 
@@ -112,8 +100,8 @@ export default function LoginPage() {
                 return;
             }
 
-            if (payload.token && payload.user?.role) {
-                completeLogin(payload.token, payload.user.role);
+            if (payload.user?.role) {
+                completeLogin(payload.user.role);
                 return;
             }
 
