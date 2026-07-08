@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import { Bell, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useCurrentUser } from "@/lib/use-current-user";
 
 type Role = "etudiant" | "intervenant" | "scolarite" | "superadmin";
 
@@ -25,11 +26,27 @@ const pageTitles: Record<string, string> = {
     "/parametres": "Paramètres",
 };
 
-function getRole(pathname: string): Role {
+function roleFromApi(apiRole: string | undefined): Role {
+    switch (apiRole) {
+        case "INSTRUCTOR":
+            return "intervenant";
+        case "ADMIN":
+            return "scolarite";
+        case "SUPER_ADMIN":
+            return "superadmin";
+        default:
+            return "etudiant";
+    }
+}
+
+// Même logique que Sidebar.tsx : le chemin suffit sur les pages préfixées par rôle, mais
+// /parametres et /messagerie sont partagées — il faut alors le vrai rôle de l'utilisateur connecté.
+function getRole(pathname: string, apiRole: string | undefined): Role {
     if (pathname.startsWith("/intervenant")) return "intervenant";
     if (pathname.startsWith("/scolarite")) return "scolarite";
     if (pathname.startsWith("/superadmin")) return "superadmin";
-    return "etudiant";
+    if (pathname.startsWith("/etudiant")) return "etudiant";
+    return roleFromApi(apiRole);
 }
 
 const roleBadge: Record<Role, { label: string; className: string }> = {
@@ -41,8 +58,9 @@ const roleBadge: Record<Role, { label: string; className: string }> = {
 
 export function TopBar() {
     const pathname = usePathname();
+    const me = useCurrentUser();
     const title = pageTitles[pathname] ?? "MyGES 2.0";
-    const role = getRole(pathname);
+    const role = getRole(pathname, me?.role);
     const badge = roleBadge[role];
 
     return (

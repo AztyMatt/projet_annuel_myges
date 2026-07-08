@@ -330,6 +330,7 @@ Fusionne les responsabilités "Scolarité / Pédagogique / Relations Entreprises
 - [x] Garde de route par rôle — cookie `httpOnly` (`myges_token`) posé par `app/api/auth/login/route.ts` et `app/api/auth/login/2fa/route.ts`, vérifié par `middleware.ts` via `lib/auth.ts` (`jose`, vérification de signature, pas juste un décodage) ; déconnexion via `POST /api/auth/logout` (`Sidebar.tsx`)
   - [ ] À vérifier avant déploiement prod : `JWT_SECRET` doit être accessible au pod frontend k8s (les deux `InfisicalSecret` CRD `backend`/`frontend` pointent déjà sur le même `secretsPath: "/"`, donc a priori déjà synchronisé — à confirmer dans Infisical)
 - [ ] Composants à mutualiser avant de dupliquer page par page : table triable/filtrable générique, modal de confirmation, dropzone d'upload de fichier, switch/toggle, toast succès/erreur, badge de statut (vert validé, rouge manquant/rejeté, orange en attente)
+- [x] **Bug corrigé** : `Sidebar.tsx` et `TopBar.tsx` déduisaient le rôle affiché (menu de navigation + badge) uniquement du préfixe d'URL (`/etudiant`, `/scolarite`...). Sur les pages communes sans préfixe (`/parametres`, `/messagerie`), ça retombait systématiquement sur le menu "étudiant" par défaut, quel que soit le rôle réel de l'utilisateur connecté. Corrigé via `lib/use-current-user.ts` (hook partagé `GET /users/me`) : le chemin reste utilisé comme raccourci rapide sur les pages préfixées, le vrai rôle de l'utilisateur prend le relais sur les pages communes
 
 ### Ordre de construction conseillé (frontend)
 

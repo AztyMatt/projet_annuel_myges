@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { api } from "@/lib/api";
+import { useCurrentUser } from "@/lib/use-current-user";
 import {
     LayoutDashboard,
     Calendar,
@@ -93,13 +92,29 @@ const roleConfig: Record<Role, RoleStyle> = {
     superadmin: { label: "Super Admin", icon: Shield, color: "bg-red-500" },
 };
 
-type Me = { firstname: string; lastname: string };
+function roleFromApi(apiRole: string | undefined): Role {
+    switch (apiRole) {
+        case "INSTRUCTOR":
+            return "intervenant";
+        case "ADMIN":
+            return "scolarite";
+        case "SUPER_ADMIN":
+            return "superadmin";
+        default:
+            return "etudiant";
+    }
+}
 
-function getRole(pathname: string): Role {
+// Les pages sous /etudiant, /intervenant, /scolarite, /superadmin sont préfixées par rôle : on peut
+// se fier au chemin (rapide, pas d'attente réseau). Mais /parametres et /messagerie sont partagées
+// par tous les rôles et n'ont pas de préfixe : il faut alors se fier au rôle réel de l'utilisateur
+// connecté (GET /users/me), sinon tout le monde y voit le menu "étudiant" par défaut.
+function getRole(pathname: string, apiRole: string | undefined): Role {
     if (pathname.startsWith("/intervenant")) return "intervenant";
     if (pathname.startsWith("/scolarite")) return "scolarite";
     if (pathname.startsWith("/superadmin")) return "superadmin";
-    return "etudiant";
+    if (pathname.startsWith("/etudiant")) return "etudiant";
+    return roleFromApi(apiRole);
 }
 
 function isNavActive(pathname: string, href: string): boolean {
@@ -112,19 +127,11 @@ function isNavActive(pathname: string, href: string): boolean {
 export function Sidebar() {
     const pathname = usePathname();
     const router = useRouter();
-    const role = getRole(pathname);
+    const me = useCurrentUser();
+    const role = getRole(pathname, me?.role);
     const navItems = navConfig[role];
     const user = roleConfig[role];
     const RoleIcon = user.icon;
-
-    const [me, setMe] = useState<Me | null>(null);
-
-    useEffect(() => {
-        api
-            .get<Me>("/users/me")
-            .then(setMe)
-            .catch(() => {});
-    }, []);
 
     const initials = me ? `${me.firstname[0]}${me.lastname[0]}`.toUpperCase() : "…";
     const displayName = me ? `${me.firstname} ${me.lastname}` : "Chargement…";
