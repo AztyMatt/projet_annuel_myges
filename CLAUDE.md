@@ -254,69 +254,60 @@ Seulement 4 rôles (pas les 6-7 décrits dans `cahierDesCharges.md` §2, l'admin
 
 ### 11.5 Administration — `ADMIN` + `SUPER_ADMIN` (`/scolarite`)
 
-Zone la moins couverte aujourd'hui. Fusionne les responsabilités "Scolarité / Pédagogique / Relations Entreprises" du cahier des charges puisque le backend n'a qu'un seul rôle `ADMIN`.
+Fusionne les responsabilités "Scolarité / Pédagogique / Relations Entreprises" du cahier des charges puisque le backend n'a qu'un seul rôle `ADMIN`. Les 13 pages existent désormais — voir les limitations spécifiques à chacune ci-dessous (essentiellement : pas de nom d'utilisateur affichable, section 10, et pas de création de fichiers, section 2).
 
 - [x] **`/scolarite`** — dashboard reconnecté
   - 3 KPI réels (absences en attente, documents manquants/expirés, contrats expirant sous 30 jours) + tableau fonctionnel des absences en attente avec Valider/Rejeter en un clic (`POST /absences/:id/validate|reject`)
   - Pas de liste "5 prochains examens/jurys" (dépend de `/scolarite/examens`, pas encore construit) ni d'onglet "dossiers incomplets"/"activité récente" (auraient nécessité les mêmes noms d'étudiants indisponibles, section 10)
 
-- [ ] **`/scolarite/etudiants`** — 🆕 **lien déjà présent dans le `Sidebar`, page inexistante (lien mort)** — dossiers étudiants
-  - Contenu : tableau liste (nom, prénom, email, filière, classe/groupe, statut initial/alternant déduit de la présence d'un contrat actif), recherche/filtre par filière-classe · fiche détail au clic (infos, programme, groupe(s), lien vers historique notes filtré, historique absences, documents/contrats)
-  - Endpoints : `GET /students`, `GET /students/:id`, `PATCH /students/:id`
+- [x] **`/scolarite/etudiants`** — dossiers étudiants, construite (le lien mort du `Sidebar` pointe maintenant vers une vraie page)
+  - Filtre par filière, fiche détail dépliable (groupe(s), absences en attente, documents à régulariser)
+  - Sans nom d'étudiant (gap section 10) ; statut initial/alternant **non affiché dans la liste** (aurait demandé un aller-retour fichier/contrat par étudiant, trop coûteux pour une liste — resterait à faire dans la fiche détail individuelle)
 
-- [ ] **`/scolarite/absences`** — 🆕 validation des absences §3.3
-  - Contenu : tableau filtrable par statut (`PENDING` par défaut), classe, période (étudiant, session/module, date, motif, justificatif en lien, statut) · actions ligne par ligne Valider/Rejeter (avec commentaire optionnel) · filtre "motif entreprise" pour les absences liées à l'alternance
-  - Endpoints : `GET /sessions/:id/absences`, `PATCH /absences/:id`, `GET /file-justifications/absence/:id`
+- [x] **`/scolarite/absences`** — validation des absences §3.3, construite
+  - Tableau filtrable par statut (`PENDING` par défaut), Valider/Rejeter en un clic, indicateur de justificatif déposé
+  - Pas de filtre classe/période ni "motif entreprise" (nécessiteraient de résoudre classe/groupe par étudiant en plus)
 
-- [ ] **`/scolarite/documents`** — 🆕 suivi documentaire global §3.4
-  - Contenu : tableau des documents en attente de validation (`FileDocument.status = PENDING` : étudiant, type, date de dépôt, bouton visualiser + Valider/Rejeter) · section "Expirés/manquants" (étudiants avec `DocumentAdministrative.expiration` dépassée ou type obligatoire manquant)
-  - Endpoints : `GET /document-administratives`, `PATCH /file-documents/:id`
+- [x] **`/scolarite/documents`** — suivi documentaire global §3.4, construite
+  - Tableau des `FileDocument` en attente (`Valider` → `POST /file-documents/:id/validate`, ou suppression) + section documents administratifs expirés
+  - Pas de "Rejeter" à proprement parler : le backend n'a que `validate`/`expire`/`delete`, pas de statut rejeté dédié
 
 - [x] **`/scolarite/notes`** — supervision des notes, reconnectée
   - Sélecteur de filière (`GET /programs`), tableau par module (moyenne/min/max/notes saisies) construit en résolvant chaque `Grade` jusqu'à son module (même logique que `/etudiant/notes`, appliquée à `GET /grades` — toutes les notes du système)
   - "Geler ce module" fonctionnel : appelle `POST /grades/:id/lock` sur chaque note du module (pas d'endpoint de gel en masse côté backend) — **pas de "dégeler"**, aucun endpoint unlock n'existe
   - Section "Notations manuelles" pas encore ajoutée
 
-- [ ] **`/scolarite/planning`** — 🆕 gestion des sessions §3.1, §4
-  - Contenu : vue calendrier globale par classe/salle · formulaire création/édition de session (cours concerné, date/heure début-fin, mode, salle si présentiel) · gestion des situations exceptionnelles : déplacer une session (date/salle), l'annuler, motif en texte libre tracé (grève, jour férié déplacé) — à défaut de champ dédié dans l'entité `Session`, prévoir un champ note/motif ou s'appuyer sur l'audit-log pour tracer le changement
-  - Endpoint : `POST/PATCH /sessions`
+- [x] **`/scolarite/planning`** — gestion des sessions §3.1, §4, construite
+  - Sélection d'un cours → liste/création/édition/suppression de ses sessions (date, heure, mode, salle)
+  - Pas de champ motif dédié pour tracer une annulation/déplacement exceptionnel (n'existe pas sur `Session` — modifier ou supprimer la session est le seul levier actuel, noté explicitement dans la page)
 
-- [ ] **`/scolarite/examens`** — 🆕 sessions d'examen §3.7
-  - Contenu : liste des sessions d'examen par période (module, type écrit/soutenance, rattrapage oui/non, date via la session liée) · formulaire de création (rattacher à une session existante, type, `Assessment` optionnelle, case "rattrapage") · affectation des étudiants concernés, des intervenants surveillants/jury, et des externes (choisis parmi `/scolarite/externes`)
-  - Endpoints : `POST/PATCH /session-exams`, `POST /session-exam-{students,instructors,externals}`
+- [x] **`/scolarite/examens`** — sessions d'examen §3.7, construite
+  - Création (session existante, type écrit/soutenance, case rattrapage, évaluation liée optionnelle), affectation étudiants/intervenants/externes avec retrait
+  - Externes affichés avec leur vrai nom (seule entité du projet avec un nom qui n'est pas un `userId` caché)
 
-- [ ] **`/scolarite/formations`** — 🆕 filières et modules §3.7
-  - Contenu : liste des filières (`Program` : nom, code, période) · détail filière : blocs de compétences (`Bloc`), modules rattachés (`program-module`) avec coefficient et crédits ECTS, formulaire d'ajout/retrait de module
-  - Endpoints : `POST/PATCH /programs`, `/blocs`, `/modules`, `/program-modules`
+- [x] **`/scolarite/formations`** — filières, blocs, modules §3.7, construite
+  - Catalogue de modules globaux + liste des filières avec blocs de compétences et modules rattachés (coefficient/ECTS), rattachement/retrait
 
-- [ ] **`/scolarite/classes`** — 🆕 classes et groupes §3.7, §4
-  - Contenu : liste des classes par filière (numéro, effectif déclaré, lien vers ses groupes) · détail classe : groupes (`Group`), étudiants affectés, formulaire d'affectation/retrait d'étudiant à un groupe (`student-group`)
-  - Gestion du sous-effectif (§4) : décrite comme un déplacement manuel des étudiants d'une classe vers une autre puis suppression de l'ancienne — pas une fusion automatique
-  - Endpoints : `POST/PATCH /classes`, `/groups`, `POST /student-groups`
+- [x] **`/scolarite/classes`** — classes et groupes §3.7, §4, construite
+  - Filtre par filière, classes → groupes → étudiants affectés (affectation/retrait)
+  - Sous-effectif (§4) : décrit dans la page comme un déplacement manuel puis suppression de l'ancienne classe, pas de fusion automatisée
 
-- [ ] **`/scolarite/cours`** — 🆕 affectation intervenant/module/groupe §3.7
-  - Contenu : liste des cours (module, groupe, bloc, intervenant affecté) · formulaire création/édition (sélection module + groupe + bloc + intervenant, avec les spécialités de chaque intervenant affichées comme aide à la décision — pas de suggestion automatique) · réaffectation rapide d'un intervenant en cas d'indisponibilité (§4)
-  - Endpoint : `POST/PATCH /courses`
+- [x] **`/scolarite/cours`** — affectation intervenant/module/groupe §3.7, construite
+  - Création/édition avec sélection module + groupe + bloc + intervenant ; spécialités de l'intervenant affichées comme aide à la décision, pas de suggestion automatique
 
-- [ ] **`/scolarite/intervenants`** — 🆕 gestion des intervenants §3.7, §4
-  - Contenu : liste (nom, type de contrat, spécialités, nombre de cours affectés) · fiche détail (ses cours) · formulaire création/édition (`contractType`, `specialties` en tags)
-  - Endpoint : `POST/PATCH /instructors`
+- [x] **`/scolarite/intervenants`** — construite, en lecture/édition seule
+  - Liste + modification (type de contrat, spécialités) + nombre de cours affectés
+  - **Pas de création** : nécessiterait un `userId` d'un compte "en attente de rôle", information que seul `SUPER_ADMIN` peut voir (`/admin/security/users`) — la création d'un profil intervenant reste le rôle de `/superadmin/gestion`
 
-- [ ] **`/scolarite/entreprises`** — 🆕 entreprises et contrats d'alternance
-  - Contenu : liste des entreprises (nom, SIRET, contact) · détail entreprise : contrats d'alternance rattachés, étudiants concernés, dates début/fin avec alerte proche échéance · formulaire création/édition entreprise
-  - Endpoints : `POST/PATCH /companies`, `/document-apprenticeship-contracts`
+- [x] **`/scolarite/entreprises`** — construite
+  - Liste + création d'entreprise, détail dépliable listant les contrats existants avec alerte "expire bientôt" (± 30 jours)
+  - **Pas de création de contrat** : `DocumentApprenticeshipContract` exige un `fileDocumentId` déjà existant, donc un fichier déjà uploadé — bloqué par le même gap d'upload réel (section 2/10)
 
-- [ ] **`/scolarite/campus`** — 🆕 campus et salles
-  - Contenu : liste des campus (nom, adresse) avec leurs salles rattachées · détail campus : salles (nom, capacité), formulaire d'ajout de salle
-  - Endpoints : `POST/PATCH /campuses`, `/classrooms`
+- [x] **`/scolarite/campus`** — construite : campus + salles, création des deux, capacité affichée
 
-- [ ] **`/scolarite/externes`** — 🆕 jurys et surveillants externes
-  - Contenu : liste (nom, prénom, email, type jury/surveillant/autre), formulaire création/édition — utilisés ensuite dans `/scolarite/examens`
-  - Endpoint : `POST/PATCH /externals`
+- [x] **`/scolarite/externes`** — construite : liste + création/édition (nom, email, type jury/surveillant/autre), utilisés dans `/scolarite/examens`
 
-- [ ] **`/scolarite/annee-academique`** — 🆕 années académiques et périodes (prérequis pour créer une filière)
-  - Contenu : liste des années académiques (dates début/fin, laquelle est "en cours") · détail : périodes rattachées (ordre, dates), formulaire d'ajout de période · action "Définir comme année en cours"
-  - Endpoints : `POST/PATCH /academic-years`, `/periods`
+- [x] **`/scolarite/annee-academique`** — construite : années académiques + périodes, action "Définir comme actuelle" (dé-sélectionne les autres années côté client puisque le backend ne l'impose pas lui-même)
 
 ### 11.6 Super Administrateur uniquement (`/superadmin`)
 
@@ -345,7 +336,7 @@ Zone la moins couverte aujourd'hui. Fusionne les responsabilités "Scolarité / 
 1. ~~Client API + garde de route (base commune)~~ ✅ fait — `lib/api.ts`, `lib/auth.ts`, `middleware.ts`, `app/api/auth/{login,login/2fa,logout}`
 2. ~~Reconnecter les pages `[~]` existantes~~ ✅ fait — les 13 pages (dashboards ×4, planning ×2, notes ×2, absences, documents, supports, messagerie, paramètres) sont branchées sur le vrai backend. `/superadmin/gestion` inclut déjà l'attribution de rôle (initialement prévue à l'étape 6)
 3. ~~`/intervenant/notes` (régression à corriger, fonctionnalité cœur du métier)~~ ✅ fait — au passage, `Sidebar.tsx` affichait un nom/rôle **en dur** ("Lucas Martin", "Sophie Bernard"...) au lieu de l'utilisateur réellement connecté (`GET /users/me`) : corrigé en même temps, avec l'entrée de menu manquante
-4. Zone Administration (`/scolarite/*`) dans l'ordre : année académique → campus → formations/modules → classes/groupes → cours (affectation intervenant) → planning/sessions → examens → étudiants → absences/documents → entreprises
+4. ~~Zone Administration (`/scolarite/*`)~~ ✅ fait — les 13 pages (année académique, campus, formations, classes, intervenants, cours, planning, étudiants, absences, documents, entreprises, externes, examens) sont construites. `Sidebar.tsx` mis à jour avec les 13 entrées de menu correspondantes
 5. `/etudiant/cours` + `/etudiant/evaluations` + `/intervenant/evaluations` (boucle supports/rendus complète)
 6. `/superadmin/securite` (audit-log détaillé, filtres)
 7. `/forgot-password` + `/2fa/setup` une fois les endpoints back correspondants ajoutés (section 10) — `/2fa/setup` fait entretemps, `/forgot-password` reste à faire
