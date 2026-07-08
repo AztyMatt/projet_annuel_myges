@@ -220,15 +220,15 @@ Seulement 4 rôles (pas les 6-7 décrits dans `cahierDesCharges.md` §2, l'admin
   - `file-documents/student/:id` réparti en 3 sections via `document-administratives/file-document/:id` et `document-apprenticeship-contracts/file-document/:id` (déterminent si un `FileDocument` est un document officiel, un contrat, ou un document personnel)
   - Dépôt/téléchargement **désactivés avec message explicite** : même gap upload/stockage réel
 
-- [ ] **`/etudiant/cours`** — 🆕 bibliothèque de supports §3.6
-  - Contenu : liste des modules suivis (via ses cours) · pour chaque module, liste des fichiers déposés par l'intervenant (`FileCourse` : nom, type, date, bouton télécharger)
-  - Lecture seule — pas de dépôt ici, c'est le rôle de l'intervenant
-  - Endpoint : `GET /file-courses/course/:courseId`
+- [x] **`/etudiant/cours`** — bibliothèque de supports §3.6, construite
+  - Liste des modules suivis résolue via `students/me` → `student-groups` → `groups/:id/courses` → `modules/:id`, fichiers `FileCourse` par module (`file-courses/course/:id`, nom/taille/date)
+  - Lecture seule (pas de dépôt, ni de téléchargement réel) : cohérent avec le rôle de l'intervenant côté dépôt, et bloqué par le même gap d'upload/stockage réel (section 2/10) pour le téléchargement
 
-- [ ] **`/etudiant/evaluations`** — 🆕 évaluations et rendus §3.6
-  - Contenu : liste des évaluations publiées (`isPublished = true`) de ses cours (titre, module, type continu/examen, date limite, statut à rendre/rendu/en retard) · si `maxGroupSize > 1`, formation/visualisation du groupe (`assessment-group` + `assessment-group-member`) · dépôt de fichier avant la date limite avec remplacement possible tant que non dépassée
-  - Ne pas afficher les notes ici (déjà sur `/etudiant/notes`, éviter la duplication)
-  - Endpoints : `GET /courses/:id/assessments`, `POST /assessment-groups`, `POST /assessment-group-members`, `POST /file-assessments`
+- [x] **`/etudiant/evaluations`** — évaluations et rendus §3.6, construite
+  - Liste des évaluations publiées de ses cours (titre, module, type continu/examen, échéance), statut calculé "Rendu"/"En retard"/"À rendre" (`file-assessments/group/:id`)
+  - "Former mon groupe" **fonctionnel** quand `maxGroupSize > 1` (`POST /assessment-groups` puis `POST /assessment-group-members`)
+  - Dépôt de fichier **désactivé avec message explicite** : bloqué par le gap d'upload réel (section 2/10), `POST /file-assessments` exige un `fileId` déjà existant
+  - Pas d'affichage des notes ici (déjà sur `/etudiant/notes`, évite la duplication)
 
 ### 11.4 Intervenant (`/intervenant`)
 
@@ -248,9 +248,11 @@ Seulement 4 rôles (pas les 6-7 décrits dans `cahierDesCharges.md` §2, l'admin
   - Liste réelle (`file-courses/course/:id` par cours, taille/date via `files/:id`), suppression fonctionnelle
   - Dépôt de nouveau fichier **retiré avec message explicite** (même gap upload réel) ; les onglets/statuts publié-brouillon/compteur de téléchargements de la maquette retirés : `FileCourse` n'a ni statut de publication ni compteur de téléchargements
 
-- [ ] **`/intervenant/evaluations`** — 🆕 création et suivi des évaluations §3.6
-  - Contenu : liste des évaluations créées par cours (statut publié/brouillon, date limite, nombre de rendus reçus / attendus) · formulaire de création/édition (titre, cours concerné, type continu/examen, date limite, taille max de groupe, case "publier") · vue des rendus par groupe/étudiant avec lien de téléchargement et lien direct vers `/intervenant/notes` pour noter
-  - Endpoints : `POST/PATCH /assessments`, `GET /assessment-groups/*`, `GET /file-assessments/assessment/:id`
+- [x] **`/intervenant/evaluations`** — création et suivi des évaluations §3.6, construite
+  - Liste par cours (`courses/mine`) avec statut publié/brouillon, échéance, nombre de groupes formés et de rendus déposés (`assessment-groups/assessment/:id`, `file-assessments/assessment/:id`)
+  - Création/édition (`POST`/`PATCH /assessments` avec `isPublished`) + bouton "Publier" séparé (`POST /assessments/:id/publish`) pour les brouillons déjà créés, suppression (`DELETE /assessments/:id`)
+  - Détail dépliable par groupe : membres (libellés génériques, gap section 10) et statut de rendu (`file-assessments/group/:id`), lien direct vers `/intervenant/notes` pour noter
+  - Pas de lien de téléchargement du rendu : bloqué par le gap d'upload/stockage réel (section 2/10), aucun fichier réel n'est actuellement soumis
 
 ### 11.5 Administration — `ADMIN` + `SUPER_ADMIN` (`/scolarite`)
 
@@ -338,7 +340,7 @@ Fusionne les responsabilités "Scolarité / Pédagogique / Relations Entreprises
 2. ~~Reconnecter les pages `[~]` existantes~~ ✅ fait — les 13 pages (dashboards ×4, planning ×2, notes ×2, absences, documents, supports, messagerie, paramètres) sont branchées sur le vrai backend. `/superadmin/gestion` inclut déjà l'attribution de rôle (initialement prévue à l'étape 6)
 3. ~~`/intervenant/notes` (régression à corriger, fonctionnalité cœur du métier)~~ ✅ fait — au passage, `Sidebar.tsx` affichait un nom/rôle **en dur** ("Lucas Martin", "Sophie Bernard"...) au lieu de l'utilisateur réellement connecté (`GET /users/me`) : corrigé en même temps, avec l'entrée de menu manquante
 4. ~~Zone Administration (`/scolarite/*`)~~ ✅ fait — les 13 pages (année académique, campus, formations, classes, intervenants, cours, planning, étudiants, absences, documents, entreprises, externes, examens) sont construites. `Sidebar.tsx` mis à jour avec les 13 entrées de menu correspondantes
-5. `/etudiant/cours` + `/etudiant/evaluations` + `/intervenant/evaluations` (boucle supports/rendus complète)
+5. ~~`/etudiant/cours` + `/etudiant/evaluations` + `/intervenant/evaluations` (boucle supports/rendus complète)~~ ✅ fait — `Sidebar.tsx`/`TopBar.tsx` mis à jour avec les 3 entrées de menu/titres correspondants
 6. `/superadmin/securite` (audit-log détaillé, filtres)
 7. `/forgot-password` + `/2fa/setup` une fois les endpoints back correspondants ajoutés (section 10) — `/2fa/setup` fait entretemps, `/forgot-password` reste à faire
 8. Composants à mutualiser (table générique, modal de confirmation, toast, badge de statut) — reste à faire, plusieurs pages dupliquent aujourd'hui des patterns similaires (chargement/erreur, jointures grade→module)
