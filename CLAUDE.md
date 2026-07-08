@@ -125,6 +125,7 @@ Ces gaps backend conditionnent des pages listées en section 11 — à traiter e
 - [ ] Upload réel de fichiers (multipart + stockage disque/S3), au-delà de la simple création de métadonnées `POST /files`
 - [ ] Mécanisme de notifications temps réel (WebSocket) pour planning/notes/documents
 - [ ] Un moyen de lister les comptes en attente d'attribution de rôle (`pending_role_assignment`) — aujourd'hui `GET /admin/security/users` retourne tous les comptes mais ne distingue pas explicitement "sans rôle" des autres
+- [ ] **Résolution nom/prénom à partir d'un `userId`** — vérifié dans le code (`student.adapter.ts`, `instructor.adapter.ts`, `course.use-cases.ts`, `message.use-cases.ts`) : `GET /students`, `/students/:id`, `/instructors/:id`, `/courses/*`, les messages, etc. ne renvoient que des IDs bruts, jamais de nom joint. Seuls `/users/me`, `/students/me`, `/instructors/me` (soi-même) et `/admin/security/users` (`SUPER_ADMIN` uniquement, tous les comptes) exposent un nom. Bloque l'affichage de "qui" sur `/messagerie`, les dashboards (nom de l'intervenant), `/scolarite/etudiants`, la gestion des intervenants, etc. — à corriger en joignant `firstname`/`lastname` dans les réponses `students`/`instructors`/`courses` concernées, ou via un endpoint restreint `GET /users/:id` (nom uniquement, pas de données sensibles). **Décision d'équipe : en attendant, le front affiche des libellés génériques ("Intervenant", "Administration") ou l'ID plutôt que de bloquer les pages.**
 
 ---
 
@@ -182,43 +183,42 @@ Seulement 4 rôles (pas les 6-7 décrits dans `cahierDesCharges.md` §2, l'admin
 
 ### 11.2 Commun à tous les rôles connectés
 
-- [~] **`/parametres`** — page statique existante, à reconnecter
-  - Section "Profil" : prénom, nom, email (lecture seule tant qu'aucun `PATCH /users/me` n'existe côté backend), badge de rôle
-  - Section "Sécurité" : formulaire changer le mot de passe (ancien + nouveau) → `POST /auth/password/reset` · statut 2FA (activée/non) avec bouton d'activation si non → `/2fa/setup` · jours restants avant expiration du mot de passe (`passwordExpiresInDays` de `GET /users/me`), alerte visuelle si < 7 jours
-  - Section "RGPD" : bouton "Exporter mes données" (télécharge le JSON de `GET /gdpr/export`) · bouton "Supprimer mon compte" avec modal de confirmation → `DELETE /users/me` puis déconnexion
-  - Ne pas ajouter de section "Notifications" tant que le WebSocket (section 10) n'existe pas — éviter des toggles qui ne feraient rien
+- [x] **`/parametres`** — reconnectée
+  - Section "Profil" : prénom, nom, email en lecture seule (`GET /users/me`, pas de `PATCH /users/me` côté backend), badge de rôle
+  - Section "Sécurité" : changer le mot de passe (ancien + nouveau) → `POST /auth/password/reset` · statut 2FA réel avec lien vers `/2fa/setup` si non activée · alerte si `passwordExpiresInDays < 7`
+  - Section "Confidentialité" : export RGPD (télécharge le JSON de `GET /gdpr/export`) · suppression de compte avec modal de confirmation → `DELETE /users/me` + déconnexion
+  - Sections "Notifications" et "Sessions actives" de la maquette retirées (pas de backend derrière, auraient été des toggles qui ne font rien)
 
-- [~] **`/messagerie`** — page statique existante, à reconnecter
-  - Colonne gauche : liste des conversations (par classe via `class.conversationId`, par module/cours avec l'intervenant via `course.conversationId`, privées admin↔étudiant via `conversation-private`) avec dernier message + horodatage
-  - Colonne droite : fil de la conversation sélectionnée (expéditeur, contenu, heure) + champ de saisie et envoi → `POST /messages`
-  - Marquage automatique "lu" à l'ouverture d'une conversation → `POST /message-reads`
-  - Uniquement pour `ADMIN`/`SUPER_ADMIN` : bouton "Nouvelle conversation" pour démarrer une conversation privée avec un étudiant → `POST /conversation-privates` (les conversations de classe/module, elles, sont créées automatiquement à la création de la classe/du cours, pas par l'utilisateur)
-  - Endpoints : `GET/POST /messages`, `GET /messages/conversation/:id`, `POST /message-reads`, `GET/POST /conversation-privates`
+- [x] **`/messagerie`** — reconnectée
+  - Liste des conversations reconstruite côté client (pas d'endpoint agrégé) : classe (étudiant → groupe → classe → `conversationId`), cours (groupe → cours → `conversationId`), privées (`conversation-private`)
+  - Fil de messages, envoi (`POST /messages`), marquage lu best-effort (`POST /message-reads`)
+  - "Nouvelle conversation" (ADMIN/SUPER_ADMIN) fonctionnelle mais dégradée : pas de nom d'étudiant à afficher (gap section 10), sélection par ID tronqué
+  - **Limitation connue** : `ADMIN` (non `SUPER_ADMIN`) ne peut pas utiliser la messagerie ciblée — `GET /admins/user/:userId` est réservé à `SUPER_ADMIN`, un simple admin ne peut donc pas retrouver son propre `adminId`. Affiché comme "fonctionnalité limitée pour votre rôle" plutôt que planté
 
 - [ ] Notifications temps réel (bandeau/cloche globale, pas une page à part) — dépend du WebSocket backend (section 10), requis par §3.1/§3.5
 
 ### 11.3 Étudiant (`/etudiant`)
 
-- [~] **`/etudiant`** — dashboard
-  - Contenu : carte "Prochain cours" (module, horaire, mode, salle ou lien) · carte "Dernières notes" (3-5 dernières, module + valeur/20) · carte "Absences en attente" (nombre + lien vers `/etudiant/absences`) · carte "Documents manquants" (liste des types de documents manquants/expirés + lien vers `/etudiant/documents`)
-  - Rester sur des chiffres/liens de raccourci, pas de graphique complexe
+- [x] **`/etudiant`** — dashboard reconnecté
+  - Carte "Prochain cours" (calcul du plus proche créneau futur), carte "Absences en attente", carte "Documents à régulariser", carte "Nouvelles notes" · listes "Prochain cours" et "Dernières notes" détaillées
+  - Pas d'ECTS/graphique de progression (aucune notion de validation d'ECTS dans le backend, aurait été inventé)
 
-- [~] **`/etudiant/planning`** — emploi du temps §3.1
-  - Contenu : vue calendrier semaine (bascule jour/semaine) · chaque créneau affiche module, horaire début/fin, mode (couleur distincte présentiel/distanciel/entreprise), salle si `ON_SITE` · navigation semaine précédente/suivante
-  - Endpoints : `GET /courses/mine`, `GET /courses/:id/sessions`, `GET /academic-years/current`
+- [x] **`/etudiant/planning`** — emploi du temps §3.1, reconnecté
+  - Chaîne réelle : `students/me` → `student-groups` → `groups/:id/courses` → `courses/:id/sessions`, grille semaine avec navigation
+  - Seuls deux modes existent réellement côté backend (`ON_SITE`/`REMOTE`) — pas de mode "entreprise" dédié dans `SessionMode`, retiré du filtre/légende (une journée entreprise = simplement l'absence de session)
 
-- [~] **`/etudiant/notes`** — notes et moyennes §3.2
-  - Contenu : liste des modules avec moyenne calculée, coefficient (`program-module`), mention · détail par module (accordéon) listant chaque note individuelle (type d'évaluation, date, valeur/20) · badge "Gelée" si `isLocked = true` (informatif seulement, pas de contestation depuis cette page — ça passe par la messagerie/l'admin) · distinction visuelle notes académiques vs notes entreprise si l'étudiant est alternant
-  - Endpoints : `GET /grades/mine`, `GET /grade-assessments/*`, `GET /grade-session-exams/*`, `GET /manual-notations/module/:id`
+- [x] **`/etudiant/notes`** — notes et moyennes §3.2, reconnecté
+  - Chaque note (`Grade`) n'est liée à un module qu'indirectement (`grade-assessment` / `grade-session-exam` / `grade-manual-notation` → remonter jusqu'au module) — logique de résolution écrite dans la page
+  - Badge "Gelée" (`isLocked`), moyenne pondérée par coefficient (`program-modules`)
+  - Distinction notes académiques/entreprise **retirée** : aucun champ de ce type n'existe sur `Grade`/`Assessment`, l'inventer aurait été trompeur
 
-- [~] **`/etudiant/absences`** — déclaration + suivi §3.3
-  - Contenu : formulaire de déclaration (sélection de la session concernée, motif en texte libre, dépôt de justificatif optionnel dès la déclaration) · tableau historique (session/date, motif, statut `PENDING`/`VALIDATED`/`REJECTED` en badge coloré, lien de téléchargement du justificatif s'il existe) · action "Ajouter un justificatif" sur une absence `PENDING` qui n'en a pas encore
-  - Endpoints : `POST /absences`, `GET /absences/mine`, `POST /file-justifications` (dépend de l'upload réel de fichiers, section 10)
+- [x] **`/etudiant/absences`** — déclaration + suivi §3.3, reconnecté
+  - Déclaration (session + motif) fonctionnelle → `POST /absences` · historique avec statut réel
+  - Dépôt de justificatif **désactivé avec message explicite** : dépend de l'upload réel de fichiers (section 2/10), pas encore implémenté
 
-- [~] **`/etudiant/documents`** — dossier centralisé §3.4
-  - Contenu : section "Documents officiels" (types `SCHOOL_CERTIFICATE`, `ENROLLMENT_CERTIFICATE`, `TRANSCRIPTS`, `OFFICIAL_DOCUMENTS_ISSUED_BY_THE_SCHOOL` — lecture + téléchargement) · section "Mes contrats" si alternant (contrat d'apprentissage/convention : entreprise, type, dates de début/fin, avenants) · section "Documents à fournir" (alerte par document manquant ou `FileDocument.status` en `PENDING`/`EXPIRED`, bouton "Déposer")
-  - Pas de gestion d'entreprise ici (juste affichage) — la gestion entreprise appartient à l'admin
-  - Endpoints : `GET /file-documents/student/:id`, `GET /document-administratives/*`, `POST /file-documents`, `POST /files`
+- [x] **`/etudiant/documents`** — dossier centralisé §3.4, reconnecté
+  - `file-documents/student/:id` réparti en 3 sections via `document-administratives/file-document/:id` et `document-apprenticeship-contracts/file-document/:id` (déterminent si un `FileDocument` est un document officiel, un contrat, ou un document personnel)
+  - Dépôt/téléchargement **désactivés avec message explicite** : même gap upload/stockage réel
 
 - [ ] **`/etudiant/cours`** — 🆕 bibliothèque de supports §3.6
   - Contenu : liste des modules suivis (via ses cours) · pour chaque module, liste des fichiers déposés par l'intervenant (`FileCourse` : nom, type, date, bouton télécharger)
@@ -232,20 +232,19 @@ Seulement 4 rôles (pas les 6-7 décrits dans `cahierDesCharges.md` §2, l'admin
 
 ### 11.4 Intervenant (`/intervenant`)
 
-- [~] **`/intervenant`** — dashboard
-  - Contenu : carte "Cours du jour" (horaire, module, salle) · carte "Notes à saisir" (évaluations dont la saisie n'est pas terminée) · carte "Rendus en attente de correction" (nombre de `FileAssessment` non encore notés)
+- [x] **`/intervenant`** — dashboard reconnecté
+  - Carte "Cours aujourd'hui", "Modules actifs", "Étudiants", "Rendus reçus" (calculé, pas "en attente de correction" : `FileAssessment` n'a pas de champ "noté", donc affiché comme un compte brut plutôt que d'inventer un statut) · liste "Cours du jour" + "Prochaines échéances" (assessments publiés à venir)
 
-- [~] **`/intervenant/planning`** — mon planning §3.1
-  - Contenu : calendrier de ses sessions (via ses cours) · clic sur une session → détail avec liste des étudiants du groupe et case à cocher présent/absent (déclenche `POST /absences` côté intervenant) · lien rapide vers le dépôt de support pour ce cours
-  - Endpoints : `GET /courses/mine`, `GET /courses/:id/sessions`, `GET /sessions/:sessionId/absences`
+- [x] **`/intervenant/planning`** — mon planning §3.1, reconnecté (`courses/mine` → `courses/:id/sessions`, avec nom de groupe et effectif réels)
+  - Non fait : détail session avec présence/absent en un clic (nécessite `/intervenant/notes`-like UI, laissé pour une prochaine itération)
 
-- [ ] **`/intervenant/notes`** — 🆕 **régression à corriger en priorité** (existait dans la maquette, disparue du `Sidebar` Next.js) — saisie des notes §3.2
+- [ ] **`/intervenant/notes`** — 🆕 **régression à corriger en priorité** (existait dans la maquette, disparue du `Sidebar` Next.js) — saisie des notes §3.2, **pas encore fait**
   - Contenu : sélecteur de module/cours en haut · tableau des étudiants du groupe avec saisie de note par évaluation (valeur/20, mention calculée automatiquement, commentaire optionnel) · bouton "Geler les notes" une fois la saisie terminée (désactive l'édition) · export CSV
   - Endpoints : `POST/PATCH /grades`, `POST /grade-assessments`
 
-- [~] **`/intervenant/supports`** — dépôt de supports
-  - Contenu : liste des fichiers déjà déposés par cours (`FileCourse` : nom, type, taille, date) avec suppression possible · zone de dépôt (titre + sélection du cours concerné)
-  - Endpoints : `GET/POST/DELETE /file-courses`
+- [x] **`/intervenant/supports`** — reconnecté
+  - Liste réelle (`file-courses/course/:id` par cours, taille/date via `files/:id`), suppression fonctionnelle
+  - Dépôt de nouveau fichier **retiré avec message explicite** (même gap upload réel) ; les onglets/statuts publié-brouillon/compteur de téléchargements de la maquette retirés : `FileCourse` n'a ni statut de publication ni compteur de téléchargements
 
 - [ ] **`/intervenant/evaluations`** — 🆕 création et suivi des évaluations §3.6
   - Contenu : liste des évaluations créées par cours (statut publié/brouillon, date limite, nombre de rendus reçus / attendus) · formulaire de création/édition (titre, cours concerné, type continu/examen, date limite, taille max de groupe, case "publier") · vue des rendus par groupe/étudiant avec lien de téléchargement et lien direct vers `/intervenant/notes` pour noter
@@ -255,8 +254,9 @@ Seulement 4 rôles (pas les 6-7 décrits dans `cahierDesCharges.md` §2, l'admin
 
 Zone la moins couverte aujourd'hui. Fusionne les responsabilités "Scolarité / Pédagogique / Relations Entreprises" du cahier des charges puisque le backend n'a qu'un seul rôle `ADMIN`.
 
-- [~] **`/scolarite`** — dashboard
-  - Contenu : KPI "Absences en attente de validation" (nombre + lien) · KPI "Documents manquants/expirés" (nombre + lien) · KPI "Contrats d'alternance expirant sous 30 jours" (nombre + lien) · liste courte des 5 prochains examens/jurys
+- [x] **`/scolarite`** — dashboard reconnecté
+  - 3 KPI réels (absences en attente, documents manquants/expirés, contrats expirant sous 30 jours) + tableau fonctionnel des absences en attente avec Valider/Rejeter en un clic (`POST /absences/:id/validate|reject`)
+  - Pas de liste "5 prochains examens/jurys" (dépend de `/scolarite/examens`, pas encore construit) ni d'onglet "dossiers incomplets"/"activité récente" (auraient nécessité les mêmes noms d'étudiants indisponibles, section 10)
 
 - [ ] **`/scolarite/etudiants`** — 🆕 **lien déjà présent dans le `Sidebar`, page inexistante (lien mort)** — dossiers étudiants
   - Contenu : tableau liste (nom, prénom, email, filière, classe/groupe, statut initial/alternant déduit de la présence d'un contrat actif), recherche/filtre par filière-classe · fiche détail au clic (infos, programme, groupe(s), lien vers historique notes filtré, historique absences, documents/contrats)
@@ -270,9 +270,10 @@ Zone la moins couverte aujourd'hui. Fusionne les responsabilités "Scolarité / 
   - Contenu : tableau des documents en attente de validation (`FileDocument.status = PENDING` : étudiant, type, date de dépôt, bouton visualiser + Valider/Rejeter) · section "Expirés/manquants" (étudiants avec `DocumentAdministrative.expiration` dépassée ou type obligatoire manquant)
   - Endpoints : `GET /document-administratives`, `PATCH /file-documents/:id`
 
-- [~] **`/scolarite/notes`** — supervision des notes
-  - Contenu : sélecteur filière/classe/module · tableau des notes du module (moyenne de classe, répartition des mentions) · bouton geler/dégeler les notes du module (bascule `isLocked` en masse) · section "Notations manuelles" (`ManualNotation` par module, ajout/édition)
-  - Endpoints : `PATCH /grades/:id` (lock), `GET/POST /manual-notations`
+- [x] **`/scolarite/notes`** — supervision des notes, reconnectée
+  - Sélecteur de filière (`GET /programs`), tableau par module (moyenne/min/max/notes saisies) construit en résolvant chaque `Grade` jusqu'à son module (même logique que `/etudiant/notes`, appliquée à `GET /grades` — toutes les notes du système)
+  - "Geler ce module" fonctionnel : appelle `POST /grades/:id/lock` sur chaque note du module (pas d'endpoint de gel en masse côté backend) — **pas de "dégeler"**, aucun endpoint unlock n'existe
+  - Section "Notations manuelles" pas encore ajoutée
 
 - [ ] **`/scolarite/planning`** — 🆕 gestion des sessions §3.1, §4
   - Contenu : vue calendrier globale par classe/salle · formulaire création/édition de session (cours concerné, date/heure début-fin, mode, salle si présentiel) · gestion des situations exceptionnelles : déplacer une session (date/salle), l'annuler, motif en texte libre tracé (grève, jour férié déplacé) — à défaut de champ dédié dans l'entité `Session`, prévoir un champ note/motif ou s'appuyer sur l'audit-log pour tracer le changement
@@ -317,14 +318,13 @@ Zone la moins couverte aujourd'hui. Fusionne les responsabilités "Scolarité / 
 
 ### 11.6 Super Administrateur uniquement (`/superadmin`)
 
-- [~] **`/superadmin`** — dashboard global
-  - Contenu : KPI "Comptes en attente d'attribution de rôle" (nombre + lien) · KPI "Comptes verrouillés" · KPI "Mots de passe expirés" · 5-10 derniers événements d'audit-log significatifs (lien vers `/superadmin/securite`)
+- [x] **`/superadmin`** — dashboard reconnecté
+  - 3 KPI réels (comptes en attente de rôle, verrouillés, mots de passe expirés) + 8 derniers événements `GET /audit-logs` (nom d'utilisateur non affiché, gap section 10 — affiche l'action et l'entité)
 
-- [~] **`/superadmin/gestion`** — gestion des comptes
-  - Contenu : tableau de tous les comptes (nom, email, statut verrouillé avec date de déblocage, 2FA activée oui/non, mot de passe expiré oui/non) · filtre "en attente de rôle" (à croiser côté front avec `/students`, `/instructors`, `/admins` puisque le backend ne l'expose pas explicitement — cf. gap section 10)
-  - **Point critique à ajouter** : action "Attribuer un rôle" sur un compte en attente, avec choix Étudiant (+ sélection du programme) / Intervenant (+ type de contrat) / Admin (+ `ADMIN` ou `SUPER_ADMIN`)
-  - Action sur un compte admin existant : modifier son rôle (`ADMIN` ↔ `SUPER_ADMIN`), le supprimer (sans supprimer le compte `user` sous-jacent)
-  - Endpoints : `GET /admin/security/users`, `POST /students`, `POST /instructors`, `POST/PATCH/DELETE /admins`
+- [x] **`/superadmin/gestion`** — **point critique fait** : attribution de rôle fonctionnelle
+  - Le rôle de chaque compte est déterminé en croisant `GET /admin/security/users` avec `GET /students`/`/instructors`/`/admins` (par `userId`) puisque le backend ne l'expose pas directement
+  - Modal "Attribuer un rôle" sur un compte en attente : Étudiant (+ filière), Intervenant (+ type de contrat), Admin (+ `ADMIN`/`SUPER_ADMIN`) → `POST /students`, `/instructors`, `/admins`
+  - Sur un compte admin existant : changer son niveau (`PATCH /admins/:id`) ou le retirer (`DELETE /admins/:id`, ne supprime pas le compte `user`)
 
 - [ ] **`/superadmin/securite`** — 🆕 référencée dans le `Sidebar`, aucune page réelle aujourd'hui — audit et traçabilité §3.8
   - Contenu : tableau paginé de l'audit-log (date, utilisateur, action `CREATE`/`UPDATE`/`DELETE`/`VALIDATE`/`REJECT`/`FREEZE`/`LOGIN`/`OTHER`, entité concernée, ancienne/nouvelle valeur en diff simplifié) · filtres par utilisateur, entité, action, plage de dates
@@ -333,7 +333,7 @@ Zone la moins couverte aujourd'hui. Fusionne les responsabilités "Scolarité / 
 
 ### 11.7 Points d'architecture transverses à traiter en même temps que les pages
 
-- [x] Client API centralisé (`lib/api.ts`) : `api.get/post/patch/delete` normalisent les erreurs (`ApiError`) et redirigent vers `/login` sur 401. Le header `Authorization` n'a plus besoin d'être posé par les pages : le cookie httpOnly suffit, le middleware l'attache lui-même en le relayant vers le backend. Pas encore utilisé par les pages existantes (elles seront migrées au fil de l'étape 2 de l'ordre de construction)
+- [x] Client API centralisé (`lib/api.ts`) : `api.get/post/patch/delete` normalisent les erreurs (`ApiError`) et redirigent vers `/login` sur 401. Le header `Authorization` n'a plus besoin d'être posé par les pages : le cookie httpOnly suffit, le middleware l'attache lui-même en le relayant vers le backend. **Utilisé par toutes les pages reconnectées de la section 11** (auth mise à part, qui passe par ses propres route handlers)
 - [x] Garde de route par rôle — cookie `httpOnly` (`myges_token`) posé par `app/api/auth/login/route.ts` et `app/api/auth/login/2fa/route.ts`, vérifié par `middleware.ts` via `lib/auth.ts` (`jose`, vérification de signature, pas juste un décodage) ; déconnexion via `POST /api/auth/logout` (`Sidebar.tsx`)
   - [ ] À vérifier avant déploiement prod : `JWT_SECRET` doit être accessible au pod frontend k8s (les deux `InfisicalSecret` CRD `backend`/`frontend` pointent déjà sur le même `secretsPath: "/"`, donc a priori déjà synchronisé — à confirmer dans Infisical)
 - [ ] Composants à mutualiser avant de dupliquer page par page : table triable/filtrable générique, modal de confirmation, dropzone d'upload de fichier, switch/toggle, toast succès/erreur, badge de statut (vert validé, rouge manquant/rejeté, orange en attente)
@@ -341,9 +341,10 @@ Zone la moins couverte aujourd'hui. Fusionne les responsabilités "Scolarité / 
 ### Ordre de construction conseillé (frontend)
 
 1. ~~Client API + garde de route (base commune)~~ ✅ fait — `lib/api.ts`, `lib/auth.ts`, `middleware.ts`, `app/api/auth/{login,login/2fa,logout}`
-2. Reconnecter les pages `[~]` existantes (dashboards, planning, notes, absences, documents, messagerie, paramètres)
-3. `/intervenant/notes` (régression à corriger, fonctionnalité cœur du métier)
+2. ~~Reconnecter les pages `[~]` existantes~~ ✅ fait — les 13 pages (dashboards ×4, planning ×2, notes ×2, absences, documents, supports, messagerie, paramètres) sont branchées sur le vrai backend. `/superadmin/gestion` inclut déjà l'attribution de rôle (initialement prévue à l'étape 6)
+3. `/intervenant/notes` (régression à corriger, fonctionnalité cœur du métier) — **toujours à faire**
 4. Zone Administration (`/scolarite/*`) dans l'ordre : année académique → campus → formations/modules → classes/groupes → cours (affectation intervenant) → planning/sessions → examens → étudiants → absences/documents → entreprises
 5. `/etudiant/cours` + `/etudiant/evaluations` + `/intervenant/evaluations` (boucle supports/rendus complète)
-6. `/superadmin/gestion` (attribution de rôle) + `/superadmin/securite`
-7. `/forgot-password` + `/2fa/setup` une fois les endpoints back correspondants ajoutés (section 10)
+6. `/superadmin/securite` (audit-log détaillé, filtres)
+7. `/forgot-password` + `/2fa/setup` une fois les endpoints back correspondants ajoutés (section 10) — `/2fa/setup` fait entretemps, `/forgot-password` reste à faire
+8. Composants à mutualiser (table générique, modal de confirmation, toast, badge de statut) — reste à faire, plusieurs pages dupliquent aujourd'hui des patterns similaires (chargement/erreur, jointures grade→module)

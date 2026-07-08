@@ -1,238 +1,230 @@
 "use client";
 
-import { FileText, Download, Upload, CheckCircle, AlertCircle, Clock, FileUp, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { FileText, CheckCircle, AlertCircle, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useState } from "react";
+import { api, ApiError } from "@/lib/api";
 
-const contractDocs = [
-    {
-        label: "Contrat d'alternance",
-        status: "valid",
-        date: "01/09/2025",
-        expiry: "31/08/2026",
-        file: "contrat_alternance_2025.pdf",
-    },
-    {
-        label: "Convention de formation",
-        status: "valid",
-        date: "01/09/2025",
-        expiry: "31/08/2026",
-        file: "convention_2025.pdf",
-    },
-    {
-        label: "Avenant au contrat",
-        status: "missing",
-        date: null,
-        expiry: null,
-        file: null,
-    },
-];
+type FileDocumentStatus = "PENDING" | "VALID" | "EXPIRED";
 
-const officialDocs = [
-    { name: "Certificat de scolarité 2025-2026", date: "01/09/2025", size: "124 Ko", icon: "📄" },
-    { name: "Relevé de notes S9", date: "15/02/2026", size: "87 Ko", icon: "📊" },
-    { name: "Attestation d'assiduité", date: "10/04/2026", size: "65 Ko", icon: "✅" },
-    { name: "Carte étudiant 2025-2026", date: "01/09/2025", size: "2.1 Mo", icon: "🪪" },
-];
+type OfficialDoc = { id: string; type: string; expiration: string | null; fileName: string; status: FileDocumentStatus };
+type ContractDoc = {
+    id: string;
+    type: string;
+    startDate: string;
+    endDate: string;
+    fileName: string;
+    status: FileDocumentStatus;
+};
+type PersonalDoc = { id: string; fileName: string; sizeBytes: number; status: FileDocumentStatus };
 
-const myDocs = [
-    { name: "CV_LucasMartin_2026.pdf", date: "01/03/2026", size: "340 Ko", status: "validated" },
-    { name: "Lettre_motivation.pdf", date: "01/03/2026", size: "128 Ko", status: "validated" },
-    { name: "Diplome_BAC.pdf", date: "15/09/2025", size: "1.2 Mo", status: "validated" },
-    { name: "Photo_identite.jpg", date: "15/09/2025", size: "540 Ko", status: "validated" },
-];
-
-const statusConfig = {
-    valid: { label: "Valide", icon: CheckCircle, className: "text-green-600", bg: "bg-green-50" },
-    expiring: { label: "Expire bientôt", icon: AlertCircle, className: "text-orange-600", bg: "bg-orange-50" },
-    missing: { label: "Manquant", icon: AlertCircle, className: "text-red-600", bg: "bg-red-50" },
-    validated: { label: "Validé", icon: CheckCircle, className: "text-green-600", bg: "bg-green-50" },
-    pending: { label: "En attente", icon: Clock, className: "text-orange-600", bg: "bg-orange-50" },
+const statusConfig: Record<FileDocumentStatus, { label: string; icon: typeof CheckCircle; className: string; bg: string }> = {
+    VALID: { label: "Valide", icon: CheckCircle, className: "text-green-600", bg: "bg-green-50" },
+    PENDING: { label: "En attente de validation", icon: Clock, className: "text-orange-600", bg: "bg-orange-50" },
+    EXPIRED: { label: "Expiré", icon: AlertCircle, className: "text-red-600", bg: "bg-red-50" },
 };
 
+const documentTypeLabels: Record<string, string> = {
+    SCHOOL_CERTIFICATE: "Certificat de scolarité",
+    ENROLLMENT_CERTIFICATE: "Attestation d'inscription",
+    TRANSCRIPTS: "Relevé de notes",
+    OFFICIAL_DOCUMENTS_ISSUED_BY_THE_SCHOOL: "Document officiel de l'école",
+    AGREEMENT: "Convention",
+    AMENDMENTS: "Avenant",
+    COMPANY_DOCUMENTS: "Document entreprise",
+    OTHER: "Autre",
+};
+
+function formatSize(bytes: number): string {
+    if (bytes < 1024) return `${bytes} o`;
+    if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} Ko`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`;
+}
+
+async function loadDocuments(): Promise<{ official: OfficialDoc[]; contracts: ContractDoc[]; personal: PersonalDoc[] }> {
+    const student = await api.get<{ id: string }>("/students/me");
+    const fileDocuments = await api.get<{ id: string; fileId: string; status: FileDocumentStatus }[]>(
+        `/file-documents/student/${student.id}`,
+    );
+
+    const official: OfficialDoc[] = [];
+    const contracts: ContractDoc[] = [];
+    const personal: PersonalDoc[] = [];
+
+    for (const fd of fileDocuments) {
+        const file = await api.get<{ originalName: string; sizeBytes: number }>(`/files/${fd.fileId}`);
+
+        const administrative = await api
+            .get<{ type: string; expiration: string | null }>(`/document-administratives/file-document/${fd.id}`)
+            .catch(() => null);
+        if (administrative) {
+            official.push({
+                id: fd.id,
+                type: administrative.type,
+                expiration: administrative.expiration,
+                fileName: file.originalName,
+                status: fd.status,
+            });
+            continue;
+        }
+
+        const contract = await api
+            .get<{ type: string; startDate: string; endDate: string }>(
+                `/document-apprenticeship-contracts/file-document/${fd.id}`,
+            )
+            .catch(() => null);
+        if (contract) {
+            contracts.push({
+                id: fd.id,
+                type: contract.type,
+                startDate: contract.startDate,
+                endDate: contract.endDate,
+                fileName: file.originalName,
+                status: fd.status,
+            });
+            continue;
+        }
+
+        personal.push({ id: fd.id, fileName: file.originalName, sizeBytes: file.sizeBytes, status: fd.status });
+    }
+
+    return { official, contracts, personal };
+}
+
 export default function DocumentsEtudiant() {
-    const [showUpload, setShowUpload] = useState(false);
+    const [official, setOfficial] = useState<OfficialDoc[]>([]);
+    const [contracts, setContracts] = useState<ContractDoc[]>([]);
+    const [personal, setPersonal] = useState<PersonalDoc[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState("");
+
+    useEffect(() => {
+        loadDocuments()
+            .then(({ official, contracts, personal }) => {
+                setOfficial(official);
+                setContracts(contracts);
+                setPersonal(personal);
+            })
+            .catch((e) => setError(e instanceof ApiError ? e.message : "Impossible de charger les documents."))
+            .finally(() => setLoading(false));
+    }, []);
+
+    const missingOrExpired = official.filter((d) => d.status !== "VALID").length;
 
     return (
         <div className="space-y-6 max-w-4xl">
-            {/* Alert */}
-            <div className="flex items-center gap-3 bg-orange-50 border border-orange-200 rounded-xl px-4 py-3 text-sm">
-                <AlertCircle size={16} className="text-orange-500 flex-shrink-0" />
-                <span className="text-orange-800 font-medium">
-                    1 document manquant dans votre dossier : <strong>Avenant au contrat</strong>. Veuillez le déposer
-                    dès que possible.
-                </span>
-            </div>
+            {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl p-4">{error}</div>}
+            {loading && <p className="text-sm text-gray-400">Chargement…</p>}
 
-            {/* Contracts */}
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100">
-                <div className="p-5 border-b border-gray-50">
-                    <h3 className="font-bold text-sm text-gray-900">Documents d'alternance</h3>
-                </div>
-                <div className="divide-y divide-gray-50">
-                    {contractDocs.map((doc, i) => {
-                        const s = statusConfig[doc.status as keyof typeof statusConfig];
-                        const SIcon = s.icon;
-                        return (
-                            <div key={i} className="flex items-center gap-4 px-5 py-4">
-                                <div
-                                    className={cn(
-                                        "w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0",
-                                        s.bg,
-                                    )}
-                                >
-                                    <FileText size={18} className={s.className} />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <div className="font-semibold text-sm text-gray-900">{doc.label}</div>
-                                    {doc.date && (
-                                        <div className="text-xs text-gray-500 mt-0.5">
-                                            Signé le {doc.date}
-                                            {doc.expiry && <span className="ml-2">· Expire le {doc.expiry}</span>}
+            {!loading && !error && (
+                <>
+                    <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-xs text-blue-800">
+                        Le dépôt et le téléchargement de fichiers dépendent d&apos;un stockage réel côté backend, pas
+                        encore implémenté (voir CLAUDE.md) — cette page affiche les documents déjà enregistrés.
+                    </div>
+
+                    {missingOrExpired > 0 && (
+                        <div className="flex items-center gap-3 bg-orange-50 border border-orange-200 rounded-xl px-4 py-3 text-sm">
+                            <AlertCircle size={16} className="text-orange-500 flex-shrink-0" />
+                            <span className="text-orange-800 font-medium">
+                                {missingOrExpired} document{missingOrExpired > 1 ? "s" : ""} officiel
+                                {missingOrExpired > 1 ? "s" : ""} en attente ou expiré{missingOrExpired > 1 ? "s" : ""}.
+                            </span>
+                        </div>
+                    )}
+
+                    {contracts.length > 0 && (
+                        <div className="bg-white rounded-2xl shadow-sm border border-gray-100">
+                            <div className="p-5 border-b border-gray-50">
+                                <h3 className="font-bold text-sm text-gray-900">Documents d&apos;alternance</h3>
+                            </div>
+                            <div className="divide-y divide-gray-50">
+                                {contracts.map((doc) => {
+                                    const s = statusConfig[doc.status];
+                                    const SIcon = s.icon;
+                                    return (
+                                        <div key={doc.id} className="flex items-center gap-4 px-5 py-4">
+                                            <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0", s.bg)}>
+                                                <FileText size={18} className={s.className} />
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="font-semibold text-sm text-gray-900">
+                                                    {documentTypeLabels[doc.type] ?? doc.type}
+                                                </div>
+                                                <div className="text-xs text-gray-500 mt-0.5">
+                                                    Du {new Date(doc.startDate).toLocaleDateString("fr-FR")} au{" "}
+                                                    {new Date(doc.endDate).toLocaleDateString("fr-FR")}
+                                                </div>
+                                            </div>
+                                            <span className={cn("flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full", s.bg, s.className)}>
+                                                <SIcon size={11} /> {s.label}
+                                            </span>
                                         </div>
-                                    )}
-                                </div>
-                                <div className="flex items-center gap-3 flex-shrink-0">
-                                    <span
-                                        className={cn(
-                                            "flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full",
-                                            s.bg,
-                                            s.className,
-                                        )}
-                                    >
-                                        <SIcon size={11} /> {s.label}
-                                    </span>
-                                    {doc.file ? (
-                                        <button className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-                                            <Download size={12} /> Télécharger
-                                        </button>
-                                    ) : (
-                                        <button
-                                            onClick={() => setShowUpload(true)}
-                                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-[#001944] rounded-lg hover:bg-[#002C6E] transition-colors"
-                                        >
-                                            <Upload size={12} /> Déposer
-                                        </button>
-                                    )}
-                                </div>
+                                    );
+                                })}
                             </div>
-                        );
-                    })}
-                </div>
-            </div>
-
-            {/* Official docs */}
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100">
-                <div className="flex items-center justify-between p-5 border-b border-gray-50">
-                    <h3 className="font-bold text-sm text-gray-900">Documents officiels</h3>
-                    <span className="text-xs text-gray-400">Générés par l'administration</span>
-                </div>
-                <div className="divide-y divide-gray-50">
-                    {officialDocs.map((doc, i) => (
-                        <div key={i} className="flex items-center gap-4 px-5 py-3 hover:bg-gray-50 transition-colors">
-                            <span className="text-xl flex-shrink-0">{doc.icon}</span>
-                            <div className="flex-1 min-w-0">
-                                <div className="font-medium text-sm text-gray-800">{doc.name}</div>
-                                <div className="text-xs text-gray-400">
-                                    {doc.date} · {doc.size}
-                                </div>
-                            </div>
-                            <button className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors flex-shrink-0">
-                                <Download size={12} /> Télécharger
-                            </button>
                         </div>
-                    ))}
-                </div>
-            </div>
+                    )}
 
-            {/* My docs */}
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100">
-                <div className="flex items-center justify-between p-5 border-b border-gray-50">
-                    <h3 className="font-bold text-sm text-gray-900">Mes documents personnels</h3>
-                    <button
-                        onClick={() => setShowUpload(true)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-[#001944] text-white text-xs font-semibold rounded-lg hover:bg-[#002C6E] transition-colors"
-                    >
-                        <Upload size={12} /> Ajouter
-                    </button>
-                </div>
-                <div className="divide-y divide-gray-50">
-                    {myDocs.map((doc, i) => {
-                        const s = statusConfig[doc.status as keyof typeof statusConfig];
-                        const SIcon = s.icon;
-                        return (
-                            <div
-                                key={i}
-                                className="flex items-center gap-4 px-5 py-3 hover:bg-gray-50 transition-colors"
-                            >
-                                <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
-                                    <FileText size={16} className="text-blue-600" />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <div className="font-medium text-sm text-gray-800 truncate">{doc.name}</div>
-                                    <div className="text-xs text-gray-400">
-                                        {doc.date} · {doc.size}
+                    <div className="bg-white rounded-2xl shadow-sm border border-gray-100">
+                        <div className="p-5 border-b border-gray-50">
+                            <h3 className="font-bold text-sm text-gray-900">Documents officiels</h3>
+                        </div>
+                        <div className="divide-y divide-gray-50">
+                            {official.length === 0 && <p className="px-5 py-4 text-sm text-gray-400">Aucun document.</p>}
+                            {official.map((doc) => {
+                                const s = statusConfig[doc.status];
+                                const SIcon = s.icon;
+                                return (
+                                    <div key={doc.id} className="flex items-center gap-4 px-5 py-3">
+                                        <div className={cn("w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0", s.bg)}>
+                                            <FileText size={16} className={s.className} />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="font-medium text-sm text-gray-800">
+                                                {documentTypeLabels[doc.type] ?? doc.type}
+                                            </div>
+                                            <div className="text-xs text-gray-400">
+                                                {doc.fileName}
+                                                {doc.expiration && ` · Expire le ${new Date(doc.expiration).toLocaleDateString("fr-FR")}`}
+                                            </div>
+                                        </div>
+                                        <span className={cn("flex items-center gap-1 text-xs font-medium", s.className)}>
+                                            <SIcon size={11} /> {s.label}
+                                        </span>
                                     </div>
-                                </div>
-                                <div className="flex items-center gap-2 flex-shrink-0">
-                                    <span className={cn("flex items-center gap-1 text-xs font-medium", s.className)}>
-                                        <SIcon size={11} /> {s.label}
-                                    </span>
-                                    <button className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
-                                        <Download size={14} />
-                                    </button>
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
-            </div>
-
-            {/* Upload modal */}
-            {showUpload && (
-                <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
-                        <div className="flex items-center justify-between p-6 border-b border-gray-100">
-                            <h3 className="font-bold text-gray-900">Déposer un document</h3>
-                            <button onClick={() => setShowUpload(false)} className="text-gray-400 hover:text-gray-600">
-                                <X size={18} />
-                            </button>
-                        </div>
-                        <div className="p-6 space-y-4">
-                            <div>
-                                <label className="text-xs font-medium text-gray-700 block mb-1">Type de document</label>
-                                <select className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500/20 bg-white">
-                                    <option>Avenant au contrat</option>
-                                    <option>Justificatif d'identité</option>
-                                    <option>Diplôme</option>
-                                    <option>Autre</option>
-                                </select>
-                            </div>
-                            <div className="border-2 border-dashed border-gray-200 rounded-xl p-8 text-center hover:border-blue-300 hover:bg-blue-50/30 transition-all cursor-pointer">
-                                <FileUp size={28} className="text-gray-300 mx-auto mb-3" />
-                                <p className="text-sm font-medium text-gray-600">Glisser-déposer votre fichier ici</p>
-                                <p className="text-xs text-gray-400 mt-1">PDF, JPG, PNG — max 10 Mo</p>
-                                <button className="mt-3 px-4 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded-lg hover:bg-blue-700 transition-colors">
-                                    Parcourir les fichiers
-                                </button>
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-3 px-6 pb-6">
-                            <button
-                                onClick={() => setShowUpload(false)}
-                                className="flex-1 py-2.5 border border-gray-200 text-gray-700 rounded-xl text-sm font-medium hover:bg-gray-50"
-                            >
-                                Annuler
-                            </button>
-                            <button
-                                onClick={() => setShowUpload(false)}
-                                className="flex-1 py-2.5 bg-[#001944] text-white rounded-xl text-sm font-semibold hover:bg-[#002C6E]"
-                            >
-                                Déposer
-                            </button>
+                                );
+                            })}
                         </div>
                     </div>
-                </div>
+
+                    <div className="bg-white rounded-2xl shadow-sm border border-gray-100">
+                        <div className="p-5 border-b border-gray-50">
+                            <h3 className="font-bold text-sm text-gray-900">Mes documents personnels</h3>
+                        </div>
+                        <div className="divide-y divide-gray-50">
+                            {personal.length === 0 && <p className="px-5 py-4 text-sm text-gray-400">Aucun document.</p>}
+                            {personal.map((doc) => {
+                                const s = statusConfig[doc.status];
+                                const SIcon = s.icon;
+                                return (
+                                    <div key={doc.id} className="flex items-center gap-4 px-5 py-3">
+                                        <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
+                                            <FileText size={16} className="text-blue-600" />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="font-medium text-sm text-gray-800 truncate">{doc.fileName}</div>
+                                            <div className="text-xs text-gray-400">{formatSize(doc.sizeBytes)}</div>
+                                        </div>
+                                        <span className={cn("flex items-center gap-1 text-xs font-medium flex-shrink-0", s.className)}>
+                                            <SIcon size={11} /> {s.label}
+                                        </span>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                </>
             )}
         </div>
     );

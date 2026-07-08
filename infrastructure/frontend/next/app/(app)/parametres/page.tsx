@@ -1,50 +1,123 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { User, Lock, Bell, Shield, Trash2, Eye, EyeOff, CheckCircle, Smartphone } from "lucide-react";
+import { User, Lock, Shield, Trash2, Eye, EyeOff, CheckCircle, AlertTriangle, Smartphone } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { api, ApiError } from "@/lib/api";
 
-type Section = "profil" | "securite" | "notifications" | "confidentialite";
+type Section = "profil" | "securite" | "confidentialite";
 
 const sections: { id: Section; label: string; icon: React.ElementType }[] = [
     { id: "profil", label: "Profil", icon: User },
     { id: "securite", label: "Sécurité", icon: Lock },
-    { id: "notifications", label: "Notifications", icon: Bell },
     { id: "confidentialite", label: "Confidentialité", icon: Shield },
 ];
 
-function Toggle({ checked, onChange }: { checked: boolean; onChange: () => void }) {
-    return (
-        <button
-            onClick={onChange}
-            className={cn("relative w-10 h-5 rounded-full transition-colors", checked ? "bg-[#001944]" : "bg-gray-200")}
-        >
-            <div
-                className={cn(
-                    "absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform",
-                    checked ? "translate-x-5" : "translate-x-0",
-                )}
-            />
-        </button>
-    );
-}
+const roleLabels: Record<string, string> = {
+    STUDENT: "Étudiant",
+    INSTRUCTOR: "Intervenant",
+    ADMIN: "Administration",
+    SUPER_ADMIN: "Super Administrateur",
+};
+
+type Me = {
+    id: string;
+    firstname: string;
+    lastname: string;
+    email: string;
+    role: string;
+    passwordExpiresInDays: number;
+    twoFactorEnabled: boolean;
+};
 
 export default function Parametres() {
+    const router = useRouter();
     const [section, setSection] = useState<Section>("profil");
+
+    const [me, setMe] = useState<Me | null>(null);
+    const [meError, setMeError] = useState("");
+
     const [showCurrentPwd, setShowCurrentPwd] = useState(false);
     const [showNewPwd, setShowNewPwd] = useState(false);
-    const [twoFA, setTwoFA] = useState(true);
-    const [notifications, setNotifications] = useState({
-        planning: true,
-        notes: true,
-        absences: true,
-        messages: true,
-        admin: false,
-        email: true,
-    });
+    const [oldPassword, setOldPassword] = useState("");
+    const [newPassword, setNewPassword] = useState("");
+    const [confirmPassword, setConfirmPassword] = useState("");
+    const [pwdSubmitting, setPwdSubmitting] = useState(false);
+    const [pwdError, setPwdError] = useState("");
+    const [pwdSuccess, setPwdSuccess] = useState("");
 
-    const toggleNotif = (key: keyof typeof notifications) => setNotifications((n) => ({ ...n, [key]: !n[key] }));
+    const [exporting, setExporting] = useState(false);
+    const [exportError, setExportError] = useState("");
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [deleting, setDeleting] = useState(false);
+    const [deleteError, setDeleteError] = useState("");
+
+    useEffect(() => {
+        api
+            .get<Me>("/users/me")
+            .then(setMe)
+            .catch((error: unknown) => {
+                setMeError(error instanceof ApiError ? error.message : "Impossible de charger le profil.");
+            });
+    }, []);
+
+    const handlePasswordSubmit = async (event: FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        setPwdError("");
+        setPwdSuccess("");
+
+        if (newPassword !== confirmPassword) {
+            setPwdError("Les deux mots de passe ne correspondent pas.");
+            return;
+        }
+
+        setPwdSubmitting(true);
+        try {
+            const result = await api.post<{ message: string }>("/auth/password/reset", { oldPassword, newPassword });
+            setPwdSuccess(result.message ?? "Mot de passe mis à jour.");
+            setOldPassword("");
+            setNewPassword("");
+            setConfirmPassword("");
+        } catch (error) {
+            setPwdError(error instanceof ApiError ? error.message : "Erreur inattendue.");
+        } finally {
+            setPwdSubmitting(false);
+        }
+    };
+
+    const handleExport = async () => {
+        setExporting(true);
+        setExportError("");
+        try {
+            const result = await api.get<{ data: Record<string, unknown> }>("/gdpr/export");
+            const blob = new Blob([JSON.stringify(result.data, null, 2)], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = "myges-mes-donnees.json";
+            link.click();
+            URL.revokeObjectURL(url);
+        } catch (error) {
+            setExportError(error instanceof ApiError ? error.message : "Export impossible.");
+        } finally {
+            setExporting(false);
+        }
+    };
+
+    const handleDeleteAccount = async () => {
+        setDeleting(true);
+        setDeleteError("");
+        try {
+            await api.delete("/users/me");
+            await fetch("/api/auth/logout", { method: "POST" });
+            router.push("/login");
+        } catch (error) {
+            setDeleteError(error instanceof ApiError ? error.message : "Suppression impossible.");
+            setDeleting(false);
+        }
+    };
 
     return (
         <div className="max-w-4xl">
@@ -73,79 +146,58 @@ export default function Parametres() {
 
                 {/* Content */}
                 <main className="flex-1 space-y-4">
+                    {meError && (
+                        <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl p-4">
+                            {meError}
+                        </div>
+                    )}
+
                     {/* Profil */}
                     {section === "profil" && (
-                        <>
-                            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-                                <h3 className="font-bold text-gray-900 mb-5">Informations personnelles</h3>
-                                {/* Avatar */}
-                                <div className="flex items-center gap-5 mb-6">
-                                    <div className="w-16 h-16 rounded-full bg-blue-500 flex items-center justify-center text-white text-xl font-bold">
-                                        LM
+                        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+                            <h3 className="font-bold text-gray-900 mb-1">Informations personnelles</h3>
+                            <p className="text-sm text-gray-500 mb-5">
+                                Ces informations sont gérées par l&apos;administration.
+                            </p>
+                            {!me && !meError && <p className="text-sm text-gray-400">Chargement…</p>}
+                            {me && (
+                                <div className="space-y-4">
+                                    <div className="flex items-center gap-5">
+                                        <div className="w-16 h-16 rounded-full bg-[#001944] flex items-center justify-center text-white text-xl font-bold flex-shrink-0">
+                                            {me.firstname[0]}
+                                            {me.lastname[0]}
+                                        </div>
+                                        <div>
+                                            <div className="font-bold text-gray-900">
+                                                {me.firstname} {me.lastname}
+                                            </div>
+                                            <span className="inline-block mt-1 text-xs font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                                                {roleLabels[me.role] ?? me.role}
+                                            </span>
+                                        </div>
                                     </div>
                                     <div>
-                                        <button className="px-3 py-1.5 text-xs font-semibold text-white bg-[#001944] rounded-lg hover:bg-[#002C6E] transition-colors">
-                                            Changer la photo
-                                        </button>
-                                        <p className="text-xs text-gray-400 mt-1">JPG, PNG — max 2 Mo</p>
-                                    </div>
-                                </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="text-xs font-medium text-gray-700 block mb-1">Prénom</label>
-                                        <input
-                                            defaultValue="Lucas"
-                                            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="text-xs font-medium text-gray-700 block mb-1">Nom</label>
-                                        <input
-                                            defaultValue="Martin"
-                                            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
-                                        />
-                                    </div>
-                                    <div className="col-span-2">
                                         <label className="text-xs font-medium text-gray-700 block mb-1">
                                             Adresse email
                                         </label>
                                         <input
-                                            defaultValue="l.martin@myges.fr"
-                                            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 bg-gray-50 text-gray-500"
+                                            value={me.email}
                                             readOnly
+                                            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none bg-gray-50 text-gray-500"
                                         />
-                                        <p className="text-xs text-gray-400 mt-1">
-                                            L'email est géré par l'administration.
-                                        </p>
-                                    </div>
-                                    <div>
-                                        <label className="text-xs font-medium text-gray-700 block mb-1">
-                                            Téléphone
-                                        </label>
-                                        <input
-                                            defaultValue="06 12 34 56 78"
-                                            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="text-xs font-medium text-gray-700 block mb-1">Langue</label>
-                                        <select className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500/20 bg-white">
-                                            <option>Français</option>
-                                            <option>English</option>
-                                        </select>
                                     </div>
                                 </div>
-                            </div>
-                            <button className="px-5 py-2.5 bg-[#001944] text-white text-sm font-semibold rounded-xl hover:bg-[#002C6E] transition-colors">
-                                Enregistrer les modifications
-                            </button>
-                        </>
+                            )}
+                        </div>
                     )}
 
                     {/* Sécurité */}
                     {section === "securite" && (
                         <>
-                            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+                            <form
+                                onSubmit={handlePasswordSubmit}
+                                className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6"
+                            >
                                 <h3 className="font-bold text-gray-900 mb-5">Changer le mot de passe</h3>
                                 <div className="space-y-4">
                                     <div>
@@ -155,7 +207,10 @@ export default function Parametres() {
                                         <div className="relative">
                                             <input
                                                 type={showCurrentPwd ? "text" : "password"}
+                                                value={oldPassword}
+                                                onChange={(e) => setOldPassword(e.target.value)}
                                                 placeholder="••••••••••••"
+                                                required
                                                 className="w-full px-3 py-2 pr-10 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
                                             />
                                             <button
@@ -174,7 +229,10 @@ export default function Parametres() {
                                         <div className="relative">
                                             <input
                                                 type={showNewPwd ? "text" : "password"}
+                                                value={newPassword}
+                                                onChange={(e) => setNewPassword(e.target.value)}
                                                 placeholder="12 caractères minimum"
+                                                required
                                                 className="w-full px-3 py-2 pr-10 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
                                             />
                                             <button
@@ -186,7 +244,7 @@ export default function Parametres() {
                                             </button>
                                         </div>
                                         <p className="text-xs text-gray-400 mt-1">
-                                            Min. 12 caractères, majuscule, chiffre et symbole.
+                                            Min. 12 caractères, majuscule, minuscule, chiffre et symbole.
                                         </p>
                                     </div>
                                     <div>
@@ -195,15 +253,45 @@ export default function Parametres() {
                                         </label>
                                         <input
                                             type="password"
+                                            value={confirmPassword}
+                                            onChange={(e) => setConfirmPassword(e.target.value)}
                                             placeholder="••••••••••••"
+                                            required
                                             className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
                                         />
                                     </div>
                                 </div>
-                                <button className="mt-5 px-5 py-2.5 bg-[#001944] text-white text-sm font-semibold rounded-xl hover:bg-[#002C6E] transition-colors">
-                                    Modifier le mot de passe
+
+                                {pwdError && (
+                                    <p className="mt-4 text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-2">
+                                        {pwdError}
+                                    </p>
+                                )}
+                                {pwdSuccess && (
+                                    <p className="mt-4 text-xs text-green-800 bg-green-50 border border-green-200 rounded-lg p-2">
+                                        {pwdSuccess}
+                                    </p>
+                                )}
+
+                                <button
+                                    type="submit"
+                                    disabled={pwdSubmitting}
+                                    className="mt-5 px-5 py-2.5 bg-[#001944] text-white text-sm font-semibold rounded-xl hover:bg-[#002C6E] transition-colors disabled:bg-gray-300"
+                                >
+                                    {pwdSubmitting ? "Modification…" : "Modifier le mot de passe"}
                                 </button>
-                            </div>
+                            </form>
+
+                            {me && me.passwordExpiresInDays < 7 && (
+                                <div className="flex items-center gap-3 bg-orange-50 border border-orange-200 rounded-xl px-4 py-3 text-sm text-orange-700">
+                                    <AlertTriangle size={16} className="flex-shrink-0" />
+                                    <span>
+                                        Votre mot de passe expire dans {me.passwordExpiresInDays} jour
+                                        {me.passwordExpiresInDays > 1 ? "s" : ""} (renouvellement obligatoire tous les
+                                        60 jours).
+                                    </span>
+                                </div>
+                            )}
 
                             {/* 2FA */}
                             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
@@ -214,21 +302,19 @@ export default function Parametres() {
                                             Protégez votre compte avec un code TOTP (Google Authenticator, Authy…)
                                         </p>
                                     </div>
-                                    <Toggle checked={twoFA} onChange={() => setTwoFA(!twoFA)} />
                                 </div>
-                                {twoFA && (
+                                {me?.twoFactorEnabled && (
                                     <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-sm text-green-700">
                                         <CheckCircle size={15} />
-                                        <span className="font-medium">2FA activé — votre compte est protégé</span>
+                                        <span className="font-medium">2FA activée — votre compte est protégé</span>
                                     </div>
                                 )}
-                                {!twoFA && (
+                                {me && !me.twoFactorEnabled && (
                                     <div className="flex items-center gap-3 p-4 bg-orange-50 border border-orange-200 rounded-xl">
                                         <Smartphone size={18} className="text-orange-500 flex-shrink-0" />
                                         <div className="flex-1">
                                             <p className="text-sm text-orange-700">
-                                                Activez la 2FA pour renforcer la sécurité de votre compte. Scannez le QR
-                                                code avec votre application TOTP.
+                                                Activez la 2FA pour renforcer la sécurité de votre compte.
                                             </p>
                                             <Link
                                                 href="/2fa/setup"
@@ -240,112 +326,7 @@ export default function Parametres() {
                                     </div>
                                 )}
                             </div>
-
-                            {/* Sessions */}
-                            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-                                <h3 className="font-bold text-gray-900 mb-4">Sessions actives</h3>
-                                {[
-                                    {
-                                        device: "Chrome – Windows 11",
-                                        ip: "192.168.1.42",
-                                        time: "Maintenant",
-                                        current: true,
-                                    },
-                                    {
-                                        device: "Safari – iPhone 15",
-                                        ip: "90.123.45.67",
-                                        time: "Il y a 2h",
-                                        current: false,
-                                    },
-                                ].map((session, i) => (
-                                    <div
-                                        key={i}
-                                        className="flex items-center justify-between py-3 border-b border-gray-50 last:border-0"
-                                    >
-                                        <div>
-                                            <div className="font-medium text-sm text-gray-800 flex items-center gap-2">
-                                                {session.device}
-                                                {session.current && (
-                                                    <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">
-                                                        Session actuelle
-                                                    </span>
-                                                )}
-                                            </div>
-                                            <div className="text-xs text-gray-400">
-                                                {session.ip} · {session.time}
-                                            </div>
-                                        </div>
-                                        {!session.current && (
-                                            <button className="text-xs text-red-500 font-semibold hover:text-red-700">
-                                                Révoquer
-                                            </button>
-                                        )}
-                                    </div>
-                                ))}
-                            </div>
                         </>
-                    )}
-
-                    {/* Notifications */}
-                    {section === "notifications" && (
-                        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-                            <h3 className="font-bold text-gray-900 mb-5">Préférences de notification</h3>
-                            <div className="space-y-1">
-                                {[
-                                    {
-                                        key: "planning" as const,
-                                        label: "Modifications du planning",
-                                        desc: "Cours annulés, déplacés ou ajoutés",
-                                    },
-                                    {
-                                        key: "notes" as const,
-                                        label: "Nouvelles notes",
-                                        desc: "Quand une note est publiée",
-                                    },
-                                    {
-                                        key: "absences" as const,
-                                        label: "Statut des absences",
-                                        desc: "Validation ou refus de justificatifs",
-                                    },
-                                    {
-                                        key: "messages" as const,
-                                        label: "Nouveaux messages",
-                                        desc: "Messages de vos intervenants ou de l'administration",
-                                    },
-                                    {
-                                        key: "admin" as const,
-                                        label: "Annonces administratives",
-                                        desc: "Informations générales de l'école",
-                                    },
-                                ].map((notif) => (
-                                    <div
-                                        key={notif.key}
-                                        className="flex items-center justify-between py-3 border-b border-gray-50 last:border-0"
-                                    >
-                                        <div>
-                                            <div className="font-medium text-sm text-gray-800">{notif.label}</div>
-                                            <div className="text-xs text-gray-400">{notif.desc}</div>
-                                        </div>
-                                        <Toggle
-                                            checked={notifications[notif.key]}
-                                            onChange={() => toggleNotif(notif.key)}
-                                        />
-                                    </div>
-                                ))}
-                            </div>
-
-                            <div className="mt-6 pt-4 border-t border-gray-100">
-                                <div className="flex items-center justify-between py-3">
-                                    <div>
-                                        <div className="font-medium text-sm text-gray-800">Notifications par email</div>
-                                        <div className="text-xs text-gray-400">
-                                            Recevoir un récapitulatif quotidien par email
-                                        </div>
-                                    </div>
-                                    <Toggle checked={notifications.email} onChange={() => toggleNotif("email")} />
-                                </div>
-                            </div>
-                        </div>
                     )}
 
                     {/* Confidentialité */}
@@ -354,39 +335,80 @@ export default function Parametres() {
                             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
                                 <h3 className="font-bold text-gray-900 mb-1">Données personnelles</h3>
                                 <p className="text-sm text-gray-500 mb-5">
-                                    Conformément au RGPD, vous pouvez exporter ou supprimer vos données.
+                                    Conformément au RGPD, vous pouvez exporter vos données à tout moment.
                                 </p>
-                                <div className="space-y-3">
-                                    <button className="w-full flex items-center justify-between px-4 py-3 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
-                                        <span className="text-sm font-medium text-gray-700">
-                                            Exporter mes données (JSON)
-                                        </span>
-                                        <Shield size={15} className="text-gray-400" />
-                                    </button>
-                                    <button className="w-full flex items-center justify-between px-4 py-3 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
-                                        <span className="text-sm font-medium text-gray-700">
-                                            Historique des connexions
-                                        </span>
-                                        <Eye size={15} className="text-gray-400" />
-                                    </button>
-                                </div>
+                                {exportError && (
+                                    <p className="mb-3 text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-2">
+                                        {exportError}
+                                    </p>
+                                )}
+                                <button
+                                    onClick={handleExport}
+                                    disabled={exporting}
+                                    className="w-full flex items-center justify-between px-4 py-3 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors disabled:opacity-50"
+                                >
+                                    <span className="text-sm font-medium text-gray-700">
+                                        {exporting ? "Export en cours…" : "Exporter mes données (JSON)"}
+                                    </span>
+                                    <Shield size={15} className="text-gray-400" />
+                                </button>
                             </div>
 
                             <div className="bg-white rounded-2xl shadow-sm border border-red-100 p-6">
                                 <h3 className="font-bold text-red-700 mb-1">Zone de danger</h3>
                                 <p className="text-sm text-gray-500 mb-5">
-                                    Ces actions sont irréversibles. Contactez l'administration pour toute demande de
-                                    suppression de compte.
+                                    La suppression du compte est définitive et efface vos données personnelles.
                                 </p>
-                                <button className="flex items-center gap-2 px-4 py-2.5 bg-red-50 text-red-600 border border-red-200 rounded-xl text-sm font-semibold hover:bg-red-100 transition-colors">
+                                {deleteError && (
+                                    <p className="mb-3 text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-2">
+                                        {deleteError}
+                                    </p>
+                                )}
+                                <button
+                                    onClick={() => setShowDeleteConfirm(true)}
+                                    className="flex items-center gap-2 px-4 py-2.5 bg-red-50 text-red-600 border border-red-200 rounded-xl text-sm font-semibold hover:bg-red-100 transition-colors"
+                                >
                                     <Trash2 size={14} />
-                                    Demander la suppression du compte
+                                    Supprimer mon compte
                                 </button>
                             </div>
                         </>
                     )}
                 </main>
             </div>
+
+            {showDeleteConfirm && (
+                <div
+                    className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4"
+                    onClick={() => !deleting && setShowDeleteConfirm(false)}
+                >
+                    <div
+                        className="bg-white rounded-2xl p-6 w-full max-w-sm"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <h3 className="font-bold text-gray-900 mb-2">Supprimer définitivement votre compte ?</h3>
+                        <p className="text-sm text-gray-500 mb-5">
+                            Cette action est irréversible : votre compte et vos données personnelles seront effacés.
+                        </p>
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => setShowDeleteConfirm(false)}
+                                disabled={deleting}
+                                className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                            >
+                                Annuler
+                            </button>
+                            <button
+                                onClick={handleDeleteAccount}
+                                disabled={deleting}
+                                className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-xl text-sm font-semibold hover:bg-red-700 disabled:opacity-50"
+                            >
+                                {deleting ? "Suppression…" : "Supprimer"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

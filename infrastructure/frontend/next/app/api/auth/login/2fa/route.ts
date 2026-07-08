@@ -7,13 +7,23 @@ export async function POST(request: NextRequest) {
     const backendUrl = process.env.API_URL ?? "http://localhost:3001";
     const body = await request.text();
 
-    const backendResponse = await fetch(new URL("/auth/login/2fa", backendUrl), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body,
-    });
+    let backendResponse: Response;
+    try {
+        // Le backend monte tous ses routeurs sous /api (voir infrastructure/backend/express/src/app.ts)
+        backendResponse = await fetch(new URL("/api/auth/login/2fa", backendUrl), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body,
+        });
+    } catch (error) {
+        console.error("[/api/auth/login/2fa] backend unreachable:", error);
+        return NextResponse.json({ error: "Serveur indisponible. Réessayez dans un instant." }, { status: 502 });
+    }
 
-    const payload = await backendResponse.json();
+    const payload = await backendResponse.json().catch(() => null);
+    if (!payload) {
+        return NextResponse.json({ error: "Réponse invalide du serveur." }, { status: 502 });
+    }
 
     const response = NextResponse.json(payload.token ? { user: payload.user } : payload, {
         status: backendResponse.status,
