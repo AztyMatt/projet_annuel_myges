@@ -1,8 +1,10 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { api } from "@/lib/api";
 import {
     LayoutDashboard,
     Calendar,
@@ -39,6 +41,7 @@ const navConfig: Record<Role, NavItem[]> = {
     intervenant: [
         { label: "Tableau de bord", href: "/intervenant", icon: LayoutDashboard },
         { label: "Mon planning", href: "/intervenant/planning", icon: Calendar },
+        { label: "Saisie des notes", href: "/intervenant/notes", icon: BookOpen },
         { label: "Supports de cours", href: "/intervenant/supports", icon: FolderOpen },
         { label: "Messagerie", href: "/messagerie", icon: MessageSquare },
         { label: "Paramètres", href: "/parametres", icon: Settings },
@@ -59,44 +62,20 @@ const navConfig: Record<Role, NavItem[]> = {
     ],
 };
 
-type UserProfile = {
+type RoleStyle = {
     label: string;
-    name: string;
-    initials: string;
     icon: React.ElementType;
     color: string;
 };
 
-const roleConfig: Record<Role, UserProfile> = {
-    etudiant: {
-        label: "Étudiant",
-        name: "Lucas Martin",
-        initials: "LM",
-        icon: GraduationCap,
-        color: "bg-blue-500",
-    },
-    intervenant: {
-        label: "Intervenant",
-        name: "Sophie Bernard",
-        initials: "SB",
-        icon: Briefcase,
-        color: "bg-emerald-500",
-    },
-    scolarite: {
-        label: "Administration",
-        name: "Marie Dupont",
-        initials: "MD",
-        icon: Building2,
-        color: "bg-orange-500",
-    },
-    superadmin: {
-        label: "Super Admin",
-        name: "Admin Système",
-        initials: "AS",
-        icon: Shield,
-        color: "bg-red-500",
-    },
+const roleConfig: Record<Role, RoleStyle> = {
+    etudiant: { label: "Étudiant", icon: GraduationCap, color: "bg-blue-500" },
+    intervenant: { label: "Intervenant", icon: Briefcase, color: "bg-emerald-500" },
+    scolarite: { label: "Administration", icon: Building2, color: "bg-orange-500" },
+    superadmin: { label: "Super Admin", icon: Shield, color: "bg-red-500" },
 };
+
+type Me = { firstname: string; lastname: string };
 
 function getRole(pathname: string): Role {
     if (pathname.startsWith("/intervenant")) return "intervenant";
@@ -119,6 +98,18 @@ export function Sidebar() {
     const navItems = navConfig[role];
     const user = roleConfig[role];
     const RoleIcon = user.icon;
+
+    const [me, setMe] = useState<Me | null>(null);
+
+    useEffect(() => {
+        api
+            .get<Me>("/users/me")
+            .then(setMe)
+            .catch(() => {});
+    }, []);
+
+    const initials = me ? `${me.firstname[0]}${me.lastname[0]}`.toUpperCase() : "…";
+    const displayName = me ? `${me.firstname} ${me.lastname}` : "Chargement…";
 
     const handleLogout = async () => {
         try {
@@ -190,10 +181,10 @@ export function Sidebar() {
                             user.color,
                         )}
                     >
-                        {user.initials}
+                        {initials}
                     </div>
                     <div className="flex-1 min-w-0">
-                        <div className="text-white text-xs font-semibold truncate">{user.name}</div>
+                        <div className="text-white text-xs font-semibold truncate">{displayName}</div>
                         <div className="text-white/40 text-xs">{user.label}</div>
                     </div>
                 </div>

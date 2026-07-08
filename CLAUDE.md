@@ -238,9 +238,11 @@ Seulement 4 rôles (pas les 6-7 décrits dans `cahierDesCharges.md` §2, l'admin
 - [x] **`/intervenant/planning`** — mon planning §3.1, reconnecté (`courses/mine` → `courses/:id/sessions`, avec nom de groupe et effectif réels)
   - Non fait : détail session avec présence/absent en un clic (nécessite `/intervenant/notes`-like UI, laissé pour une prochaine itération)
 
-- [ ] **`/intervenant/notes`** — 🆕 **régression à corriger en priorité** (existait dans la maquette, disparue du `Sidebar` Next.js) — saisie des notes §3.2, **pas encore fait**
-  - Contenu : sélecteur de module/cours en haut · tableau des étudiants du groupe avec saisie de note par évaluation (valeur/20, mention calculée automatiquement, commentaire optionnel) · bouton "Geler les notes" une fois la saisie terminée (désactive l'édition) · export CSV
-  - Endpoints : `POST/PATCH /grades`, `POST /grade-assessments`
+- [x] **`/intervenant/notes`** — régression corrigée, reconnectée
+  - Sélecteur cours (`courses/mine`) → évaluation (`courses/:id/assessments`) → roster du groupe (`groups/:id/students`), notes résolues via `grade-assessments/assessment/:id` + `grades/:id`
+  - Saisie inline (création `POST /grades` + `POST /grade-assessments`, ou `PATCH /grades/:id` si déjà notée), mention calculée, export CSV
+  - Lien de navigation ajouté dans `Sidebar.tsx` (existait pour la page, mais l'entrée de menu manquait)
+  - Pas de champ "commentaire" (n'existe pas sur `Grade`) ni de bouton "Geler" : `POST /grades/:id/lock` est réservé à `ADMIN`/`SUPER_ADMIN` côté backend, un intervenant ne peut pas geler lui-même (le gel se fait depuis `/scolarite/notes`)
 
 - [x] **`/intervenant/supports`** — reconnecté
   - Liste réelle (`file-courses/course/:id` par cours, taille/date via `files/:id`), suppression fonctionnelle
@@ -342,7 +344,7 @@ Zone la moins couverte aujourd'hui. Fusionne les responsabilités "Scolarité / 
 
 1. ~~Client API + garde de route (base commune)~~ ✅ fait — `lib/api.ts`, `lib/auth.ts`, `middleware.ts`, `app/api/auth/{login,login/2fa,logout}`
 2. ~~Reconnecter les pages `[~]` existantes~~ ✅ fait — les 13 pages (dashboards ×4, planning ×2, notes ×2, absences, documents, supports, messagerie, paramètres) sont branchées sur le vrai backend. `/superadmin/gestion` inclut déjà l'attribution de rôle (initialement prévue à l'étape 6)
-3. `/intervenant/notes` (régression à corriger, fonctionnalité cœur du métier) — **toujours à faire**
+3. ~~`/intervenant/notes` (régression à corriger, fonctionnalité cœur du métier)~~ ✅ fait — au passage, `Sidebar.tsx` affichait un nom/rôle **en dur** ("Lucas Martin", "Sophie Bernard"...) au lieu de l'utilisateur réellement connecté (`GET /users/me`) : corrigé en même temps, avec l'entrée de menu manquante
 4. Zone Administration (`/scolarite/*`) dans l'ordre : année académique → campus → formations/modules → classes/groupes → cours (affectation intervenant) → planning/sessions → examens → étudiants → absences/documents → entreprises
 5. `/etudiant/cours` + `/etudiant/evaluations` + `/intervenant/evaluations` (boucle supports/rendus complète)
 6. `/superadmin/securite` (audit-log détaillé, filtres)
