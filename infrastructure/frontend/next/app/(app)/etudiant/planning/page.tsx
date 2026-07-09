@@ -1,177 +1,132 @@
 "use client";
 
-import { useState } from "react";
-import { ChevronLeft, ChevronRight, MapPin, Monitor, Building2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ChevronLeft, ChevronRight, MapPin, Monitor } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { api, ApiError } from "@/lib/api";
 
 const DAYS = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi"];
 const HOURS = ["08:00", "09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00"];
+const GRID_START = 8;
+const ROW_HEIGHT = 56;
 
-type CourseType = "presentiel" | "distanciel" | "entreprise";
+type Mode = "ON_SITE" | "REMOTE";
 
-type Course = {
-    day: number;
-    startHour: number;
-    duration: number;
-    title: string;
-    teacher: string;
+type CalendarSession = {
+    id: string;
+    moduleName: string;
     room: string;
-    type: CourseType;
+    mode: Mode;
+    startTime: Date;
+    endTime: Date;
 };
 
-const weekCourses: Course[] = [
-    {
-        day: 0,
-        startHour: 9,
-        duration: 2,
-        title: "Architecture logicielle",
-        teacher: "M. Dupont",
-        room: "Salle 201",
-        type: "presentiel",
-    },
-    {
-        day: 0,
-        startHour: 11,
-        duration: 2,
-        title: "Bases de données avancées",
-        teacher: "Mme. Martin",
-        room: "Distanciel",
-        type: "distanciel",
-    },
-    {
-        day: 0,
-        startHour: 14,
-        duration: 2,
-        title: "DevOps & CI/CD",
-        teacher: "M. Bernard",
-        room: "Salle 105",
-        type: "presentiel",
-    },
-    {
-        day: 1,
-        startHour: 8,
-        duration: 4,
-        title: "Journée entreprise",
-        teacher: "—",
-        room: "Entreprise",
-        type: "entreprise",
-    },
-    {
-        day: 1,
-        startHour: 14,
-        duration: 2,
-        title: "React avancé",
-        teacher: "Mme. Leclerc",
-        room: "Salle 301",
-        type: "presentiel",
-    },
-    {
-        day: 2,
-        startHour: 9,
-        duration: 3,
-        title: "Sécurité applicative",
-        teacher: "M. Roux",
-        room: "Distanciel",
-        type: "distanciel",
-    },
-    {
-        day: 2,
-        startHour: 14,
-        duration: 2,
-        title: "Gestion de projet",
-        teacher: "M. Petit",
-        room: "Salle 202",
-        type: "presentiel",
-    },
-    {
-        day: 3,
-        startHour: 8,
-        duration: 10,
-        title: "Journée entreprise",
-        teacher: "—",
-        room: "Entreprise",
-        type: "entreprise",
-    },
-    {
-        day: 4,
-        startHour: 9,
-        duration: 2,
-        title: "Cloud & Kubernetes",
-        teacher: "M. Bernard",
-        room: "Salle 105",
-        type: "presentiel",
-    },
-    {
-        day: 4,
-        startHour: 11,
-        duration: 2,
-        title: "UX Design",
-        teacher: "Mme. Simon",
-        room: "Distanciel",
-        type: "distanciel",
-    },
-    {
-        day: 4,
-        startHour: 14,
-        duration: 2,
-        title: "TP – Microservices",
-        teacher: "M. Dupont",
-        room: "Salle TP 3",
-        type: "presentiel",
-    },
-];
-
-const typeConfig = {
-    presentiel: {
-        label: "Présentiel",
-        bg: "bg-blue-100 border-blue-300",
-        text: "text-blue-800",
-        icon: MapPin,
-        filter: "bg-blue-500",
-    },
-    distanciel: {
-        label: "Distanciel",
-        bg: "bg-purple-100 border-purple-300",
-        text: "text-purple-800",
-        icon: Monitor,
-        filter: "bg-purple-500",
-    },
-    entreprise: {
-        label: "Entreprise",
-        bg: "bg-orange-100 border-orange-300",
-        text: "text-orange-800",
-        icon: Building2,
-        filter: "bg-orange-500",
-    },
+// Le backend ne modélise que deux modes de session (ON_SITE / REMOTE) — pas de mode "entreprise"
+// dédié : une journée en entreprise se traduit simplement par l'absence de session planifiée.
+const typeConfig: Record<Mode, { label: string; bg: string; text: string; icon: typeof MapPin; filter: string }> = {
+    ON_SITE: { label: "Présentiel", bg: "bg-blue-100 border-blue-300", text: "text-blue-800", icon: MapPin, filter: "bg-blue-500" },
+    REMOTE: { label: "Distanciel", bg: "bg-purple-100 border-purple-300", text: "text-purple-800", icon: Monitor, filter: "bg-purple-500" },
 };
 
-function getWeekLabel(offset: number): string {
+function mondayOf(offset: number): Date {
     const now = new Date();
-    const monday = new Date(now);
     const day = now.getDay();
     const diff = day === 0 ? -6 : 1 - day;
+    const monday = new Date(now);
+    monday.setHours(0, 0, 0, 0);
     monday.setDate(now.getDate() + diff + offset * 7);
+    return monday;
+}
+
+function getWeekLabel(offset: number): string {
+    const monday = mondayOf(offset);
     const friday = new Date(monday);
     friday.setDate(monday.getDate() + 4);
     const fmt = (d: Date) => d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
     return `${fmt(monday)} – ${fmt(friday)}`;
 }
 
+async function loadStudentSessions(): Promise<CalendarSession[]> {
+    const student = await api.get<{ id: string }>("/students/me");
+    const studentGroups = await api.get<{ groupId: string }[]>(`/student-groups/student/${student.id}`);
+
+    const moduleCache = new Map<string, string>();
+    const classroomCache = new Map<string, string>();
+    const sessions: CalendarSession[] = [];
+
+    for (const sg of studentGroups) {
+        const courses = await api.get<{ id: string; moduleId: string }[]>(`/groups/${sg.groupId}/courses`);
+
+        for (const course of courses) {
+            if (!moduleCache.has(course.moduleId)) {
+                const moduleData = await api.get<{ name: string }>(`/modules/${course.moduleId}`);
+                moduleCache.set(course.moduleId, moduleData.name);
+            }
+            const moduleName = moduleCache.get(course.moduleId)!;
+
+            const courseSessions = await api.get<
+                { id: string; startTime: string; endTime: string; mode: Mode; classroomId: string | null }[]
+            >(`/courses/${course.id}/sessions`);
+
+            for (const session of courseSessions) {
+                let room = "Distanciel";
+                if (session.mode === "ON_SITE" && session.classroomId) {
+                    if (!classroomCache.has(session.classroomId)) {
+                        const classroom = await api.get<{ name: string }>(`/classrooms/${session.classroomId}`);
+                        classroomCache.set(session.classroomId, classroom.name);
+                    }
+                    room = classroomCache.get(session.classroomId)!;
+                }
+                sessions.push({
+                    id: session.id,
+                    moduleName,
+                    room,
+                    mode: session.mode,
+                    startTime: new Date(session.startTime),
+                    endTime: new Date(session.endTime),
+                });
+            }
+        }
+    }
+
+    return sessions;
+}
+
 export default function PlanningEtudiant() {
     const [weekOffset, setWeekOffset] = useState(0);
-    const [filters, setFilters] = useState<Record<CourseType, boolean>>({
-        presentiel: true,
-        distanciel: true,
-        entreprise: true,
-    });
+    const [filters, setFilters] = useState<Record<Mode, boolean>>({ ON_SITE: true, REMOTE: true });
+    const [sessions, setSessions] = useState<CalendarSession[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState("");
 
-    const toggleFilter = (type: CourseType) => setFilters((f) => ({ ...f, [type]: !f[type] }));
+    useEffect(() => {
+        const refresh = async () => {
+            setLoading(true);
+            setError("");
+            try {
+                setSessions(await loadStudentSessions());
+            } catch (e) {
+                setError(e instanceof ApiError ? e.message : "Impossible de charger le planning.");
+            } finally {
+                setLoading(false);
+            }
+        };
+        void refresh();
+    }, []);
 
-    const visibleCourses = weekCourses.filter((c) => filters[c.type]);
+    const toggleFilter = (mode: Mode) => setFilters((f) => ({ ...f, [mode]: !f[mode] }));
 
-    const GRID_START = 8;
+    const monday = useMemo(() => mondayOf(weekOffset), [weekOffset]);
+
+    const visibleSessions = useMemo(() => {
+        const friday = new Date(monday);
+        friday.setDate(monday.getDate() + 5);
+        return sessions
+            .filter((s) => filters[s.mode] && s.startTime >= monday && s.startTime < friday)
+            .map((s) => ({ ...s, dayIndex: Math.floor((s.startTime.getTime() - monday.getTime()) / 86400000) }));
+    }, [sessions, filters, monday]);
+
     const GRID_ROWS = HOURS.length;
-    const ROW_HEIGHT = 56;
 
     return (
         <div className="space-y-5 max-w-7xl">
@@ -182,7 +137,6 @@ export default function PlanningEtudiant() {
                     <p className="text-sm text-gray-500 mt-0.5">{getWeekLabel(weekOffset)}</p>
                 </div>
 
-                {/* Week navigation */}
                 <div className="flex items-center gap-2">
                     <button
                         onClick={() => setWeekOffset((w) => w - 1)}
@@ -194,7 +148,7 @@ export default function PlanningEtudiant() {
                         onClick={() => setWeekOffset(0)}
                         className="px-3 h-8 text-xs font-medium rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
                     >
-                        Aujourd'hui
+                        Aujourd&apos;hui
                     </button>
                     <button
                         onClick={() => setWeekOffset((w) => w + 1)}
@@ -205,16 +159,18 @@ export default function PlanningEtudiant() {
                 </div>
             </div>
 
+            {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl p-4">{error}</div>}
+
             {/* Filters */}
             <div className="flex items-center gap-2">
                 <span className="text-xs text-gray-500 font-medium">Afficher :</span>
-                {(Object.entries(typeConfig) as [CourseType, typeof typeConfig.presentiel][]).map(([type, cfg]) => (
+                {(Object.entries(typeConfig) as [Mode, (typeof typeConfig)["ON_SITE"]][]).map(([mode, cfg]) => (
                     <button
-                        key={type}
-                        onClick={() => toggleFilter(type)}
+                        key={mode}
+                        onClick={() => toggleFilter(mode)}
                         className={cn(
                             "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all",
-                            filters[type]
+                            filters[mode]
                                 ? cn("text-white border-transparent", cfg.filter)
                                 : "bg-white border-gray-200 text-gray-500 hover:border-gray-300",
                         )}
@@ -226,7 +182,6 @@ export default function PlanningEtudiant() {
 
             {/* Calendar grid */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                {/* Day headers */}
                 <div className="grid border-b border-gray-100" style={{ gridTemplateColumns: "56px repeat(5, 1fr)" }}>
                     <div className="border-r border-gray-100" />
                     {DAYS.map((day) => (
@@ -236,15 +191,10 @@ export default function PlanningEtudiant() {
                     ))}
                 </div>
 
-                {/* Time grid */}
                 <div
                     className="relative grid"
-                    style={{
-                        gridTemplateColumns: "56px repeat(5, 1fr)",
-                        height: `${GRID_ROWS * ROW_HEIGHT}px`,
-                    }}
+                    style={{ gridTemplateColumns: "56px repeat(5, 1fr)", height: `${GRID_ROWS * ROW_HEIGHT}px` }}
                 >
-                    {/* Time labels column */}
                     <div className="border-r border-gray-100">
                         {HOURS.map((h) => (
                             <div
@@ -257,53 +207,43 @@ export default function PlanningEtudiant() {
                         ))}
                     </div>
 
-                    {/* Day columns with background grid */}
                     {DAYS.map((_, dayIndex) => (
                         <div key={dayIndex} className="relative border-r border-gray-100 last:border-r-0">
                             {HOURS.map((_, hi) => (
-                                <div
-                                    key={hi}
-                                    className="border-b border-gray-50"
-                                    style={{ height: `${ROW_HEIGHT}px` }}
-                                />
+                                <div key={hi} className="border-b border-gray-50" style={{ height: `${ROW_HEIGHT}px` }} />
                             ))}
-                            {/* Course blocks */}
-                            {visibleCourses
-                                .filter((c) => c.day === dayIndex)
-                                .map((course, ci) => {
-                                    const cfg = typeConfig[course.type];
+                            {visibleSessions
+                                .filter((s) => s.dayIndex === dayIndex)
+                                .map((session) => {
+                                    const cfg = typeConfig[session.mode];
                                     const Icon = cfg.icon;
-                                    const top = (course.startHour - GRID_START) * ROW_HEIGHT;
-                                    const height = course.duration * ROW_HEIGHT - 4;
+                                    const startHour = session.startTime.getHours() + session.startTime.getMinutes() / 60;
+                                    const durationHours =
+                                        (session.endTime.getTime() - session.startTime.getTime()) / 3600000;
+                                    const top = (startHour - GRID_START) * ROW_HEIGHT;
+                                    const height = durationHours * ROW_HEIGHT - 4;
                                     return (
                                         <div
-                                            key={ci}
+                                            key={session.id}
                                             className={cn(
                                                 "absolute left-1 right-1 rounded-lg border px-2 py-1.5 overflow-hidden cursor-pointer hover:shadow-md transition-shadow",
                                                 cfg.bg,
                                             )}
                                             style={{ top: top + 2, height }}
                                         >
-                                            <div
-                                                className={cn("text-xs font-semibold leading-tight truncate", cfg.text)}
-                                            >
-                                                {course.title}
+                                            <div className={cn("text-xs font-semibold leading-tight truncate", cfg.text)}>
+                                                {session.moduleName}
                                             </div>
-                                            {height > 60 && (
-                                                <>
-                                                    <div className={cn("text-xs mt-0.5 truncate opacity-70", cfg.text)}>
-                                                        {course.teacher}
-                                                    </div>
-                                                    <div
-                                                        className={cn(
-                                                            "flex items-center gap-1 text-xs mt-0.5 opacity-60",
-                                                            cfg.text,
-                                                        )}
-                                                    >
-                                                        <Icon size={10} />
-                                                        {course.room}
-                                                    </div>
-                                                </>
+                                            {height > 40 && (
+                                                <div
+                                                    className={cn(
+                                                        "flex items-center gap-1 text-xs mt-0.5 opacity-60",
+                                                        cfg.text,
+                                                    )}
+                                                >
+                                                    <Icon size={10} />
+                                                    {session.room}
+                                                </div>
                                             )}
                                         </div>
                                     );
@@ -313,11 +253,16 @@ export default function PlanningEtudiant() {
                 </div>
             </div>
 
+            {loading && <p className="text-sm text-gray-400">Chargement…</p>}
+            {!loading && !error && visibleSessions.length === 0 && (
+                <p className="text-sm text-gray-400">Aucune session cette semaine.</p>
+            )}
+
             {/* Legend */}
             <div className="flex items-center gap-4 text-xs text-gray-500">
                 <span className="font-medium">Légende :</span>
-                {(Object.entries(typeConfig) as [CourseType, typeof typeConfig.presentiel][]).map(([type, cfg]) => (
-                    <div key={type} className="flex items-center gap-1.5">
+                {(Object.entries(typeConfig) as [Mode, (typeof typeConfig)["ON_SITE"]][]).map(([mode, cfg]) => (
+                    <div key={mode} className="flex items-center gap-1.5">
                         <div className={cn("w-3 h-3 rounded-sm border", cfg.bg)} />
                         <span>{cfg.label}</span>
                     </div>

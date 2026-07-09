@@ -1,94 +1,133 @@
 "use client";
 
-import { useState } from "react";
-import { Search, Plus, UserCheck, UserX, Filter, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Search, Filter, X, Lock, ShieldCheck, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { api, ApiError } from "@/lib/api";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { useToast } from "@/components/ui/toast";
 
-const users = [
-    {
-        id: 1,
-        name: "Lucas Martin",
-        email: "l.martin@myges.fr",
-        role: "etudiant",
-        status: "active",
-        lastLogin: "Il y a 10 min",
-    },
-    {
-        id: 2,
-        name: "Sophie Bernard",
-        email: "s.bernard@myges.fr",
-        role: "intervenant",
-        status: "active",
-        lastLogin: "Il y a 2h",
-    },
-    { id: 3, name: "Marie Dupont", email: "m.dupont@myges.fr", role: "scolarite", status: "active", lastLogin: "Hier" },
-    {
-        id: 4,
-        name: "Paul Girard",
-        email: "p.girard@myges.fr",
-        role: "etudiant",
-        status: "suspended",
-        lastLogin: "Il y a 5j",
-    },
-    {
-        id: 5,
-        name: "Jean Lefèvre",
-        email: "j.lefevre@myges.fr",
-        role: "scolarite",
-        status: "active",
-        lastLogin: "Il y a 3h",
-    },
-    {
-        id: 6,
-        name: "Emma Durand",
-        email: "e.durand@myges.fr",
-        role: "etudiant",
-        status: "active",
-        lastLogin: "Il y a 30 min",
-    },
-    {
-        id: 7,
-        name: "Thomas Leclerc",
-        email: "t.leclerc@myges.fr",
-        role: "etudiant",
-        status: "active",
-        lastLogin: "Aujourd'hui",
-    },
-];
-
-const roleConfig: Record<string, { label: string; className: string }> = {
-    etudiant: { label: "Étudiant", className: "bg-blue-100 text-blue-700" },
-    intervenant: { label: "Intervenant", className: "bg-emerald-100 text-emerald-700" },
-    scolarite: { label: "Administration", className: "bg-orange-100 text-orange-700" },
-    superadmin: { label: "Super Admin", className: "bg-red-100 text-red-700" },
+type SecurityUser = {
+    id: string;
+    firstname: string;
+    lastname: string;
+    email: string;
+    lockedUntil: string | null;
+    passwordExpired: boolean;
+    twoFactorEnabled: boolean;
 };
 
-export default function GestionUtilisateurs() {
-    const [search, setSearch] = useState("");
-    const [roleFilter, setRoleFilter] = useState("all");
-    const [showCreate, setShowCreate] = useState(false);
+type ResolvedRole = "STUDENT" | "INSTRUCTOR" | "ADMIN" | "SUPER_ADMIN" | "PENDING";
 
-    const filtered = users.filter((u) => {
-        const matchSearch =
-            u.name.toLowerCase().includes(search.toLowerCase()) || u.email.toLowerCase().includes(search.toLowerCase());
-        const matchRole = roleFilter === "all" || u.role === roleFilter;
-        return matchSearch && matchRole;
+type UserRow = SecurityUser & { role: ResolvedRole; adminId: string | null };
+
+type Program = { id: string; name: string; code: string };
+
+const roleConfig: Record<ResolvedRole, { label: string; className: string }> = {
+    STUDENT: { label: "Étudiant", className: "bg-blue-100 text-blue-700" },
+    INSTRUCTOR: { label: "Intervenant", className: "bg-emerald-100 text-emerald-700" },
+    ADMIN: { label: "Administration", className: "bg-orange-100 text-orange-700" },
+    SUPER_ADMIN: { label: "Super Admin", className: "bg-red-100 text-red-700" },
+    PENDING: { label: "En attente de rôle", className: "bg-gray-100 text-gray-600" },
+};
+
+async function loadUsers(): Promise<UserRow[]> {
+    const [{ users: securityUsers }, students, instructors, admins] = await Promise.all([
+        api.get<{ users: SecurityUser[] }>("/admin/security/users"),
+        api.get<{ userId: string }[]>("/students"),
+        api.get<{ userId: string }[]>("/instructors"),
+        api.get<{ id: string; userId: string; role: "ADMIN" | "SUPER_ADMIN" }[]>("/admins"),
+    ]);
+
+    const studentUserIds = new Set(students.map((s) => s.userId));
+    const instructorUserIds = new Set(instructors.map((i) => i.userId));
+    const adminByUserId = new Map(admins.map((a) => [a.userId, a]));
+
+    return securityUsers.map((u) => {
+        const admin = adminByUserId.get(u.id);
+        if (admin) return { ...u, role: admin.role, adminId: admin.id };
+        if (instructorUserIds.has(u.id)) return { ...u, role: "INSTRUCTOR" as const, adminId: null };
+        if (studentUserIds.has(u.id)) return { ...u, role: "STUDENT" as const, adminId: null };
+        return { ...u, role: "PENDING" as const, adminId: null };
     });
+}
+
+export default function GestionUtilisateurs() {
+    const [users, setUsers] = useState<UserRow[]>([]);
+    const [search, setSearch] = useState("");
+    const [roleFilter, setRoleFilter] = useState<"all" | ResolvedRole>("all");
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState("");
+    const [assigningUser, setAssigningUser] = useState<UserRow | null>(null);
+    const [removeTarget, setRemoveTarget] = useState<UserRow | null>(null);
+    const [removing, setRemoving] = useState(false);
+    const toast = useToast();
+
+    const refresh = async () => {
+        setLoading(true);
+        setError("");
+        try {
+            setUsers(await loadUsers());
+        } catch (e) {
+            setError(e instanceof ApiError ? e.message : "Impossible de charger les comptes.");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        void refresh();
+    }, []);
+
+    const filtered = useMemo(
+        () =>
+            users.filter((u) => {
+                const matchSearch =
+                    `${u.firstname} ${u.lastname}`.toLowerCase().includes(search.toLowerCase()) ||
+                    u.email.toLowerCase().includes(search.toLowerCase());
+                const matchRole = roleFilter === "all" || u.role === roleFilter;
+                return matchSearch && matchRole;
+            }),
+        [users, search, roleFilter],
+    );
+
+    const handleAdminRoleChange = async (adminId: string, role: "ADMIN" | "SUPER_ADMIN") => {
+        try {
+            await api.patch(`/admins/${adminId}`, { role });
+            toast.success("Niveau d'administration modifié.");
+            void refresh();
+        } catch (e) {
+            setError(e instanceof ApiError ? e.message : "Modification impossible.");
+        }
+    };
+
+    const handleRemoveAdmin = async () => {
+        if (!removeTarget?.adminId) return;
+        setRemoving(true);
+        try {
+            await api.delete(`/admins/${removeTarget.adminId}`);
+            toast.success("Rôle d'administration retiré.");
+            setRemoveTarget(null);
+            await refresh();
+        } catch (e) {
+            setError(e instanceof ApiError ? e.message : "Suppression impossible.");
+        } finally {
+            setRemoving(false);
+        }
+    };
 
     return (
         <div className="space-y-6 max-w-5xl">
-            {/* Stats */}
-            <div className="grid grid-cols-4 gap-4">
+            {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl p-4">{error}</div>}
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {[
                     { label: "Total", value: users.length },
-                    { label: "Étudiants", value: users.filter((u) => u.role === "etudiant").length },
-                    { label: "Intervenants", value: users.filter((u) => u.role === "intervenant").length },
-                    { label: "Suspendus", value: users.filter((u) => u.status === "suspended").length },
+                    { label: "En attente de rôle", value: users.filter((u) => u.role === "PENDING").length },
+                    { label: "Comptes verrouillés", value: users.filter((u) => u.lockedUntil && new Date(u.lockedUntil) > new Date()).length },
+                    { label: "Mots de passe expirés", value: users.filter((u) => u.passwordExpired).length },
                 ].map((s) => (
-                    <div
-                        key={s.label}
-                        className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 text-center"
-                    >
+                    <div key={s.label} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 text-center">
                         <div className="text-2xl font-black text-gray-900">{s.value}</div>
                         <div className="text-xs text-gray-500 mt-0.5">{s.label}</div>
                     </div>
@@ -111,162 +150,280 @@ export default function GestionUtilisateurs() {
                         <Filter size={14} className="text-gray-400" />
                         <select
                             value={roleFilter}
-                            onChange={(e) => setRoleFilter(e.target.value)}
+                            onChange={(e) => setRoleFilter(e.target.value as "all" | ResolvedRole)}
                             className="px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none bg-white text-gray-600"
                         >
                             <option value="all">Tous les rôles</option>
-                            <option value="etudiant">Étudiants</option>
-                            <option value="intervenant">Intervenants</option>
-                            <option value="scolarite">Administration</option>
-                            <option value="superadmin">Super Admin</option>
+                            <option value="PENDING">En attente de rôle</option>
+                            <option value="STUDENT">Étudiants</option>
+                            <option value="INSTRUCTOR">Intervenants</option>
+                            <option value="ADMIN">Administration</option>
+                            <option value="SUPER_ADMIN">Super Admin</option>
                         </select>
                     </div>
-                    <button
-                        onClick={() => setShowCreate(true)}
-                        className="flex items-center gap-1.5 px-3 py-2 bg-[#001944] text-white text-sm font-semibold rounded-lg hover:bg-[#002C6E] transition-colors"
-                    >
-                        <Plus size={14} /> Créer un compte
-                    </button>
                 </div>
 
-                <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                        <thead>
-                            <tr className="border-b border-gray-50">
-                                {["Utilisateur", "Email", "Rôle", "Dernière connexion", "Statut", "Actions"].map(
-                                    (h) => (
+                {loading && <p className="p-5 text-sm text-gray-400">Chargement…</p>}
+
+                {!loading && (
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                            <thead>
+                                <tr className="border-b border-gray-50">
+                                    {["Utilisateur", "Email", "Rôle", "Sécurité", "Actions"].map((h) => (
                                         <th key={h} className="text-left font-semibold text-gray-400 text-xs px-5 py-3">
                                             {h}
                                         </th>
-                                    ),
-                                )}
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-50">
-                            {filtered.map((u) => {
-                                const role = roleConfig[u.role];
-                                return (
-                                    <tr key={u.id} className="hover:bg-gray-50 transition-colors">
-                                        <td className="px-5 py-3">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-8 h-8 rounded-full bg-[#001944] flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-                                                    {u.name
-                                                        .split(" ")
-                                                        .map((n) => n[0])
-                                                        .join("")}
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-50">
+                                {filtered.map((u) => {
+                                    const role = roleConfig[u.role];
+                                    const isLocked = u.lockedUntil && new Date(u.lockedUntil) > new Date();
+                                    return (
+                                        <tr key={u.id} className="hover:bg-gray-50 transition-colors">
+                                            <td className="px-5 py-3">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-8 h-8 rounded-full bg-[#001944] flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+                                                        {u.firstname[0]}
+                                                        {u.lastname[0]}
+                                                    </div>
+                                                    <span className="font-semibold text-gray-900">
+                                                        {u.firstname} {u.lastname}
+                                                    </span>
                                                 </div>
-                                                <span className="font-semibold text-gray-900">{u.name}</span>
-                                            </div>
-                                        </td>
-                                        <td className="px-5 py-3 text-gray-500 text-xs">{u.email}</td>
-                                        <td className="px-5 py-3">
-                                            <span
-                                                className={cn(
-                                                    "text-xs font-medium px-2 py-0.5 rounded-full",
-                                                    role.className,
-                                                )}
-                                            >
-                                                {role.label}
-                                            </span>
-                                        </td>
-                                        <td className="px-5 py-3 text-xs text-gray-500">{u.lastLogin}</td>
-                                        <td className="px-5 py-3">
-                                            <span
-                                                className={cn(
-                                                    "text-xs font-medium px-2 py-0.5 rounded-full",
-                                                    u.status === "active"
-                                                        ? "bg-green-100 text-green-700"
-                                                        : "bg-red-100 text-red-700",
-                                                )}
-                                            >
-                                                {u.status === "active" ? "Actif" : "Suspendu"}
-                                            </span>
-                                        </td>
-                                        <td className="px-5 py-3">
-                                            <div className="flex items-center gap-1.5">
-                                                <select className="text-xs border border-gray-200 rounded-lg px-2 py-1 outline-none bg-white text-gray-600">
-                                                    <option value={u.role}>{role.label}</option>
-                                                    <option value="etudiant">Étudiant</option>
-                                                    <option value="intervenant">Intervenant</option>
-                                                    <option value="scolarite">Administration</option>
-                                                </select>
-                                                <button
-                                                    className={cn(
-                                                        "p-1.5 rounded-lg transition-colors",
-                                                        u.status === "active"
-                                                            ? "text-red-400 hover:bg-red-50"
-                                                            : "text-green-500 hover:bg-green-50",
+                                            </td>
+                                            <td className="px-5 py-3 text-gray-500 text-xs">{u.email}</td>
+                                            <td className="px-5 py-3">
+                                                <span className={cn("text-xs font-medium px-2 py-0.5 rounded-full", role.className)}>
+                                                    {role.label}
+                                                </span>
+                                            </td>
+                                            <td className="px-5 py-3">
+                                                <div className="flex items-center gap-1.5 flex-wrap">
+                                                    {isLocked && (
+                                                        <span className="flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-red-100 text-red-700">
+                                                            <Lock size={10} /> Verrouillé
+                                                        </span>
                                                     )}
-                                                >
-                                                    {u.status === "active" ? (
-                                                        <UserX size={13} />
-                                                    ) : (
-                                                        <UserCheck size={13} />
+                                                    {u.passwordExpired && (
+                                                        <span className="flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-orange-100 text-orange-700">
+                                                            <AlertTriangle size={10} /> Mdp expiré
+                                                        </span>
                                                     )}
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
-                </div>
+                                                    {u.twoFactorEnabled && (
+                                                        <span className="flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-700">
+                                                            <ShieldCheck size={10} /> 2FA
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </td>
+                                            <td className="px-5 py-3">
+                                                {u.role === "PENDING" && (
+                                                    <button
+                                                        onClick={() => setAssigningUser(u)}
+                                                        className="px-3 py-1.5 bg-[#001944] text-white text-xs font-semibold rounded-lg hover:bg-[#002C6E]"
+                                                    >
+                                                        Attribuer un rôle
+                                                    </button>
+                                                )}
+                                                {(u.role === "ADMIN" || u.role === "SUPER_ADMIN") && u.adminId && (
+                                                    <div className="flex items-center gap-1.5">
+                                                        <select
+                                                            value={u.role}
+                                                            onChange={(e) =>
+                                                                void handleAdminRoleChange(u.adminId!, e.target.value as "ADMIN" | "SUPER_ADMIN")
+                                                            }
+                                                            className="text-xs border border-gray-200 rounded-lg px-2 py-1 outline-none bg-white text-gray-600"
+                                                        >
+                                                            <option value="ADMIN">Administration</option>
+                                                            <option value="SUPER_ADMIN">Super Admin</option>
+                                                        </select>
+                                                        <button
+                                                            onClick={() => setRemoveTarget(u)}
+                                                            className="px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 rounded-lg border border-red-200"
+                                                        >
+                                                            Retirer
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                        {filtered.length === 0 && <div className="text-center py-12 text-gray-400 text-sm">Aucun utilisateur trouvé</div>}
+                    </div>
+                )}
             </div>
 
-            {showCreate && (
-                <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
-                        <div className="flex items-center justify-between p-6 border-b border-gray-100">
-                            <h3 className="font-bold text-gray-900">Créer un compte</h3>
-                            <button onClick={() => setShowCreate(false)} className="text-gray-400 hover:text-gray-600">
-                                <X size={18} />
-                            </button>
-                        </div>
-                        <div className="p-6 space-y-4">
-                            <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                    <label className="text-xs font-medium text-gray-700 block mb-1">Prénom</label>
-                                    <input className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500/20" />
-                                </div>
-                                <div>
-                                    <label className="text-xs font-medium text-gray-700 block mb-1">Nom</label>
-                                    <input className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500/20" />
-                                </div>
-                            </div>
-                            <div>
-                                <label className="text-xs font-medium text-gray-700 block mb-1">Email</label>
-                                <input
-                                    type="email"
-                                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500/20"
-                                />
-                            </div>
-                            <div>
-                                <label className="text-xs font-medium text-gray-700 block mb-1">Rôle</label>
-                                <select className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none bg-white">
-                                    <option>Étudiant</option>
-                                    <option>Intervenant</option>
-                                    <option>Administration</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-3 px-6 pb-6">
-                            <button
-                                onClick={() => setShowCreate(false)}
-                                className="flex-1 py-2.5 border border-gray-200 text-gray-700 rounded-xl text-sm font-medium hover:bg-gray-50"
-                            >
-                                Annuler
-                            </button>
-                            <button
-                                onClick={() => setShowCreate(false)}
-                                className="flex-1 py-2.5 bg-[#001944] text-white rounded-xl text-sm font-semibold hover:bg-[#002C6E]"
-                            >
-                                Créer
-                            </button>
-                        </div>
-                    </div>
-                </div>
+            {assigningUser && (
+                <AssignRoleModal
+                    user={assigningUser}
+                    onClose={() => setAssigningUser(null)}
+                    onAssigned={() => {
+                        setAssigningUser(null);
+                        void refresh();
+                    }}
+                />
             )}
+
+            <ConfirmDialog
+                open={removeTarget !== null}
+                title="Retirer le rôle d'administration ?"
+                description={`${removeTarget?.firstname ?? ""} ${removeTarget?.lastname ?? ""} perdra ses droits d'administration (le compte utilisateur n'est pas supprimé).`}
+                confirmLabel="Retirer"
+                pendingLabel="Retrait…"
+                loading={removing}
+                onConfirm={() => void handleRemoveAdmin()}
+                onCancel={() => setRemoveTarget(null)}
+            />
+        </div>
+    );
+}
+
+type RoleChoice = "STUDENT" | "INSTRUCTOR" | "ADMIN";
+
+function AssignRoleModal({
+    user,
+    onClose,
+    onAssigned,
+}: {
+    user: UserRow;
+    onClose: () => void;
+    onAssigned: () => void;
+}) {
+    const [choice, setChoice] = useState<RoleChoice>("STUDENT");
+    const [programs, setPrograms] = useState<Program[]>([]);
+    const [programId, setProgramId] = useState("");
+    const [contractType, setContractType] = useState("PERMANENT");
+    const [adminRole, setAdminRole] = useState<"ADMIN" | "SUPER_ADMIN">("ADMIN");
+    const [submitting, setSubmitting] = useState(false);
+    const [error, setError] = useState("");
+
+    useEffect(() => {
+        api
+            .get<Program[]>("/programs")
+            .then((list) => {
+                setPrograms(list);
+                if (list[0]) setProgramId(list[0].id);
+            })
+            .catch(() => {});
+    }, []);
+
+    const handleSubmit = async () => {
+        setSubmitting(true);
+        setError("");
+        try {
+            if (choice === "STUDENT") {
+                if (!programId) throw new ApiError(400, "Sélectionnez une filière.");
+                await api.post("/students", { userId: user.id, programId });
+            } else if (choice === "INSTRUCTOR") {
+                await api.post("/instructors", { userId: user.id, contractType });
+            } else {
+                await api.post("/admins", { userId: user.id, role: adminRole });
+            }
+            onAssigned();
+        } catch (e) {
+            setError(e instanceof ApiError ? e.message : "Attribution impossible.");
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={onClose}>
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center justify-between p-6 border-b border-gray-100">
+                    <h3 className="font-bold text-gray-900">
+                        Attribuer un rôle — {user.firstname} {user.lastname}
+                    </h3>
+                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+                        <X size={18} />
+                    </button>
+                </div>
+                <div className="p-6 space-y-4">
+                    <div>
+                        <label className="text-xs font-medium text-gray-700 block mb-1">Rôle</label>
+                        <select
+                            value={choice}
+                            onChange={(e) => setChoice(e.target.value as RoleChoice)}
+                            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none bg-white"
+                        >
+                            <option value="STUDENT">Étudiant</option>
+                            <option value="INSTRUCTOR">Intervenant</option>
+                            <option value="ADMIN">Admin / Super Admin</option>
+                        </select>
+                    </div>
+
+                    {choice === "STUDENT" && (
+                        <div>
+                            <label className="text-xs font-medium text-gray-700 block mb-1">Filière</label>
+                            <select
+                                value={programId}
+                                onChange={(e) => setProgramId(e.target.value)}
+                                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none bg-white"
+                            >
+                                {programs.length === 0 && <option value="">Aucune filière disponible</option>}
+                                {programs.map((p) => (
+                                    <option key={p.id} value={p.id}>
+                                        {p.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
+
+                    {choice === "INSTRUCTOR" && (
+                        <div>
+                            <label className="text-xs font-medium text-gray-700 block mb-1">Type de contrat</label>
+                            <select
+                                value={contractType}
+                                onChange={(e) => setContractType(e.target.value)}
+                                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none bg-white"
+                            >
+                                <option value="PERMANENT">Permanent</option>
+                                <option value="FIXED_TERM">CDD</option>
+                                <option value="FREELANCE">Indépendant</option>
+                                <option value="TEMPORARY">Vacataire</option>
+                            </select>
+                        </div>
+                    )}
+
+                    {choice === "ADMIN" && (
+                        <div>
+                            <label className="text-xs font-medium text-gray-700 block mb-1">Niveau</label>
+                            <select
+                                value={adminRole}
+                                onChange={(e) => setAdminRole(e.target.value as "ADMIN" | "SUPER_ADMIN")}
+                                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none bg-white"
+                            >
+                                <option value="ADMIN">Administration</option>
+                                <option value="SUPER_ADMIN">Super Admin</option>
+                            </select>
+                        </div>
+                    )}
+
+                    {error && <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-2">{error}</p>}
+                </div>
+                <div className="flex items-center gap-3 px-6 pb-6">
+                    <button
+                        onClick={onClose}
+                        className="flex-1 py-2.5 border border-gray-200 text-gray-700 rounded-xl text-sm font-medium hover:bg-gray-50"
+                    >
+                        Annuler
+                    </button>
+                    <button
+                        onClick={() => void handleSubmit()}
+                        disabled={submitting}
+                        className="flex-1 py-2.5 bg-[#001944] text-white rounded-xl text-sm font-semibold hover:bg-[#002C6E] disabled:opacity-50"
+                    >
+                        {submitting ? "Attribution…" : "Attribuer"}
+                    </button>
+                </div>
+            </div>
         </div>
     );
 }

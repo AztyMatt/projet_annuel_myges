@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import { Bell, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useCurrentUser } from "@/lib/use-current-user";
 
 type Role = "etudiant" | "intervenant" | "scolarite" | "superadmin";
 
@@ -12,9 +13,13 @@ const pageTitles: Record<string, string> = {
     "/etudiant/notes": "Mes notes",
     "/etudiant/absences": "Mes absences",
     "/etudiant/documents": "Mes documents",
+    "/etudiant/cours": "Supports de cours",
+    "/etudiant/evaluations": "Évaluations",
     "/intervenant": "Tableau de bord",
     "/intervenant/planning": "Mon planning",
+    "/intervenant/notes": "Saisie des notes",
     "/intervenant/supports": "Supports de cours",
+    "/intervenant/evaluations": "Évaluations",
     "/scolarite": "Tableau de bord",
     "/scolarite/etudiants": "Gestion des étudiants",
     "/scolarite/notes": "Notes & jurys",
@@ -25,11 +30,27 @@ const pageTitles: Record<string, string> = {
     "/parametres": "Paramètres",
 };
 
-function getRole(pathname: string): Role {
+function roleFromApi(apiRole: string | undefined): Role {
+    switch (apiRole) {
+        case "INSTRUCTOR":
+            return "intervenant";
+        case "ADMIN":
+            return "scolarite";
+        case "SUPER_ADMIN":
+            return "superadmin";
+        default:
+            return "etudiant";
+    }
+}
+
+// Même logique que Sidebar.tsx : le chemin suffit sur les pages préfixées par rôle, mais
+// /parametres et /messagerie sont partagées — il faut alors le vrai rôle de l'utilisateur connecté.
+function getRole(pathname: string, apiRole: string | undefined): Role {
     if (pathname.startsWith("/intervenant")) return "intervenant";
     if (pathname.startsWith("/scolarite")) return "scolarite";
     if (pathname.startsWith("/superadmin")) return "superadmin";
-    return "etudiant";
+    if (pathname.startsWith("/etudiant")) return "etudiant";
+    return roleFromApi(apiRole);
 }
 
 const roleBadge: Record<Role, { label: string; className: string }> = {
@@ -41,8 +62,9 @@ const roleBadge: Record<Role, { label: string; className: string }> = {
 
 export function TopBar() {
     const pathname = usePathname();
+    const me = useCurrentUser();
     const title = pageTitles[pathname] ?? "MyGES 2.0";
-    const role = getRole(pathname);
+    const role = getRole(pathname, me?.role);
     const badge = roleBadge[role];
 
     return (

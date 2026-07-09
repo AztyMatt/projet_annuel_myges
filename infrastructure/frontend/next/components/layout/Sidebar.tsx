@@ -3,9 +3,11 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { useCurrentUser } from "@/lib/use-current-user";
 import {
     LayoutDashboard,
     Calendar,
+    CalendarDays,
     BookOpen,
     AlertCircle,
     FileText,
@@ -19,6 +21,11 @@ import {
     GraduationCap,
     Briefcase,
     Building2,
+    Library,
+    Boxes,
+    Landmark,
+    UserPlus,
+    ClipboardList,
     ChevronRight,
 } from "lucide-react";
 
@@ -33,20 +40,36 @@ const navConfig: Record<Role, NavItem[]> = {
         { label: "Notes", href: "/etudiant/notes", icon: BookOpen },
         { label: "Absences", href: "/etudiant/absences", icon: AlertCircle },
         { label: "Documents", href: "/etudiant/documents", icon: FileText },
+        { label: "Supports de cours", href: "/etudiant/cours", icon: Library },
+        { label: "Évaluations", href: "/etudiant/evaluations", icon: ClipboardList },
         { label: "Messagerie", href: "/messagerie", icon: MessageSquare },
         { label: "Paramètres", href: "/parametres", icon: Settings },
     ],
     intervenant: [
         { label: "Tableau de bord", href: "/intervenant", icon: LayoutDashboard },
         { label: "Mon planning", href: "/intervenant/planning", icon: Calendar },
+        { label: "Saisie des notes", href: "/intervenant/notes", icon: BookOpen },
         { label: "Supports de cours", href: "/intervenant/supports", icon: FolderOpen },
+        { label: "Évaluations", href: "/intervenant/evaluations", icon: ClipboardList },
         { label: "Messagerie", href: "/messagerie", icon: MessageSquare },
         { label: "Paramètres", href: "/parametres", icon: Settings },
     ],
     scolarite: [
         { label: "Tableau de bord", href: "/scolarite", icon: LayoutDashboard },
         { label: "Étudiants", href: "/scolarite/etudiants", icon: Users },
+        { label: "Absences", href: "/scolarite/absences", icon: AlertCircle },
+        { label: "Documents", href: "/scolarite/documents", icon: FileText },
         { label: "Notes & jurys", href: "/scolarite/notes", icon: BookOpen },
+        { label: "Planning", href: "/scolarite/planning", icon: Calendar },
+        { label: "Examens", href: "/scolarite/examens", icon: ClipboardList },
+        { label: "Formations", href: "/scolarite/formations", icon: Library },
+        { label: "Classes", href: "/scolarite/classes", icon: Boxes },
+        { label: "Cours", href: "/scolarite/cours", icon: FolderOpen },
+        { label: "Intervenants", href: "/scolarite/intervenants", icon: Briefcase },
+        { label: "Entreprises", href: "/scolarite/entreprises", icon: Landmark },
+        { label: "Externes", href: "/scolarite/externes", icon: UserPlus },
+        { label: "Campus", href: "/scolarite/campus", icon: Building2 },
+        { label: "Année académique", href: "/scolarite/annee-academique", icon: CalendarDays },
         { label: "Messagerie", href: "/messagerie", icon: MessageSquare },
         { label: "Paramètres", href: "/parametres", icon: Settings },
     ],
@@ -59,50 +82,42 @@ const navConfig: Record<Role, NavItem[]> = {
     ],
 };
 
-type UserProfile = {
+type RoleStyle = {
     label: string;
-    name: string;
-    initials: string;
     icon: React.ElementType;
     color: string;
 };
 
-const roleConfig: Record<Role, UserProfile> = {
-    etudiant: {
-        label: "Étudiant",
-        name: "Lucas Martin",
-        initials: "LM",
-        icon: GraduationCap,
-        color: "bg-blue-500",
-    },
-    intervenant: {
-        label: "Intervenant",
-        name: "Sophie Bernard",
-        initials: "SB",
-        icon: Briefcase,
-        color: "bg-emerald-500",
-    },
-    scolarite: {
-        label: "Administration",
-        name: "Marie Dupont",
-        initials: "MD",
-        icon: Building2,
-        color: "bg-orange-500",
-    },
-    superadmin: {
-        label: "Super Admin",
-        name: "Admin Système",
-        initials: "AS",
-        icon: Shield,
-        color: "bg-red-500",
-    },
+const roleConfig: Record<Role, RoleStyle> = {
+    etudiant: { label: "Étudiant", icon: GraduationCap, color: "bg-blue-500" },
+    intervenant: { label: "Intervenant", icon: Briefcase, color: "bg-emerald-500" },
+    scolarite: { label: "Administration", icon: Building2, color: "bg-orange-500" },
+    superadmin: { label: "Super Admin", icon: Shield, color: "bg-red-500" },
 };
 
-function getRole(pathname: string): Role {
+function roleFromApi(apiRole: string | undefined): Role {
+    switch (apiRole) {
+        case "INSTRUCTOR":
+            return "intervenant";
+        case "ADMIN":
+            return "scolarite";
+        case "SUPER_ADMIN":
+            return "superadmin";
+        default:
+            return "etudiant";
+    }
+}
+
+// Les pages sous /etudiant, /intervenant, /scolarite, /superadmin sont préfixées par rôle : on peut
+// se fier au chemin (rapide, pas d'attente réseau). Mais /parametres et /messagerie sont partagées
+// par tous les rôles et n'ont pas de préfixe : il faut alors se fier au rôle réel de l'utilisateur
+// connecté (GET /users/me), sinon tout le monde y voit le menu "étudiant" par défaut.
+function getRole(pathname: string, apiRole: string | undefined): Role {
     if (pathname.startsWith("/intervenant")) return "intervenant";
     if (pathname.startsWith("/scolarite")) return "scolarite";
     if (pathname.startsWith("/superadmin")) return "superadmin";
-    return "etudiant";
+    if (pathname.startsWith("/etudiant")) return "etudiant";
+    return roleFromApi(apiRole);
 }
 
 function isNavActive(pathname: string, href: string): boolean {
@@ -115,16 +130,21 @@ function isNavActive(pathname: string, href: string): boolean {
 export function Sidebar() {
     const pathname = usePathname();
     const router = useRouter();
-    const role = getRole(pathname);
+    const me = useCurrentUser();
+    const role = getRole(pathname, me?.role);
     const navItems = navConfig[role];
     const user = roleConfig[role];
     const RoleIcon = user.icon;
 
-    const handleLogout = () => {
-        if (typeof window !== "undefined") {
-            localStorage.removeItem("myges_role");
+    const initials = me ? `${me.firstname[0]}${me.lastname[0]}`.toUpperCase() : "…";
+    const displayName = me ? `${me.firstname} ${me.lastname}` : "Chargement…";
+
+    const handleLogout = async () => {
+        try {
+            await fetch("/api/auth/logout", { method: "POST" });
+        } finally {
+            router.push("/login");
         }
-        router.push("/login");
     };
 
     return (
@@ -189,10 +209,10 @@ export function Sidebar() {
                             user.color,
                         )}
                     >
-                        {user.initials}
+                        {initials}
                     </div>
                     <div className="flex-1 min-w-0">
-                        <div className="text-white text-xs font-semibold truncate">{user.name}</div>
+                        <div className="text-white text-xs font-semibold truncate">{displayName}</div>
                         <div className="text-white/40 text-xs">{user.label}</div>
                     </div>
                 </div>
