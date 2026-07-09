@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { AlertCircle, CheckCircle, XCircle, Clock, Plus, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api, ApiError } from "@/lib/api";
+import { StatusBadge, type StatusTone } from "@/components/ui/status-badge";
 
 type Status = "PENDING" | "VALIDATED" | "REJECTED";
 
@@ -18,10 +19,10 @@ type AbsenceRow = {
 
 type SessionOption = { id: string; moduleName: string; date: Date };
 
-const statusConfig: Record<Status, { label: string; className: string; icon: typeof Clock }> = {
-    PENDING: { label: "En attente", className: "bg-orange-100 text-orange-700", icon: Clock },
-    VALIDATED: { label: "Justifiée", className: "bg-green-100 text-green-700", icon: CheckCircle },
-    REJECTED: { label: "Non justifiée", className: "bg-red-100 text-red-700", icon: XCircle },
+const statusConfig: Record<Status, { label: string; tone: StatusTone; icon: typeof Clock }> = {
+    PENDING: { label: "En attente", tone: "orange", icon: Clock },
+    VALIDATED: { label: "Justifiée", tone: "green", icon: CheckCircle },
+    REJECTED: { label: "Non justifiée", tone: "red", icon: XCircle },
 };
 
 async function loadStudentCourseSessions(): Promise<SessionOption[]> {
@@ -190,14 +191,7 @@ export default function AbsencesEtudiant() {
                                                 )}
                                             </td>
                                             <td className="px-3 py-3">
-                                                <span
-                                                    className={cn(
-                                                        "flex items-center gap-1.5 w-fit px-2 py-0.5 rounded-full text-xs font-medium",
-                                                        s.className,
-                                                    )}
-                                                >
-                                                    <SIcon size={11} /> {s.label}
-                                                </span>
+                                                <StatusBadge tone={s.tone} icon={SIcon}>{s.label}</StatusBadge>
                                             </td>
                                         </tr>
                                     );

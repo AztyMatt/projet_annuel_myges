@@ -2,17 +2,18 @@
 
 import { useEffect, useState } from "react";
 import { CheckCircle, XCircle, Clock, Paperclip } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { api, ApiError } from "@/lib/api";
+import { StatusBadge, type StatusTone } from "@/components/ui/status-badge";
+import { useToast } from "@/components/ui/toast";
 
 type Status = "PENDING" | "VALIDATED" | "REJECTED";
 type Absence = { id: string; studentId: string; sessionId: string; reason: string; status: Status; declaredAt: string };
 type Row = Absence & { sessionDate: Date | null; hasJustification: boolean };
 
-const statusConfig: Record<Status, { label: string; className: string; icon: typeof Clock }> = {
-    PENDING: { label: "En attente", className: "bg-orange-100 text-orange-700", icon: Clock },
-    VALIDATED: { label: "Validée", className: "bg-green-100 text-green-700", icon: CheckCircle },
-    REJECTED: { label: "Rejetée", className: "bg-red-100 text-red-700", icon: XCircle },
+const statusConfig: Record<Status, { label: string; tone: StatusTone; icon: typeof Clock }> = {
+    PENDING: { label: "En attente", tone: "orange", icon: Clock },
+    VALIDATED: { label: "Validée", tone: "green", icon: CheckCircle },
+    REJECTED: { label: "Rejetée", tone: "red", icon: XCircle },
 };
 
 export default function AbsencesScolarite() {
@@ -21,6 +22,7 @@ export default function AbsencesScolarite() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [processingId, setProcessingId] = useState<string | null>(null);
+    const toast = useToast();
 
     const refresh = async () => {
         setLoading(true);
@@ -51,6 +53,7 @@ export default function AbsencesScolarite() {
         try {
             await api.post(`/absences/${id}/${decision}`);
             setRows((prev) => prev.map((r) => (r.id === id ? { ...r, status: decision === "validate" ? "VALIDATED" : "REJECTED" } : r)));
+            toast.success(decision === "validate" ? "Absence validée." : "Absence rejetée.");
         } catch (e) {
             setError(e instanceof ApiError ? e.message : "Action impossible.");
         } finally {
@@ -108,9 +111,7 @@ export default function AbsencesScolarite() {
                                             )}
                                         </td>
                                         <td className="px-5 py-3">
-                                            <span className={cn("flex items-center gap-1 w-fit px-2 py-0.5 rounded-full text-xs font-medium", s.className)}>
-                                                <SIcon size={11} /> {s.label}
-                                            </span>
+                                            <StatusBadge tone={s.tone} icon={SIcon}>{s.label}</StatusBadge>
                                         </td>
                                         <td className="px-5 py-3">
                                             {r.status === "PENDING" && (

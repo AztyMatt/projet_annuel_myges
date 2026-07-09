@@ -2,18 +2,20 @@
 
 import { useEffect, useState } from "react";
 import { CheckCircle, Clock, AlertTriangle, Trash2 } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { api, ApiError } from "@/lib/api";
+import { StatusBadge, type StatusTone } from "@/components/ui/status-badge";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { useToast } from "@/components/ui/toast";
 
 type FileDocumentStatus = "PENDING" | "VALID" | "EXPIRED";
 type FileDocument = { id: string; fileId: string; studentId: string; status: FileDocumentStatus };
 type Row = FileDocument & { fileName: string; uploadedAt: string };
 type ExpiringDoc = { id: string; studentId: string; type: string; expiration: string };
 
-const statusConfig: Record<FileDocumentStatus, { label: string; className: string; icon: typeof Clock }> = {
-    PENDING: { label: "En attente", className: "bg-orange-100 text-orange-700", icon: Clock },
-    VALID: { label: "Valide", className: "bg-green-100 text-green-700", icon: CheckCircle },
-    EXPIRED: { label: "Expiré", className: "bg-red-100 text-red-700", icon: AlertTriangle },
+const statusConfig: Record<FileDocumentStatus, { label: string; tone: StatusTone; icon: typeof Clock }> = {
+    PENDING: { label: "En attente", tone: "orange", icon: Clock },
+    VALID: { label: "Valide", tone: "green", icon: CheckCircle },
+    EXPIRED: { label: "Expiré", tone: "red", icon: AlertTriangle },
 };
 
 export default function DocumentsScolarite() {
@@ -22,6 +24,8 @@ export default function DocumentsScolarite() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [processingId, setProcessingId] = useState<string | null>(null);
+    const [deleteTarget, setDeleteTarget] = useState<Row | null>(null);
+    const toast = useToast();
 
     const refresh = async () => {
         setLoading(true);
@@ -69,6 +73,7 @@ export default function DocumentsScolarite() {
         try {
             await api.post(`/file-documents/${id}/validate`);
             setPending((prev) => prev.filter((r) => r.id !== id));
+            toast.success("Document validé.");
         } catch (e) {
             setError(e instanceof ApiError ? e.message : "Action impossible.");
         } finally {
@@ -76,11 +81,14 @@ export default function DocumentsScolarite() {
         }
     };
 
-    const handleDelete = async (id: string) => {
-        setProcessingId(id);
+    const handleDelete = async () => {
+        if (!deleteTarget) return;
+        setProcessingId(deleteTarget.id);
         try {
-            await api.delete(`/file-documents/${id}`);
-            setPending((prev) => prev.filter((r) => r.id !== id));
+            await api.delete(`/file-documents/${deleteTarget.id}`);
+            setPending((prev) => prev.filter((r) => r.id !== deleteTarget.id));
+            toast.success("Document supprimé.");
+            setDeleteTarget(null);
         } catch (e) {
             setError(e instanceof ApiError ? e.message : "Suppression impossible.");
         } finally {
@@ -122,16 +130,14 @@ export default function DocumentsScolarite() {
                                             <td className="px-5 py-3 text-gray-700">{r.fileName}</td>
                                             <td className="px-5 py-3 text-gray-500">{new Date(r.uploadedAt).toLocaleDateString("fr-FR")}</td>
                                             <td className="px-5 py-3">
-                                                <span className={cn("flex items-center gap-1 w-fit px-2 py-0.5 rounded-full text-xs font-medium", s.className)}>
-                                                    <SIcon size={11} /> {s.label}
-                                                </span>
+                                                <StatusBadge tone={s.tone} icon={SIcon}>{s.label}</StatusBadge>
                                             </td>
                                             <td className="px-5 py-3">
                                                 <div className="flex items-center gap-1.5">
                                                     <button onClick={() => void handleValidate(r.id)} disabled={processingId === r.id} className="px-2.5 py-1 bg-green-600 text-white text-xs rounded-lg hover:bg-green-700 font-medium disabled:opacity-50">
                                                         Valider
                                                     </button>
-                                                    <button onClick={() => void handleDelete(r.id)} disabled={processingId === r.id} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg disabled:opacity-50">
+                                                    <button onClick={() => setDeleteTarget(r)} disabled={processingId === r.id} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg disabled:opacity-50">
                                                         <Trash2 size={13} />
                                                     </button>
                                                 </div>
@@ -163,6 +169,17 @@ export default function DocumentsScolarite() {
                     </div>
                 </>
             )}
+
+            <ConfirmDialog
+                open={deleteTarget !== null}
+                title="Supprimer ce document ?"
+                description={`Le document « ${deleteTarget?.fileName ?? ""} » sera définitivement supprimé.`}
+                confirmLabel="Supprimer"
+                pendingLabel="Suppression…"
+                loading={processingId === deleteTarget?.id}
+                onConfirm={() => void handleDelete()}
+                onCancel={() => setDeleteTarget(null)}
+            />
         </div>
     );
 }

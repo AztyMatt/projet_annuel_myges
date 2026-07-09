@@ -2,8 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, Plus, Trash2, Send, ExternalLink } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { api, ApiError } from "@/lib/api";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { useToast } from "@/components/ui/toast";
+import { StatusBadge } from "@/components/ui/status-badge";
 
 type CourseOption = { id: string; label: string; groupId: string };
 
@@ -91,6 +93,11 @@ export default function EvaluationsIntervenant() {
     const [groupDetails, setGroupDetails] = useState<GroupDetail[]>([]);
     const [detailsLoading, setDetailsLoading] = useState(false);
 
+    const [deleteTarget, setDeleteTarget] = useState<Row | null>(null);
+    const [deleting, setDeleting] = useState(false);
+
+    const toast = useToast();
+
     const refresh = async () => {
         setLoading(true);
         setError("");
@@ -146,6 +153,7 @@ export default function EvaluationsIntervenant() {
             if (editingId) await api.patch(`/assessments/${editingId}`, payload);
             else await api.post("/assessments", payload);
             setShowForm(false);
+            toast.success(editingId ? "Évaluation modifiée." : "Évaluation créée.");
             await refresh();
         } catch (e) {
             setError(e instanceof ApiError ? e.message : "Enregistrement impossible.");
@@ -157,18 +165,25 @@ export default function EvaluationsIntervenant() {
     const handlePublish = async (id: string) => {
         try {
             await api.post(`/assessments/${id}/publish`);
+            toast.success("Évaluation publiée.");
             await refresh();
         } catch (e) {
             setError(e instanceof ApiError ? e.message : "Publication impossible.");
         }
     };
 
-    const handleDelete = async (id: string) => {
+    const handleDelete = async () => {
+        if (!deleteTarget) return;
+        setDeleting(true);
         try {
-            await api.delete(`/assessments/${id}`);
-            setRows((prev) => prev.filter((r) => r.id !== id));
+            await api.delete(`/assessments/${deleteTarget.id}`);
+            setRows((prev) => prev.filter((r) => r.id !== deleteTarget.id));
+            toast.success("Évaluation supprimée.");
+            setDeleteTarget(null);
         } catch (e) {
             setError(e instanceof ApiError ? e.message : "Suppression impossible.");
+        } finally {
+            setDeleting(false);
         }
     };
 
@@ -317,14 +332,9 @@ export default function EvaluationsIntervenant() {
                                     {row.groupsCount} groupe{row.groupsCount > 1 ? "s" : ""} · {row.submissionsCount} rendu
                                     {row.submissionsCount > 1 ? "s" : ""}
                                 </span>
-                                <span
-                                    className={cn(
-                                        "px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0",
-                                        row.isPublished ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600",
-                                    )}
-                                >
+                                <StatusBadge tone={row.isPublished ? "green" : "gray"} className="flex-shrink-0">
                                     {row.isPublished ? "Publiée" : "Brouillon"}
-                                </span>
+                                </StatusBadge>
                                 {!row.isPublished && (
                                     <button
                                         onClick={() => void handlePublish(row.id)}
@@ -340,7 +350,7 @@ export default function EvaluationsIntervenant() {
                                     Modifier
                                 </button>
                                 <button
-                                    onClick={() => void handleDelete(row.id)}
+                                    onClick={() => setDeleteTarget(row)}
                                     className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
                                     title="Supprimer"
                                 >
@@ -361,14 +371,9 @@ export default function EvaluationsIntervenant() {
                                                 <span className="text-gray-500">
                                                     {g.members.map((m) => `Étudiant #${m.studentId.slice(0, 8)}`).join(", ")}
                                                 </span>
-                                                <span
-                                                    className={cn(
-                                                        "ml-auto px-2 py-0.5 rounded-full font-medium",
-                                                        g.submitted ? "bg-green-100 text-green-700" : "bg-orange-100 text-orange-700",
-                                                    )}
-                                                >
+                                                <StatusBadge tone={g.submitted ? "green" : "orange"} className="ml-auto">
                                                     {g.submitted ? "Rendu déposé" : "Aucun rendu"}
-                                                </span>
+                                                </StatusBadge>
                                             </div>
                                         ))}
                                     <a
@@ -382,6 +387,17 @@ export default function EvaluationsIntervenant() {
                         </div>
                     ))}
             </div>
+
+            <ConfirmDialog
+                open={deleteTarget !== null}
+                title="Supprimer cette évaluation ?"
+                description={`« ${deleteTarget?.title ?? ""} » sera définitivement supprimée, ainsi que les groupes formés pour celle-ci.`}
+                confirmLabel="Supprimer"
+                pendingLabel="Suppression…"
+                loading={deleting}
+                onConfirm={() => void handleDelete()}
+                onCancel={() => setDeleteTarget(null)}
+            />
         </div>
     );
 }

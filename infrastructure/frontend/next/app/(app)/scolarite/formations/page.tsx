@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Plus, ChevronDown, ChevronUp, X, Trash2 } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
+import { useToast } from "@/components/ui/toast";
 
 type Program = { id: string; name: string; code: string; periodId: string };
 type Period = { id: string; order: number; startDate: string; endDate: string };
@@ -19,6 +20,7 @@ export default function Formations() {
     const [expanded, setExpanded] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
+    const toast = useToast();
 
     const [showCreateProgram, setShowCreateProgram] = useState(false);
     const [showCreateModule, setShowCreateModule] = useState(false);
@@ -78,6 +80,7 @@ export default function Formations() {
         try {
             await api.delete(`/program-modules/${programModuleId}`);
             setProgramModules((prev) => ({ ...prev, [programId]: prev[programId].filter((pm) => pm.id !== programModuleId) }));
+            toast.success("Module retiré de la filière.");
         } catch (e) {
             setError(e instanceof ApiError ? e.message : "Suppression impossible.");
         }

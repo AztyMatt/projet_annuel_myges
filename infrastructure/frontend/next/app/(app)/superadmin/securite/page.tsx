@@ -2,8 +2,8 @@
 
 import { Fragment, useMemo, useState, useEffect } from "react";
 import { ChevronDown, ChevronRight, ChevronLeft, ChevronRight as ChevronRightIcon } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { api, ApiError } from "@/lib/api";
+import { StatusBadge, type StatusTone } from "@/components/ui/status-badge";
 
 type AuditLogAction = "CREATE" | "UPDATE" | "DELETE" | "VALIDATE" | "REJECT" | "FREEZE" | "LOGIN" | "OTHER";
 
@@ -20,15 +20,15 @@ type AuditLog = {
     createdAt: string;
 };
 
-const actionConfig: Record<AuditLogAction, string> = {
-    CREATE: "bg-green-100 text-green-700",
-    UPDATE: "bg-blue-100 text-blue-700",
-    DELETE: "bg-red-100 text-red-700",
-    VALIDATE: "bg-emerald-100 text-emerald-700",
-    REJECT: "bg-orange-100 text-orange-700",
-    FREEZE: "bg-purple-100 text-purple-700",
-    LOGIN: "bg-gray-100 text-gray-600",
-    OTHER: "bg-gray-100 text-gray-600",
+const actionConfig: Record<AuditLogAction, StatusTone> = {
+    CREATE: "green",
+    UPDATE: "blue",
+    DELETE: "red",
+    VALIDATE: "emerald",
+    REJECT: "orange",
+    FREEZE: "purple",
+    LOGIN: "gray",
+    OTHER: "gray",
 };
 
 const PAGE_SIZE = 20;
@@ -187,9 +187,7 @@ export default function SecuriteSuperAdmin() {
                                             </td>
                                             <td className="px-5 py-3 text-gray-700">Utilisateur #{log.userId.slice(0, 8)}</td>
                                             <td className="px-5 py-3">
-                                                <span className={cn("px-2 py-0.5 rounded-full text-xs font-medium", actionConfig[log.action])}>
-                                                    {log.action}
-                                                </span>
+                                                <StatusBadge tone={actionConfig[log.action]}>{log.action}</StatusBadge>
                                             </td>
                                             <td className="px-5 py-3 text-gray-700">
                                                 {log.entityName} <span className="text-gray-400">#{log.entityId.slice(0, 8)}</span>

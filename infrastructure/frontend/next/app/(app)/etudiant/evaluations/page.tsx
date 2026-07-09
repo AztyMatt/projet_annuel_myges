@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { Clock, CheckCircle, AlertTriangle, Users } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { api, ApiError } from "@/lib/api";
+import { StatusBadge, type StatusTone } from "@/components/ui/status-badge";
 
 type Assessment = {
     id: string;
@@ -54,10 +54,10 @@ async function loadAssessments(studentId: string): Promise<Row[]> {
     return rows.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
 }
 
-function statusOf(row: Row): { label: string; className: string; icon: typeof Clock } {
-    if (row.hasSubmission) return { label: "Rendu", className: "bg-green-100 text-green-700", icon: CheckCircle };
-    if (new Date(row.dueDate) < new Date()) return { label: "En retard", className: "bg-red-100 text-red-700", icon: AlertTriangle };
-    return { label: "À rendre", className: "bg-orange-100 text-orange-700", icon: Clock };
+function statusOf(row: Row): { label: string; tone: StatusTone; icon: typeof Clock } {
+    if (row.hasSubmission) return { label: "Rendu", tone: "green", icon: CheckCircle };
+    if (new Date(row.dueDate) < new Date()) return { label: "En retard", tone: "red", icon: AlertTriangle };
+    return { label: "À rendre", tone: "orange", icon: Clock };
 }
 
 export default function EvaluationsEtudiant() {
@@ -139,9 +139,7 @@ export default function EvaluationsEtudiant() {
                                         </button>
                                     )
                                 )}
-                                <span className={cn("flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0", s.className)}>
-                                    <SIcon size={11} /> {s.label}
-                                </span>
+                                <StatusBadge tone={s.tone} icon={SIcon} className="flex-shrink-0">{s.label}</StatusBadge>
                             </div>
                         );
                     })}

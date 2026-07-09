@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { FileText, CheckCircle, AlertCircle, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api, ApiError } from "@/lib/api";
+import { StatusBadge, type StatusTone } from "@/components/ui/status-badge";
 
 type FileDocumentStatus = "PENDING" | "VALID" | "EXPIRED";
 
@@ -18,10 +19,10 @@ type ContractDoc = {
 };
 type PersonalDoc = { id: string; fileName: string; sizeBytes: number; status: FileDocumentStatus };
 
-const statusConfig: Record<FileDocumentStatus, { label: string; icon: typeof CheckCircle; className: string; bg: string }> = {
-    VALID: { label: "Valide", icon: CheckCircle, className: "text-green-600", bg: "bg-green-50" },
-    PENDING: { label: "En attente de validation", icon: Clock, className: "text-orange-600", bg: "bg-orange-50" },
-    EXPIRED: { label: "Expiré", icon: AlertCircle, className: "text-red-600", bg: "bg-red-50" },
+const statusConfig: Record<FileDocumentStatus, { label: string; icon: typeof CheckCircle; className: string; bg: string; tone: StatusTone }> = {
+    VALID: { label: "Valide", icon: CheckCircle, className: "text-green-600", bg: "bg-green-50", tone: "green" },
+    PENDING: { label: "En attente de validation", icon: Clock, className: "text-orange-600", bg: "bg-orange-50", tone: "orange" },
+    EXPIRED: { label: "Expiré", icon: AlertCircle, className: "text-red-600", bg: "bg-red-50", tone: "red" },
 };
 
 const documentTypeLabels: Record<string, string> = {
@@ -156,9 +157,7 @@ export default function DocumentsEtudiant() {
                                                     {new Date(doc.endDate).toLocaleDateString("fr-FR")}
                                                 </div>
                                             </div>
-                                            <span className={cn("flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full", s.bg, s.className)}>
-                                                <SIcon size={11} /> {s.label}
-                                            </span>
+                                            <StatusBadge tone={s.tone} icon={SIcon}>{s.label}</StatusBadge>
                                         </div>
                                     );
                                 })}

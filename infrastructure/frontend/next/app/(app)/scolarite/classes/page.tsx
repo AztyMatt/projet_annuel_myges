@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Plus, ChevronDown, ChevronUp, X, Trash2 } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
+import { useToast } from "@/components/ui/toast";
 
 type Program = { id: string; name: string };
 type Class = { id: string; number: number; programId: string; size: number; conversationId: string };
@@ -21,6 +22,7 @@ export default function ClassesPage() {
     const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
+    const toast = useToast();
 
     const [showCreateClass, setShowCreateClass] = useState(false);
     const [showCreateGroupFor, setShowCreateGroupFor] = useState<string | null>(null);
@@ -96,6 +98,7 @@ export default function ClassesPage() {
         try {
             await api.delete(`/student-groups/${studentGroupId}`);
             setStudentGroups((prev) => ({ ...prev, [groupId]: prev[groupId].filter((sg) => sg.id !== studentGroupId) }));
+            toast.success("Étudiant retiré du groupe.");
         } catch (e) {
             setError(e instanceof ApiError ? e.message : "Retrait impossible.");
         }

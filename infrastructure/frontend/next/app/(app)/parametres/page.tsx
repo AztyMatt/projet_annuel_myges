@@ -6,6 +6,8 @@ import Link from "next/link";
 import { User, Lock, Shield, Trash2, Eye, EyeOff, CheckCircle, AlertTriangle, Smartphone } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api, ApiError } from "@/lib/api";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { useToast } from "@/components/ui/toast";
 
 type Section = "profil" | "securite" | "confidentialite";
 
@@ -54,6 +56,8 @@ export default function Parametres() {
     const [deleting, setDeleting] = useState(false);
     const [deleteError, setDeleteError] = useState("");
 
+    const toast = useToast();
+
     useEffect(() => {
         api
             .get<Me>("/users/me")
@@ -77,6 +81,7 @@ export default function Parametres() {
         try {
             const result = await api.post<{ message: string }>("/auth/password/reset", { oldPassword, newPassword });
             setPwdSuccess(result.message ?? "Mot de passe mis à jour.");
+            toast.success("Mot de passe mis à jour.");
             setOldPassword("");
             setNewPassword("");
             setConfirmPassword("");
@@ -377,38 +382,16 @@ export default function Parametres() {
                 </main>
             </div>
 
-            {showDeleteConfirm && (
-                <div
-                    className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4"
-                    onClick={() => !deleting && setShowDeleteConfirm(false)}
-                >
-                    <div
-                        className="bg-white rounded-2xl p-6 w-full max-w-sm"
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        <h3 className="font-bold text-gray-900 mb-2">Supprimer définitivement votre compte ?</h3>
-                        <p className="text-sm text-gray-500 mb-5">
-                            Cette action est irréversible : votre compte et vos données personnelles seront effacés.
-                        </p>
-                        <div className="flex gap-3">
-                            <button
-                                onClick={() => setShowDeleteConfirm(false)}
-                                disabled={deleting}
-                                className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50"
-                            >
-                                Annuler
-                            </button>
-                            <button
-                                onClick={handleDeleteAccount}
-                                disabled={deleting}
-                                className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-xl text-sm font-semibold hover:bg-red-700 disabled:opacity-50"
-                            >
-                                {deleting ? "Suppression…" : "Supprimer"}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
+            <ConfirmDialog
+                open={showDeleteConfirm}
+                title="Supprimer définitivement votre compte ?"
+                description="Cette action est irréversible : votre compte et vos données personnelles seront effacés."
+                confirmLabel="Supprimer"
+                pendingLabel="Suppression…"
+                loading={deleting}
+                onConfirm={() => void handleDeleteAccount()}
+                onCancel={() => setShowDeleteConfirm(false)}
+            />
         </div>
     );
 }

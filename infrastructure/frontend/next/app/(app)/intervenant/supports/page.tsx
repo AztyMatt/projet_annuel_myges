@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { FileText, Trash2, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api, ApiError } from "@/lib/api";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { useToast } from "@/components/ui/toast";
 
 type SupportFile = {
     id: string; // FileCourse id
@@ -59,6 +61,8 @@ export default function SupportsIntervenant() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [deletingId, setDeletingId] = useState<string | null>(null);
+    const [deleteTarget, setDeleteTarget] = useState<SupportFile | null>(null);
+    const toast = useToast();
 
     useEffect(() => {
         const refresh = async () => {
@@ -85,11 +89,14 @@ export default function SupportsIntervenant() {
         [supports, search],
     );
 
-    const handleDelete = async (id: string) => {
-        setDeletingId(id);
+    const handleDelete = async () => {
+        if (!deleteTarget) return;
+        setDeletingId(deleteTarget.id);
         try {
-            await api.delete(`/file-courses/${id}`);
-            setSupports((prev) => prev.filter((s) => s.id !== id));
+            await api.delete(`/file-courses/${deleteTarget.id}`);
+            setSupports((prev) => prev.filter((s) => s.id !== deleteTarget.id));
+            toast.success("Support supprimé.");
+            setDeleteTarget(null);
         } catch (e) {
             setError(e instanceof ApiError ? e.message : "Suppression impossible.");
         } finally {
@@ -164,7 +171,7 @@ export default function SupportsIntervenant() {
                                         </td>
                                         <td className="px-3 py-3">
                                             <button
-                                                onClick={() => void handleDelete(s.id)}
+                                                onClick={() => setDeleteTarget(s)}
                                                 disabled={deletingId === s.id}
                                                 className={cn(
                                                     "p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors",
@@ -185,6 +192,17 @@ export default function SupportsIntervenant() {
                     </div>
                 )}
             </div>
+
+            <ConfirmDialog
+                open={deleteTarget !== null}
+                title="Supprimer ce support ?"
+                description={`« ${deleteTarget?.name ?? ""} » ne sera plus visible par les étudiants.`}
+                confirmLabel="Supprimer"
+                pendingLabel="Suppression…"
+                loading={deletingId !== null}
+                onConfirm={() => void handleDelete()}
+                onCancel={() => setDeleteTarget(null)}
+            />
         </div>
     );
 }

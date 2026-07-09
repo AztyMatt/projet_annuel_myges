@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { Plus, Pencil, Trash2, X } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { useToast } from "@/components/ui/toast";
 
 type Course = { id: string; moduleId: string; groupId: string };
 type Session = { id: string; courseId: string; startTime: string; endTime: string; mode: "ON_SITE" | "REMOTE"; classroomId: string | null };
@@ -21,6 +23,8 @@ export default function PlanningScolarite() {
     const [showCreate, setShowCreate] = useState(false);
     const [editing, setEditing] = useState<Session | null>(null);
     const [deletingId, setDeletingId] = useState<string | null>(null);
+    const [deleteTarget, setDeleteTarget] = useState<Session | null>(null);
+    const toast = useToast();
 
     useEffect(() => {
         (async () => {
@@ -63,11 +67,14 @@ export default function PlanningScolarite() {
         void refreshSessions(courseId);
     }, [courseId]);
 
-    const handleDelete = async (id: string) => {
-        setDeletingId(id);
+    const handleDelete = async () => {
+        if (!deleteTarget) return;
+        setDeletingId(deleteTarget.id);
         try {
-            await api.delete(`/sessions/${id}`);
-            setSessions((prev) => prev.filter((s) => s.id !== id));
+            await api.delete(`/sessions/${deleteTarget.id}`);
+            setSessions((prev) => prev.filter((s) => s.id !== deleteTarget.id));
+            toast.success("Session supprimée.");
+            setDeleteTarget(null);
         } catch (e) {
             setError(e instanceof ApiError ? e.message : "Suppression impossible.");
         } finally {
@@ -138,7 +145,7 @@ export default function PlanningScolarite() {
                                                 <Pencil size={13} />
                                             </button>
                                             <button
-                                                onClick={() => void handleDelete(s.id)}
+                                                onClick={() => setDeleteTarget(s)}
                                                 disabled={deletingId === s.id}
                                                 className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg disabled:opacity-50"
                                             >
@@ -170,6 +177,21 @@ export default function PlanningScolarite() {
                     onSaved={() => { setEditing(null); void refreshSessions(courseId); }}
                 />
             )}
+
+            <ConfirmDialog
+                open={deleteTarget !== null}
+                title="Supprimer cette session ?"
+                description={
+                    deleteTarget
+                        ? `La session du ${new Date(deleteTarget.startTime).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })} sera définitivement supprimée.`
+                        : ""
+                }
+                confirmLabel="Supprimer"
+                pendingLabel="Suppression…"
+                loading={deletingId === deleteTarget?.id}
+                onConfirm={() => void handleDelete()}
+                onCancel={() => setDeleteTarget(null)}
+            />
         </div>
     );
 }

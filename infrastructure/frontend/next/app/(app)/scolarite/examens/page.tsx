@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Plus, ChevronDown, ChevronUp, X, Trash2 } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
+import { useToast } from "@/components/ui/toast";
 
 type SessionExam = { id: string; sessionId: string; type: "WRITTEN" | "DEFENSE"; isRetake: boolean; assessmentId: string | null };
 type SessionInfo = { id: string; startTime: string; courseId: string };
@@ -26,6 +27,7 @@ export default function ExamensPage() {
     const [seExternals, setSeExternals] = useState<Record<string, SEExternal[]>>({});
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
+    const toast = useToast();
     const [showCreate, setShowCreate] = useState(false);
     const [addFor, setAddFor] = useState<{ sessionExamId: string; kind: "student" | "instructor" | "external" } | null>(null);
 
@@ -92,6 +94,7 @@ export default function ExamensPage() {
             if (kind === "student") setSeStudents((prev) => ({ ...prev, [sessionExamId]: prev[sessionExamId].filter((x) => x.id !== linkId) }));
             if (kind === "instructor") setSeInstructors((prev) => ({ ...prev, [sessionExamId]: prev[sessionExamId].filter((x) => x.id !== linkId) }));
             if (kind === "external") setSeExternals((prev) => ({ ...prev, [sessionExamId]: prev[sessionExamId].filter((x) => x.id !== linkId) }));
+            toast.success("Affectation retirée.");
         } catch (e) {
             setError(e instanceof ApiError ? e.message : "Retrait impossible.");
         }

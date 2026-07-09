@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Search, Filter, X, Lock, ShieldCheck, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api, ApiError } from "@/lib/api";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { useToast } from "@/components/ui/toast";
 
 type SecurityUser = {
     id: string;
@@ -57,6 +59,9 @@ export default function GestionUtilisateurs() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [assigningUser, setAssigningUser] = useState<UserRow | null>(null);
+    const [removeTarget, setRemoveTarget] = useState<UserRow | null>(null);
+    const [removing, setRemoving] = useState(false);
+    const toast = useToast();
 
     const refresh = async () => {
         setLoading(true);
@@ -89,18 +94,25 @@ export default function GestionUtilisateurs() {
     const handleAdminRoleChange = async (adminId: string, role: "ADMIN" | "SUPER_ADMIN") => {
         try {
             await api.patch(`/admins/${adminId}`, { role });
+            toast.success("Niveau d'administration modifié.");
             void refresh();
         } catch (e) {
             setError(e instanceof ApiError ? e.message : "Modification impossible.");
         }
     };
 
-    const handleRemoveAdmin = async (adminId: string) => {
+    const handleRemoveAdmin = async () => {
+        if (!removeTarget?.adminId) return;
+        setRemoving(true);
         try {
-            await api.delete(`/admins/${adminId}`);
-            void refresh();
+            await api.delete(`/admins/${removeTarget.adminId}`);
+            toast.success("Rôle d'administration retiré.");
+            setRemoveTarget(null);
+            await refresh();
         } catch (e) {
             setError(e instanceof ApiError ? e.message : "Suppression impossible.");
+        } finally {
+            setRemoving(false);
         }
     };
 
@@ -229,7 +241,7 @@ export default function GestionUtilisateurs() {
                                                             <option value="SUPER_ADMIN">Super Admin</option>
                                                         </select>
                                                         <button
-                                                            onClick={() => void handleRemoveAdmin(u.adminId!)}
+                                                            onClick={() => setRemoveTarget(u)}
                                                             className="px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 rounded-lg border border-red-200"
                                                         >
                                                             Retirer
@@ -257,6 +269,17 @@ export default function GestionUtilisateurs() {
                     }}
                 />
             )}
+
+            <ConfirmDialog
+                open={removeTarget !== null}
+                title="Retirer le rôle d'administration ?"
+                description={`${removeTarget?.firstname ?? ""} ${removeTarget?.lastname ?? ""} perdra ses droits d'administration (le compte utilisateur n'est pas supprimé).`}
+                confirmLabel="Retirer"
+                pendingLabel="Retrait…"
+                loading={removing}
+                onConfirm={() => void handleRemoveAdmin()}
+                onCancel={() => setRemoveTarget(null)}
+            />
         </div>
     );
 }
