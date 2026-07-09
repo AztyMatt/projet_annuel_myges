@@ -1,53 +1,52 @@
 import { Router } from "express";
-import { requireAuth, requireRole } from "@express/src/auth/middleware";
-import { AdminRole } from "@domain/admin/admin.enums";
+import { authed, getAuthFlags } from "@express/src/auth/middleware";
 import { externalUseCases } from "@express/src/container";
+import { respond } from "@express/src/http/responses";
 
 export const externalRouter = Router();
 
-externalRouter.get("/externals", requireAuth, requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN), async (_req, res) => {
-    const result = await externalUseCases.list();
-    res.status(200).json(result.externals);
-});
+externalRouter.get("/externals", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await externalUseCases.list(auth);
+    respond(res, result, {
+        externals_listed: (r) => ({ status: 200, body: r.externals }),
+    });
+}));
 
-externalRouter.get("/externals/:id", requireAuth, requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN), async (req, res) => {
-    const result = await externalUseCases.findById(String(req.params.id));
-    if (result.kind === "not_found") return void res.status(404).json({ error: "External not found" });
-    res.status(200).json(result.external);
-});
+externalRouter.get("/externals/:id", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await externalUseCases.findById(String(req.params.id), auth);
+    respond(res, result, {
+        not_found: { status: 404, error: "External not found" },
+        external_found: (r) => ({ status: 200, body: r.external }),
+    });
+}));
 
-externalRouter.post(
-    "/externals",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN),
-    async (req, res) => {
-        const result = await externalUseCases.create(req.body);
-        if (result.kind === "missing_fields")
-            return void res.status(400).json({ error: "firstname, lastname, email and type are required" });
-        if (result.kind === "external_already_exists")
-            return void res.status(409).json({ error: "An external with this email already exists" });
-        res.status(201).json(result.external);
-    },
-);
+externalRouter.post("/externals", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await externalUseCases.create(req.body, auth);
+    respond(res, result, {
+        missing_fields: { status: 400, error: "firstname, lastname, email and type are required" },
+        external_already_exists: { blocked: { type: "Creation", reason: "An external with this email already exists" } },
+        external_created: (r) => ({ status: 201, body: r.external }),
+    });
+}));
 
-externalRouter.patch(
-    "/externals/:id",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN),
-    async (req, res) => {
-        const result = await externalUseCases.update(String(req.params.id), req.body);
-        if (result.kind === "not_found") return void res.status(404).json({ error: "External not found" });
-        res.status(200).json(result.external);
-    },
-);
+externalRouter.patch("/externals/:id", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await externalUseCases.update(String(req.params.id), req.body, auth);
+    respond(res, result, {
+        not_found: { status: 404, error: "External not found" },
+        external_updated: (r) => ({ status: 200, body: r.external }),
+    });
+}));
 
-externalRouter.delete(
-    "/externals/:id",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN),
-    async (req, res) => {
-        const result = await externalUseCases.delete(String(req.params.id));
-        if (result.kind === "not_found") return void res.status(404).json({ error: "External not found" });
-        res.status(200).json({ message: "External deleted" });
-    },
-);
+externalRouter.delete("/externals/:id", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await externalUseCases.delete(String(req.params.id), auth);
+    respond(res, result, {
+        not_found: { status: 404, error: "External not found" },
+        external_has_session_exams: { blocked: { type: "Deletion", reason: "External has session exam assignments" } },
+        external_deleted: { status: 200, body: { message: "External deleted" } },
+    });
+}));

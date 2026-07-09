@@ -27,6 +27,10 @@ export const periodRepository: PeriodRepository = {
             .orderBy(asc(periodTable.order));
         return result.map(rowToPeriod);
     },
+    async existsByAcademicYearId(academicYearId) {
+        const rows = await db.select({ id: periodTable.id }).from(periodTable).where(eq(periodTable.academicYearId, academicYearId)).limit(1);
+        return rows.length > 0;
+    },
     async findByAcademicYearAndOrder(academicYearId, order) {
         const result = await db
             .select()

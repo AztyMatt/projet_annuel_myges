@@ -1,56 +1,54 @@
 import { Router } from "express";
-import { requireAuth, requireRole } from "@express/src/auth/middleware";
-import { AdminRole } from "@domain/admin/admin.enums";
+import { authed, getAuthFlags } from "@express/src/auth/middleware";
 import { classUseCases } from "@express/src/container";
+import { respond, send } from "@express/src/http/responses";
 
 export const classRouter = Router();
 
-classRouter.get("/classes", requireAuth, async (_req, res) => {
+classRouter.get("/classes", ...authed(async (_req, res) => {
     const result = await classUseCases.list();
-    res.status(200).json(result.classes);
-});
+    send(res, { status: 200, body: result.classes });
+}));
 
-classRouter.get("/classes/:id", requireAuth, async (req, res) => {
+classRouter.get("/classes/:id", ...authed(async (req, res) => {
     const result = await classUseCases.findById(String(req.params.id));
-    if (result.kind === "not_found") return void res.status(404).json({ error: "Class not found" });
-    res.status(200).json(result.class);
-});
+    respond(res, result, {
+        not_found: { status: 404, error: "Class not found" },
+        class_found: (r) => ({ status: 200, body: r.class }),
+    });
+}));
 
-classRouter.post("/classes", requireAuth, requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN), async (req, res) => {
-    const result = await classUseCases.create(req.body);
-    if (result.kind === "missing_fields")
-        return void res
-            .status(400)
-            .json({ error: "number, programId, size and conversationId are required" });
-    if (result.kind === "class_number_already_exists")
-        return void res.status(409).json({ error: "A class with this number already exists in this program" });
-    res.status(201).json(result.class);
-});
+classRouter.post("/classes", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await classUseCases.create(req.body, auth);
+    respond(res, result, {
+        missing_fields: { status: 400, error: "number, programId and size are required" },
+        class_number_already_exists: { blocked: { type: "Creation", reason: "A class with this number already exists in this program" } },
+        class_created: (r) => ({ status: 201, body: r.class }),
+    });
+}));
 
-classRouter.patch(
-    "/classes/:id",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN),
-    async (req, res) => {
-        const result = await classUseCases.update(String(req.params.id), req.body);
-        if (result.kind === "not_found") return void res.status(404).json({ error: "Class not found" });
-        res.status(200).json(result.class);
-    },
-);
+classRouter.patch("/classes/:id", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await classUseCases.update(String(req.params.id), req.body, auth);
+    respond(res, result, {
+        not_found: { status: 404, error: "Class not found" },
+        class_updated: (r) => ({ status: 200, body: r.class }),
+    });
+}));
 
-classRouter.delete(
-    "/classes/:id",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN),
-    async (req, res) => {
-        const result = await classUseCases.delete(String(req.params.id));
-        if (result.kind === "not_found") return void res.status(404).json({ error: "Class not found" });
-        res.status(200).json({ message: "Class deleted" });
-    },
-);
+classRouter.delete("/classes/:id", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await classUseCases.delete(String(req.params.id), auth);
+    respond(res, result, {
+        not_found: { status: 404, error: "Class not found" },
+        class_has_groups_with_courses: { blocked: { type: "Deletion", reason: "Class has groups with courses (delete the courses first)" } },
+        class_deleted: { status: 200, body: { message: "Class deleted" } },
+    });
+}));
 
-classRouter.get("/classes/:id/groups", requireAuth, async (req, res) => {
+classRouter.get("/classes/:id/groups", ...authed(async (req, res) => {
     const { groupUseCases } = await import("@express/src/container");
     const result = await groupUseCases.listByClass(String(req.params.id));
-    res.status(200).json(result.groups);
-});
+    send(res, { status: 200, body: result.groups });
+}));

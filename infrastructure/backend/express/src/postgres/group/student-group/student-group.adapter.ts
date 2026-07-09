@@ -21,9 +21,17 @@ export const studentGroupRepository: StudentGroupRepository = {
         const result = await db.select().from(studentGroupTable).where(eq(studentGroupTable.studentId, studentId));
         return result.map(rowToStudentGroup);
     },
+    async existsByStudentId(studentId) {
+        const rows = await db.select({ id: studentGroupTable.id }).from(studentGroupTable).where(eq(studentGroupTable.studentId, studentId)).limit(1);
+        return rows.length > 0;
+    },
     async findByGroupId(groupId) {
         const result = await db.select().from(studentGroupTable).where(eq(studentGroupTable.groupId, groupId));
         return result.map(rowToStudentGroup);
+    },
+    async existsByGroupId(groupId) {
+        const rows = await db.select({ id: studentGroupTable.id }).from(studentGroupTable).where(eq(studentGroupTable.groupId, groupId)).limit(1);
+        return rows.length > 0;
     },
     async findByStudentAndGroup(studentId, groupId) {
         const result = await db
@@ -51,5 +59,8 @@ export const studentGroupRepository: StudentGroupRepository = {
     },
     async deleteById(id) {
         await db.delete(studentGroupTable).where(eq(studentGroupTable.id, id));
+    },
+    async deleteByGroupId(groupId) {
+        await db.delete(studentGroupTable).where(eq(studentGroupTable.groupId, groupId));
     },
 };

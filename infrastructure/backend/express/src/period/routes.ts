@@ -1,54 +1,54 @@
 import { Router } from "express";
-import { requireAuth, requireRole } from "@express/src/auth/middleware";
-import { AdminRole } from "@domain/admin/admin.enums";
+import { authed, getAuthFlags } from "@express/src/auth/middleware";
 import { periodUseCases } from "@express/src/container";
+import { respond, send } from "@express/src/http/responses";
 
 export const periodRouter = Router();
 
-periodRouter.get("/periods", requireAuth, async (_req, res) => {
+periodRouter.get("/periods", ...authed(async (_req, res) => {
     const result = await periodUseCases.list();
-    res.status(200).json(result.periods);
-});
+    send(res, { status: 200, body: result.periods });
+}));
 
-periodRouter.get("/periods/:id", requireAuth, async (req, res) => {
+periodRouter.get("/periods/:id", ...authed(async (req, res) => {
     const result = await periodUseCases.findById(String(req.params.id));
-    if (result.kind === "not_found") return void res.status(404).json({ error: "Period not found" });
-    res.status(200).json(result.period);
-});
+    respond(res, result, {
+        not_found: { status: 404, error: "Period not found" },
+        period_found: (r) => ({ status: 200, body: r.period }),
+    });
+}));
 
-periodRouter.post("/periods", requireAuth, requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN), async (req, res) => {
-    const result = await periodUseCases.create(req.body);
-    if (result.kind === "missing_fields")
-        return void res.status(400).json({ error: "order, startDate, endDate and academicYearId are required" });
-    if (result.kind === "period_order_already_exists")
-        return void res.status(409).json({ error: "A period with this order already exists for this academic year" });
-    res.status(201).json(result.period);
-});
+periodRouter.post("/periods", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await periodUseCases.create(req.body, auth);
+    respond(res, result, {
+        missing_fields: { status: 400, error: "order, startDate, endDate and academicYearId are required" },
+        period_order_already_exists: { blocked: { type: "Creation", reason: "A period with this order already exists for this academic year" } },
+        period_created: (r) => ({ status: 201, body: r.period }),
+    });
+}));
 
-periodRouter.patch(
-    "/periods/:id",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN),
-    async (req, res) => {
-        const result = await periodUseCases.update(String(req.params.id), req.body);
-        if (result.kind === "not_found") return void res.status(404).json({ error: "Period not found" });
-        res.status(200).json(result.period);
-    },
-);
+periodRouter.patch("/periods/:id", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await periodUseCases.update(String(req.params.id), req.body, auth);
+    respond(res, result, {
+        not_found: { status: 404, error: "Period not found" },
+        period_updated: (r) => ({ status: 200, body: r.period }),
+    });
+}));
 
-periodRouter.delete(
-    "/periods/:id",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN),
-    async (req, res) => {
-        const result = await periodUseCases.delete(String(req.params.id));
-        if (result.kind === "not_found") return void res.status(404).json({ error: "Period not found" });
-        res.status(200).json({ message: "Period deleted" });
-    },
-);
+periodRouter.delete("/periods/:id", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await periodUseCases.delete(String(req.params.id), auth);
+    respond(res, result, {
+        not_found: { status: 404, error: "Period not found" },
+        period_has_programs: { blocked: { type: "Deletion", reason: "Period has programs" } },
+        period_deleted: { status: 200, body: { message: "Period deleted" } },
+    });
+}));
 
-periodRouter.get("/periods/:id/programs", requireAuth, async (req, res) => {
+periodRouter.get("/periods/:id/programs", ...authed(async (req, res) => {
     const { programUseCases } = await import("@express/src/container");
     const result = await programUseCases.listByPeriod(String(req.params.id));
-    res.status(200).json(result.programs);
-});
+    send(res, { status: 200, body: result.programs });
+}));

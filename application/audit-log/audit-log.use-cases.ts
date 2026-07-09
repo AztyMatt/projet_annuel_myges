@@ -1,7 +1,8 @@
 import { type AuditLog, type AuditLogValue } from "@domain/audit-log/audit-log.entity";
 import { type AuditLogAction } from "@domain/audit-log/audit-log.enums";
 import { type AuditLogRepository } from "@application/audit-log/audit-log.repository";
-import { NotFound } from "@application/types/results";
+import { type AuthContext } from "@application/types/auth-context";
+import { NotFound, Forbidden } from "@application/types/results";
 
 export type AuditLogView = {
     id: string;
@@ -14,9 +15,9 @@ export type AuditLogView = {
     createdAt: string;
 };
 
-export type ListAuditLogsResult = { kind: "audit_logs_listed"; auditLogs: AuditLogView[] };
+export type ListAuditLogsResult = Forbidden | { kind: "audit_logs_listed"; auditLogs: AuditLogView[] };
 
-export type GetAuditLogResult = NotFound | { kind: "audit_log_found"; auditLog: AuditLogView };
+export type GetAuditLogResult = NotFound | Forbidden | { kind: "audit_log_found"; auditLog: AuditLogView };
 
 const toView = (a: AuditLog): AuditLogView => ({
     id: a.id,
@@ -32,27 +33,32 @@ const toView = (a: AuditLog): AuditLogView => ({
 export class AuditLogUseCases {
     constructor(private readonly auditLogs: AuditLogRepository) {}
 
-    async list(): Promise<ListAuditLogsResult> {
+    async list(auth: AuthContext): Promise<ListAuditLogsResult> {
+        if (!auth.isAdmin) return Forbidden;
         const auditLogs = await this.auditLogs.list();
         return { kind: "audit_logs_listed", auditLogs: auditLogs.map(toView) };
     }
 
-    async listByUser(userId: string): Promise<ListAuditLogsResult> {
+    async listByUser(userId: string, auth: AuthContext): Promise<ListAuditLogsResult> {
+        if (!auth.isAdmin) return Forbidden;
         const auditLogs = await this.auditLogs.findByUserId(userId);
         return { kind: "audit_logs_listed", auditLogs: auditLogs.map(toView) };
     }
 
-    async listByEntity(entityId: string): Promise<ListAuditLogsResult> {
+    async listByEntity(entityId: string, auth: AuthContext): Promise<ListAuditLogsResult> {
+        if (!auth.isAdmin) return Forbidden;
         const auditLogs = await this.auditLogs.findByEntityId(entityId);
         return { kind: "audit_logs_listed", auditLogs: auditLogs.map(toView) };
     }
 
-    async listByAction(action: AuditLogAction): Promise<ListAuditLogsResult> {
+    async listByAction(action: AuditLogAction, auth: AuthContext): Promise<ListAuditLogsResult> {
+        if (!auth.isAdmin) return Forbidden;
         const auditLogs = await this.auditLogs.findByAction(action);
         return { kind: "audit_logs_listed", auditLogs: auditLogs.map(toView) };
     }
 
-    async findById(id: string): Promise<GetAuditLogResult> {
+    async findById(id: string, auth: AuthContext): Promise<GetAuditLogResult> {
+        if (!auth.isAdmin) return Forbidden;
         const auditLog = await this.auditLogs.findById(id);
         if (!auditLog) return NotFound;
         return { kind: "audit_log_found", auditLog: toView(auditLog) };

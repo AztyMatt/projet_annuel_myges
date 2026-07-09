@@ -21,6 +21,10 @@ export const manualNotationRepository: ManualNotationRepository = {
         const result = await db.select().from(manualNotationTable).where(eq(manualNotationTable.moduleId, moduleId));
         return result.map(rowToManualNotation);
     },
+    async existsByModuleId(moduleId) {
+        const rows = await db.select({ id: manualNotationTable.id }).from(manualNotationTable).where(eq(manualNotationTable.moduleId, moduleId)).limit(1);
+        return rows.length > 0;
+    },
     async findByModuleAndName(moduleId, name) {
         const result = await db
             .select()

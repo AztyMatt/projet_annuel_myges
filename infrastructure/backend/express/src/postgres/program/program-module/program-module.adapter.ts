@@ -23,9 +23,17 @@ export const programModuleRepository: ProgramModuleRepository = {
         const result = await db.select().from(programModuleTable).where(eq(programModuleTable.programId, programId));
         return result.map(rowToProgramModule);
     },
+    async existsByProgramId(programId) {
+        const rows = await db.select({ id: programModuleTable.id }).from(programModuleTable).where(eq(programModuleTable.programId, programId)).limit(1);
+        return rows.length > 0;
+    },
     async findByModuleId(moduleId) {
         const result = await db.select().from(programModuleTable).where(eq(programModuleTable.moduleId, moduleId));
         return result.map(rowToProgramModule);
+    },
+    async existsByModuleId(moduleId) {
+        const rows = await db.select({ id: programModuleTable.id }).from(programModuleTable).where(eq(programModuleTable.moduleId, moduleId)).limit(1);
+        return rows.length > 0;
     },
     async findByProgramAndModule(programId, moduleId) {
         const result = await db

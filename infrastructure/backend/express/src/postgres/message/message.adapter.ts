@@ -35,6 +35,10 @@ export const messageRepository: MessageRepository = {
             .orderBy(desc(messageTable.createdAt));
         return result.map(rowToMessage);
     },
+    async existsBySenderId(senderId) {
+        const rows = await db.select({ id: messageTable.id }).from(messageTable).where(eq(messageTable.senderId, senderId)).limit(1);
+        return rows.length > 0;
+    },
     async save(message) {
         await db
             .insert(messageTable)

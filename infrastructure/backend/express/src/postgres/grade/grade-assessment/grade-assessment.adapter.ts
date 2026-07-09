@@ -1,8 +1,8 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { type GradeAssessmentRepository } from "@application/grade/grade-assessment/grade-assessment.repository";
 import { type GradeAssessment } from "@domain/grade/grade-assessment/grade-assessment.entity";
 import { db } from "@express/src/postgres/db";
-import { gradeAssessment as gradeAssessmentTable } from "@express/src/postgres/schema/grade";
+import { gradeAssessment as gradeAssessmentTable, grade as gradeTable } from "@express/src/postgres/schema/grade";
 
 function rowToGradeAssessment(row: typeof gradeAssessmentTable.$inferSelect): GradeAssessment {
     return {
@@ -27,6 +27,20 @@ export const gradeAssessmentRepository: GradeAssessmentRepository = {
             .from(gradeAssessmentTable)
             .where(eq(gradeAssessmentTable.assessmentId, assessmentId));
         return result.map(rowToGradeAssessment);
+    },
+    async existsByAssessmentId(assessmentId) {
+        const rows = await db.select({ id: gradeAssessmentTable.id }).from(gradeAssessmentTable).where(eq(gradeAssessmentTable.assessmentId, assessmentId)).limit(1);
+        return rows.length > 0;
+    },
+    async existsByAssessmentIdAndStudentIds(assessmentId, studentIds) {
+        if (studentIds.length === 0) return false;
+        const result = await db
+            .select({ id: gradeAssessmentTable.id })
+            .from(gradeAssessmentTable)
+            .innerJoin(gradeTable, eq(gradeAssessmentTable.gradeId, gradeTable.id))
+            .where(and(eq(gradeAssessmentTable.assessmentId, assessmentId), inArray(gradeTable.studentId, studentIds)))
+            .limit(1);
+        return result.length > 0;
     },
     async findByGradeAndAssessment(gradeId, assessmentId) {
         const result = await db

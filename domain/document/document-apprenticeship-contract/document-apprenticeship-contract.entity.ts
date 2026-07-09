@@ -3,7 +3,7 @@ import { type DocumentApprenticeshipContractType } from "@domain/document/docume
 export type DocumentApprenticeshipContract = {
     id: string;
     fileDocumentId: string;
-    companyId: string;
+    companyId: string | null;
     type: DocumentApprenticeshipContractType;
     startDate: Date;
     endDate: Date;

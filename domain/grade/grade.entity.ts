@@ -4,5 +4,5 @@ export type Grade = {
     value: number;
     isLocked: boolean;
     enteredAt: Date;
-    enteredBy: string;
+    enteredBy: string | null;
 };

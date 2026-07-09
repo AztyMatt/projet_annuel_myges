@@ -35,6 +35,14 @@ export const sessionExamExternalRepository: SessionExamExternalRepository = {
             .where(eq(sessionExamExternalTable.externalId, externalId));
         return result.map(rowToSessionExamExternal);
     },
+    async existsByExternalId(externalId) {
+        const rows = await db
+            .select({ id: sessionExamExternalTable.id })
+            .from(sessionExamExternalTable)
+            .where(eq(sessionExamExternalTable.externalId, externalId))
+            .limit(1);
+        return rows.length > 0;
+    },
     async findByExamAndExternal(sessionExamId, externalId) {
         const result = await db
             .select()

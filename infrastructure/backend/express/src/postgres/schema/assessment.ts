@@ -21,14 +21,14 @@ export const assessmentGroup = pgTable("assessment_group", {
     id: text("id").primaryKey(),
     assessmentId: text("assessment_id")
         .notNull()
-        .references(() => assessment.id),
+        .references(() => assessment.id, { onDelete: "cascade" }),
 });
 
 export const assessmentGroupMember = pgTable("assessment_group_member", {
     id: text("id").primaryKey(),
     assessmentGroupId: text("assessment_group_id")
         .notNull()
-        .references(() => assessmentGroup.id),
+        .references(() => assessmentGroup.id, { onDelete: "cascade" }),
     studentId: text("student_id")
         .notNull()
         .references(() => student.id),

@@ -35,6 +35,10 @@ export const sessionExamInstructorRepository: SessionExamInstructorRepository = 
             .where(eq(sessionExamInstructorTable.instructorId, instructorId));
         return result.map(rowToSessionExamInstructor);
     },
+    async existsByInstructorId(instructorId) {
+        const rows = await db.select({ id: sessionExamInstructorTable.id }).from(sessionExamInstructorTable).where(eq(sessionExamInstructorTable.instructorId, instructorId)).limit(1);
+        return rows.length > 0;
+    },
     async findByExamAndInstructor(sessionExamId, instructorId) {
         const result = await db
             .select()

@@ -30,9 +30,17 @@ export const absenceRepository: AbsenceRepository = {
             .orderBy(desc(absenceTable.declaredAt));
         return result.map(rowToAbsence);
     },
+    async existsByStudentId(studentId) {
+        const rows = await db.select({ id: absenceTable.id }).from(absenceTable).where(eq(absenceTable.studentId, studentId)).limit(1);
+        return rows.length > 0;
+    },
     async findBySessionId(sessionId) {
         const result = await db.select().from(absenceTable).where(eq(absenceTable.sessionId, sessionId));
         return result.map(rowToAbsence);
+    },
+    async existsBySessionId(sessionId) {
+        const rows = await db.select({ id: absenceTable.id }).from(absenceTable).where(eq(absenceTable.sessionId, sessionId)).limit(1);
+        return rows.length > 0;
     },
     async findByStudentAndSession(studentId, sessionId) {
         const result = await db

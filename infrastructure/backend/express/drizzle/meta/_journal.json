@@ -36,6 +36,13 @@
       "when": 1782695115650,
       "tag": "0004_plain_tomorrow_man",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1783562090034,
+      "tag": "0005_sad_the_leader",
+      "breakpoints": true
     }
   ]
 }

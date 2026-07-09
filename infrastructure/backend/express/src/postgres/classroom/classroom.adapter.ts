@@ -22,6 +22,10 @@ export const classroomRepository: ClassroomRepository = {
         const result = await db.select().from(classroomTable).where(eq(classroomTable.campusId, campusId));
         return result.map(rowToClassroom);
     },
+    async existsByCampusId(campusId) {
+        const rows = await db.select({ id: classroomTable.id }).from(classroomTable).where(eq(classroomTable.campusId, campusId)).limit(1);
+        return rows.length > 0;
+    },
     async findByCampusAndName(campusId, name) {
         const result = await db
             .select()

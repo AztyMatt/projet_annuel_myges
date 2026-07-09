@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import * as authSchema from "@express/src/postgres/schema/auth";
@@ -36,7 +37,7 @@ export const pool = new Pool({
     password: process.env.POSTGRES_PASSWORD,
 });
 
-export const db = drizzle(pool, {
+export const rootDb = drizzle(pool, {
     schema: {
         ...authSchema,
         ...academicYearSchema,
@@ -65,5 +66,16 @@ export const db = drizzle(pool, {
         ...programModuleSchema,
         ...sessionSchema,
         ...studentSchema,
+    },
+});
+
+type Tx = Parameters<Parameters<typeof rootDb.transaction>[0]>[0];
+export const txStore = new AsyncLocalStorage<Tx>();
+
+export const db: typeof rootDb = new Proxy(rootDb, {
+    get(target, prop) {
+        const active = (txStore.getStore() ?? target) as typeof target;
+        const value = Reflect.get(active, prop, active);
+        return typeof value === "function" ? (value as (...args: unknown[]) => unknown).bind(active) : value;
     },
 });

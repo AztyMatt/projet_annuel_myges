@@ -1,63 +1,85 @@
 import { Router } from "express";
-import { requireAuth, type AuthRequest } from "@express/src/auth/middleware";
+import { authed, getAuthFlags } from "@express/src/auth/middleware";
 import { messageUseCases } from "@express/src/container";
+import { send, respond } from "@express/src/http/responses";
 
 export const messageRouter = Router();
 
-// message routes
-messageRouter.get("/messages/conversation/:conversationId", requireAuth, async (req, res) => {
-    const result = await messageUseCases.listByConversation(String(req.params.conversationId));
-    res.status(200).json(result.messages);
-});
 
-messageRouter.get("/messages/sender/:senderId", requireAuth, async (req, res) => {
-    const result = await messageUseCases.listBySender(String(req.params.senderId));
-    res.status(200).json(result.messages);
-});
+messageRouter.get("/messages/conversation/:conversationId", ...authed(async (req, res) => {
+    const result = await messageUseCases.listByConversation(String(req.params.conversationId), getAuthFlags(req.auth));
+    respond(res, result, {
+        not_found: { status: 404, error: "Conversation not found" },
+        messages_listed: (r) => ({ status: 200, body: r.messages }),
+    });
+}));
 
-messageRouter.get("/messages/:id", requireAuth, async (req, res) => {
-    const result = await messageUseCases.findById(String(req.params.id));
-    if (result.kind === "not_found") return void res.status(404).json({ error: "Message not found" });
-    res.status(200).json(result.message);
-});
+messageRouter.get("/messages/sender/:senderId", ...authed(async (req, res) => {
+    const result = await messageUseCases.listBySender(String(req.params.senderId), getAuthFlags(req.auth));
+    respond(res, result, {
+        not_found: { status: 404, error: "Messages not found" },
+        messages_listed: (r) => ({ status: 200, body: r.messages }),
+    });
+}));
 
-messageRouter.post("/messages", requireAuth, async (req: AuthRequest, res) => {
-    if (!req.auth) return void res.status(401).json({ error: "Unauthorized" });
+messageRouter.get("/messages/:id", ...authed(async (req, res) => {
+    const result = await messageUseCases.findById(String(req.params.id), getAuthFlags(req.auth));
+    respond(res, result, {
+        not_found: { status: 404, error: "Message not found" },
+        message_found: (r) => ({ status: 200, body: r.message }),
+    });
+}));
+
+messageRouter.post("/messages", ...authed(async (req, res) => {
     const result = await messageUseCases.send({ ...req.body, senderId: req.auth.userId });
-    if (result.kind === "missing_fields")
-        return void res.status(400).json({ error: "conversationId and content are required" });
-    res.status(201).json(result.message);
-});
+    respond(res, result, {
+        missing_fields: { status: 400, error: "conversationId and content are required" },
+        message_sent: (r) => ({ status: 201, body: r.message }),
+    });
+}));
 
-messageRouter.delete("/messages/:id", requireAuth, async (req, res) => {
-    const result = await messageUseCases.delete(String(req.params.id));
-    if (result.kind === "not_found") return void res.status(404).json({ error: "Message not found" });
-    res.status(200).json({ message: "Message deleted" });
-});
+messageRouter.delete("/messages/:id", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await messageUseCases.delete(String(req.params.id), auth);
+    respond(res, result, {
+        not_found: { status: 404, error: "Message not found" },
+        message_deleted: { status: 200, body: { message: "Message deleted" } },
+    });
+}));
 
-// message-read routes
-messageRouter.get("/message-reads/message/:messageId", requireAuth, async (req, res) => {
-    const result = await messageUseCases.listReadsByMessage(String(req.params.messageId));
-    res.status(200).json(result.messageReads);
-});
 
-messageRouter.get("/message-reads/user/:userId", requireAuth, async (req, res) => {
-    const result = await messageUseCases.listReadsByUser(String(req.params.userId));
-    res.status(200).json(result.messageReads);
-});
+messageRouter.get("/message-reads/message/:messageId", ...authed(async (req, res) => {
+    const result = await messageUseCases.listReadsByMessage(String(req.params.messageId), getAuthFlags(req.auth));
+    respond(res, result, {
+        not_found: { status: 404, error: "Message not found" },
+        message_reads_listed: (r) => ({ status: 200, body: r.messageReads }),
+    });
+}));
 
-messageRouter.post("/message-reads", requireAuth, async (req, res) => {
-    const result = await messageUseCases.markAsRead(req.body);
-    if (result.kind === "missing_fields")
-        return void res.status(400).json({ error: "messageId and userId are required" });
-    res.status(201).json(result.messageRead);
-});
+messageRouter.get("/message-reads/user/:userId", ...authed(async (req, res) => {
+    const result = await messageUseCases.listReadsByUser(String(req.params.userId), getAuthFlags(req.auth));
+    respond(res, result, {
+        not_found: { status: 404, error: "Message reads not found" },
+        message_reads_listed: (r) => ({ status: 200, body: r.messageReads }),
+    });
+}));
 
-messageRouter.delete("/message-reads", requireAuth, async (req, res) => {
-    const result = await messageUseCases.markAsUnread(req.body);
-    if (result.kind === "missing_fields")
-        return void res.status(400).json({ error: "messageId and userId are required" });
-    if (result.kind === "not_found")
-        return void res.status(404).json({ error: "Message read not found" });
-    res.status(200).json({ message: "Message marked as unread" });
-});
+messageRouter.post("/message-reads", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await messageUseCases.markAsRead({ messageId: req.body.messageId }, auth);
+    respond(res, result, {
+        missing_fields: { status: 400, error: "messageId is required" },
+        not_found: { status: 404, error: "Message not found" },
+        message_marked_as_read: (r) => ({ status: 201, body: r.messageRead }),
+    });
+}));
+
+messageRouter.delete("/message-reads", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await messageUseCases.markAsUnread({ messageId: req.body.messageId }, auth);
+    respond(res, result, {
+        missing_fields: { status: 400, error: "messageId is required" },
+        not_found: { status: 404, error: "Message read not found" },
+        message_marked_as_unread: { status: 200, body: { message: "Message marked as unread" } },
+    });
+}));

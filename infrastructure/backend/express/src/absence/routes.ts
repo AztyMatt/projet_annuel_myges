@@ -1,91 +1,85 @@
 import { Router } from "express";
-import { requireAuth, requireRole, type AuthRequest } from "@express/src/auth/middleware";
-import { AdminRole } from "@domain/admin/admin.enums";
-import { Role } from "@domain/auth/user.enums";
-import { absenceUseCases, studentUseCases } from "@express/src/container";
+import { authed, getAuthFlags } from "@express/src/auth/middleware";
+import { absenceUseCases } from "@express/src/container";
+import { respond, send } from "@express/src/http/responses";
 
 export const absenceRouter = Router();
 
-absenceRouter.get(
-    "/absences",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN, Role.INSTRUCTOR),
-    async (_req, res) => {
-        const result = await absenceUseCases.list();
-        res.status(200).json(result.absences);
-    },
-);
+absenceRouter.get("/absences", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await absenceUseCases.list(auth);
+    respond(res, result, {
+        absences_listed: (r) => ({ status: 200, body: r.absences }),
+    });
+}));
 
-absenceRouter.get(
-    "/absences/student/:studentId",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN, Role.INSTRUCTOR),
-    async (req, res) => {
-        const result = await absenceUseCases.listByStudent(String(req.params.studentId));
-        res.status(200).json(result.absences);
-    },
-);
+absenceRouter.get("/absences/student/:studentId", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await absenceUseCases.listByStudent(String(req.params.studentId), auth);
+    respond(res, result, {
+        absences_listed: (r) => ({ status: 200, body: r.absences }),
+    });
+}));
 
-absenceRouter.get("/absences/mine", requireAuth, async (req: AuthRequest, res) => {
-    if (!req.auth) return void res.status(401).json({ error: "Unauthorized" });
-    if (req.auth.role !== Role.STUDENT)
-        return void res.status(403).json({ error: "Only students can access this endpoint" });
-    const student = await studentUseCases.findByUserId(req.auth.userId);
-    if (student.kind === "not_found") return void res.status(404).json({ error: "Student profile not found" });
-    const result = await absenceUseCases.listByStudent(student.student.id);
-    res.status(200).json(result.absences);
-});
+absenceRouter.get("/absences/mine", ...authed(async (req, res) => {
+    const result = await absenceUseCases.listMine(getAuthFlags(req.auth));
+    respond(res, result, {
+        not_found: { status: 404, error: "Student profile not found" },
+        absences_listed: (r) => ({ status: 200, body: r.absences }),
+    });
+}));
 
-absenceRouter.get("/absences/:id", requireAuth, async (req, res) => {
-    const result = await absenceUseCases.findById(String(req.params.id));
-    if (result.kind === "not_found") return void res.status(404).json({ error: "Absence not found" });
-    res.status(200).json(result.absence);
-});
+absenceRouter.get("/absences/:id", ...authed(async (req, res) => {
+    const result = await absenceUseCases.findById(String(req.params.id), getAuthFlags(req.auth));
+    respond(res, result, {
+        not_found: { status: 404, error: "Absence not found" },
+        absence_found: (r) => ({ status: 200, body: r.absence }),
+    });
+}));
 
-absenceRouter.post("/absences", requireAuth, async (req: AuthRequest, res) => {
-    if (!req.auth) return void res.status(401).json({ error: "Unauthorized" });
-    const result = await absenceUseCases.declare(req.body);
-    if (result.kind === "missing_fields")
-        return void res.status(400).json({ error: "studentId, sessionId and reason are required" });
-    if (result.kind === "absence_already_exists")
-        return void res.status(409).json({ error: "Absence already declared for this student and session" });
-    res.status(201).json(result.absence);
-});
+absenceRouter.post("/absences", ...authed(async (req, res) => {
+    const result = await absenceUseCases.declare(req.body, getAuthFlags(req.auth));
+    respond(res, result, {
+        missing_fields: { status: 400, error: "studentId, sessionId and reason are required" },
+        not_found: { status: 404, error: "Session not found" },
+        absence_already_exists: { blocked: { type: "Creation", reason: "An absence is already declared for this student and session" } },
+        absence_declared: (r) => ({ status: 201, body: r.absence }),
+    });
+}));
 
-absenceRouter.post(
-    "/absences/:id/validate",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN, Role.INSTRUCTOR),
-    async (req, res) => {
-        const result = await absenceUseCases.validate(String(req.params.id));
-        if (result.kind === "not_found") return void res.status(404).json({ error: "Absence not found" });
-        res.status(200).json(result.absence);
-    },
-);
+absenceRouter.post("/absences/:id/validate", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await absenceUseCases.validate(String(req.params.id), auth);
+    respond(res, result, {
+        not_found: { status: 404, error: "Absence not found" },
+        absence_validated: (r) => ({ status: 200, body: r.absence }),
+    });
+}));
 
-absenceRouter.post(
-    "/absences/:id/reject",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN, Role.INSTRUCTOR),
-    async (req, res) => {
-        const result = await absenceUseCases.reject(String(req.params.id));
-        if (result.kind === "not_found") return void res.status(404).json({ error: "Absence not found" });
-        res.status(200).json(result.absence);
-    },
-);
+absenceRouter.post("/absences/:id/reject", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await absenceUseCases.reject(String(req.params.id), auth);
+    respond(res, result, {
+        not_found: { status: 404, error: "Absence not found" },
+        absence_rejected: (r) => ({ status: 200, body: r.absence }),
+    });
+}));
 
-absenceRouter.delete(
-    "/absences/:id",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN),
-    async (req, res) => {
-        const result = await absenceUseCases.delete(String(req.params.id));
-        if (result.kind === "not_found") return void res.status(404).json({ error: "Absence not found" });
-        res.status(200).json({ message: "Absence deleted" });
-    },
-);
+absenceRouter.delete("/absences/:id", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await absenceUseCases.delete(String(req.params.id), auth);
+    respond(res, result, {
+        not_found: { status: 404, error: "Absence not found" },
+        absence_is_validated: { blocked: { type: "Operation", reason: "Absence is validated, only a super admin can delete it" } },
+        absence_deleted_with_warnings: (r) => ({ status: 200, body: { message: "Absence deleted", storageWarnings: r.failedPaths } }),
+        absence_deleted: { status: 200, body: { message: "Absence deleted" } },
+    });
+}));
 
-absenceRouter.get("/sessions/:sessionId/absences", requireAuth, requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN, Role.INSTRUCTOR), async (req, res) => {
-    const result = await absenceUseCases.listBySession(String(req.params.sessionId));
-    res.status(200).json(result.absences);
-});
+absenceRouter.get("/sessions/:sessionId/absences", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await absenceUseCases.listBySession(String(req.params.sessionId), auth);
+    respond(res, result, {
+        absences_listed: (r) => ({ status: 200, body: r.absences }),
+    });
+}));

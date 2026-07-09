@@ -1,6 +1,6 @@
 export type ConversationPrivate = {
     id: string;
-    adminId: string;
-    studentId: string;
+    userAId: string | null;
+    userBId: string | null;
     conversationId: string;
 };

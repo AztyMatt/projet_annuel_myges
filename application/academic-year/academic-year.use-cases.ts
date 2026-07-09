@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { type AcademicYear } from "@domain/academic-year/academic-year.entity";
 import { type AcademicYearRepository } from "@application/academic-year/academic-year.repository";
-import { NotFound, MissingFields } from "@application/types/results";
+import { type PeriodRepository } from "@application/period/period.repository";
+import { type AuthContext } from "@application/types/auth-context";
+import { NotFound, MissingFields, Forbidden } from "@application/types/results";
 
 export type AcademicYearView = {
     id: string;
@@ -12,14 +14,21 @@ export type AcademicYearView = {
 
 export type CreateAcademicYearResult =
     | MissingFields
+    | Forbidden
     | { kind: "academic_year_already_exists" }
     | { kind: "academic_year_created"; academicYear: AcademicYearView };
 
 export type UpdateAcademicYearResult =
     | NotFound
+    | Forbidden
     | { kind: "academic_year_updated"; academicYear: AcademicYearView };
 
-export type DeleteAcademicYearResult = NotFound | { kind: "academic_year_deleted" };
+export type DeleteAcademicYearResult =
+    | NotFound
+    | Forbidden
+    | { kind: "academic_year_is_current" }
+    | { kind: "academic_year_has_periods" }
+    | { kind: "academic_year_deleted" };
 
 export type GetAcademicYearResult =
     | NotFound
@@ -35,14 +44,19 @@ const toView = (a: AcademicYear): AcademicYearView => ({
 });
 
 export class AcademicYearUseCases {
-    constructor(private readonly academicYears: AcademicYearRepository) {}
+    constructor(
+        private readonly academicYears: AcademicYearRepository,
+        private readonly periods: PeriodRepository,
+    ) {}
 
     async create(input: {
         startDate?: string;
         endDate?: string;
         isCurrent?: boolean;
-    }): Promise<CreateAcademicYearResult> {
+    }, auth: AuthContext): Promise<CreateAcademicYearResult> {
+        if (!auth.isAdmin) return Forbidden;
         const { startDate, endDate, isCurrent = false } = input;
+        if (isCurrent && !auth.isSuperAdmin) return Forbidden;
         if (!startDate || !endDate) return MissingFields;
         if (await this.academicYears.findByDates(new Date(startDate), new Date(endDate))) return { kind: "academic_year_already_exists" };
         const academicYear: AcademicYear = {
@@ -58,7 +72,10 @@ export class AcademicYearUseCases {
     async update(
         id: string,
         input: { startDate?: string; endDate?: string; isCurrent?: boolean },
+        auth: AuthContext,
     ): Promise<UpdateAcademicYearResult> {
+        if (!auth.isAdmin) return Forbidden;
+        if (input.isCurrent === true && !auth.isSuperAdmin) return Forbidden;
         const academicYear = await this.academicYears.findById(id);
         if (!academicYear) return NotFound;
         if (input.startDate !== undefined) academicYear.startDate = new Date(input.startDate);
@@ -68,9 +85,12 @@ export class AcademicYearUseCases {
         return { kind: "academic_year_updated", academicYear: toView(academicYear) };
     }
 
-    async delete(id: string): Promise<DeleteAcademicYearResult> {
+    async delete(id: string, auth: AuthContext): Promise<DeleteAcademicYearResult> {
+        if (!auth.isAdmin) return Forbidden;
         const academicYear = await this.academicYears.findById(id);
         if (!academicYear) return NotFound;
+        if (academicYear.isCurrent) return { kind: "academic_year_is_current" };
+        if (await this.periods.existsByAcademicYearId(id)) return { kind: "academic_year_has_periods" };
         await this.academicYears.deleteById(id);
         return { kind: "academic_year_deleted" };
     }

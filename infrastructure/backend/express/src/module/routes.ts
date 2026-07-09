@@ -1,56 +1,59 @@
 import { Router } from "express";
-import { requireAuth, requireRole } from "@express/src/auth/middleware";
-import { AdminRole } from "@domain/admin/admin.enums";
+import { authed, getAuthFlags } from "@express/src/auth/middleware";
 import { moduleUseCases } from "@express/src/container";
+import { send, respond } from "@express/src/http/responses";
 
 export const moduleRouter = Router();
 
-moduleRouter.get("/modules", requireAuth, async (_req, res) => {
+moduleRouter.get("/modules", ...authed(async (_req, res) => {
     const result = await moduleUseCases.list();
-    res.status(200).json(result.modules);
-});
+    send(res, { status: 200, body: result.modules });
+}));
 
-moduleRouter.get("/modules/:id", requireAuth, async (req, res) => {
+moduleRouter.get("/modules/:id", ...authed(async (req, res) => {
     const result = await moduleUseCases.findById(String(req.params.id));
-    if (result.kind === "not_found") return void res.status(404).json({ error: "Module not found" });
-    res.status(200).json(result.module);
-});
+    respond(res, result, {
+        not_found: { status: 404, error: "Module not found" },
+        module_found: (r) => ({ status: 200, body: r.module }),
+    });
+}));
 
-moduleRouter.post("/modules", requireAuth, requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN), async (req, res) => {
-    const result = await moduleUseCases.create(req.body);
-    if (result.kind === "missing_fields")
-        return void res.status(400).json({ error: "name is required" });
-    if (result.kind === "module_already_exists")
-        return void res.status(409).json({ error: "A module with this name and code already exists" });
-    res.status(201).json(result.module);
-});
+moduleRouter.post("/modules", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await moduleUseCases.create(req.body, auth);
+    respond(res, result, {
+        missing_fields: { status: 400, error: "name is required" },
+        module_already_exists: { blocked: { type: "Creation", reason: "A module with this name and code already exists" } },
+        module_created: (r) => ({ status: 201, body: r.module }),
+    });
+}));
 
-moduleRouter.patch(
-    "/modules/:id",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN),
-    async (req, res) => {
-        const result = await moduleUseCases.update(String(req.params.id), req.body);
-        if (result.kind === "not_found") return void res.status(404).json({ error: "Module not found" });
-        if (result.kind === "module_already_exists")
-            return void res.status(409).json({ error: "A module with this name and code already exists" });
-        res.status(200).json(result.module);
-    },
-);
+moduleRouter.patch("/modules/:id", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await moduleUseCases.update(String(req.params.id), req.body, auth);
+    respond(res, result, {
+        not_found: { status: 404, error: "Module not found" },
+        module_already_exists: { blocked: { type: "Creation", reason: "A module with this name and code already exists" } },
+        module_updated: (r) => ({ status: 200, body: r.module }),
+    });
+}));
 
-moduleRouter.delete(
-    "/modules/:id",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN),
-    async (req, res) => {
-        const result = await moduleUseCases.delete(String(req.params.id));
-        if (result.kind === "not_found") return void res.status(404).json({ error: "Module not found" });
-        res.status(200).json({ message: "Module deleted" });
-    },
-);
+moduleRouter.delete("/modules/:id", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await moduleUseCases.delete(String(req.params.id), auth);
+    respond(res, result, {
+        not_found: { status: 404, error: "Module not found" },
+        module_has_programs: { blocked: { type: "Deletion", reason: "Module has programs" } },
+        module_has_courses: { blocked: { type: "Deletion", reason: "Module has courses" } },
+        module_has_notations: { blocked: { type: "Deletion", reason: "Module has manual notations" } },
+        module_deleted: { status: 200, body: { message: "Module deleted" } },
+    });
+}));
 
-moduleRouter.get("/modules/:id/courses", requireAuth, async (req, res) => {
+moduleRouter.get("/modules/:id/courses", ...authed(async (req, res) => {
     const { courseUseCases } = await import("@express/src/container");
     const result = await courseUseCases.listByModule(String(req.params.id));
-    res.status(200).json(result.courses);
-});
+    respond(res, result, {
+        courses_listed: (r) => ({ status: 200, body: r.courses }),
+    });
+}));

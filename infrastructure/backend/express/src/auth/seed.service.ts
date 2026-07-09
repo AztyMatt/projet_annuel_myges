@@ -50,7 +50,6 @@ const createSeedAdmin = async ({
     const admin: Admin = {
         id: randomUUID(),
         userId: user.id,
-        instructorId: null,
         role: adminRole,
     };
     await adminRepository.save(admin);

@@ -10,7 +10,6 @@ function rowToAdmin(row: typeof adminTable.$inferSelect): Admin {
     return {
         id: row.id,
         userId: row.userId,
-        instructorId: row.instructorId,
         role: assertEnum(row.role, AdminRole),
     };
 }
@@ -30,14 +29,12 @@ export const adminRepository: AdminRepository = {
             .values({
                 id: admin.id,
                 userId: admin.userId,
-                instructorId: admin.instructorId,
                 role: admin.role,
             })
             .onConflictDoUpdate({
                 target: adminTable.id,
                 set: {
                     userId: admin.userId,
-                    instructorId: admin.instructorId,
                     role: admin.role,
                 },
             });

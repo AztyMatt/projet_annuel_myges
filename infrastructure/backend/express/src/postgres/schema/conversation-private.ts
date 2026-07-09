@@ -1,19 +1,16 @@
 import { pgTable, text, unique } from "drizzle-orm/pg-core";
-import { admin } from "@express/src/postgres/schema/admin";
-import { student } from "@express/src/postgres/schema/student";
+import { users } from "@express/src/postgres/schema/auth";
 import { conversation } from "@express/src/postgres/schema/conversation";
 
 export const conversationPrivate = pgTable("conversation_private", {
     id: text("id").primaryKey(),
-    adminId: text("admin_id")
-        .notNull()
-        .references(() => admin.id),
-    studentId: text("student_id")
-        .notNull()
-        .references(() => student.id),
+    userAId: text("user_a_id")
+        .references(() => users.id, { onDelete: "set null" }),
+    userBId: text("user_b_id")
+        .references(() => users.id, { onDelete: "set null" }),
     conversationId: text("conversation_id")
         .notNull()
-        .references(() => conversation.id),
+        .references(() => conversation.id, { onDelete: "cascade" }),
 }, (table) => ({
-    pairUnique: unique().on(table.adminId, table.studentId),
+    pairUnique: unique().on(table.userAId, table.userBId),
 }));

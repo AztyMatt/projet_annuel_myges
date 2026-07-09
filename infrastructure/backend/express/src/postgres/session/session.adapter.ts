@@ -29,6 +29,10 @@ export const sessionRepository: SessionRepository = {
             .orderBy(asc(sessionTable.startTime));
         return result.map(rowToSession);
     },
+    async existsByCourseId(courseId) {
+        const rows = await db.select({ id: sessionTable.id }).from(sessionTable).where(eq(sessionTable.courseId, courseId)).limit(1);
+        return rows.length > 0;
+    },
     async findByClassroomId(classroomId) {
         const result = await db
             .select()
@@ -36,6 +40,10 @@ export const sessionRepository: SessionRepository = {
             .where(eq(sessionTable.classroomId, classroomId))
             .orderBy(asc(sessionTable.startTime));
         return result.map(rowToSession);
+    },
+    async existsByClassroomId(classroomId) {
+        const rows = await db.select({ id: sessionTable.id }).from(sessionTable).where(eq(sessionTable.classroomId, classroomId)).limit(1);
+        return rows.length > 0;
     },
     async findBySlot(courseId, classroomId, startTime, endTime) {
         const result = await db

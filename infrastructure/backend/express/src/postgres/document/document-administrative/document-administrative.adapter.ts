@@ -5,6 +5,7 @@ import { DocumentType } from "@domain/document/document-administrative/document-
 import { assertEnum } from "@express/src/postgres/assert-enum";
 import { db } from "@express/src/postgres/db";
 import { documentAdministrative as documentAdministrativeTable } from "@express/src/postgres/schema/document";
+import { fileDocument as fileDocumentTable } from "@express/src/postgres/schema/file";
 
 function rowToDocumentAdministrative(row: typeof documentAdministrativeTable.$inferSelect): DocumentAdministrative {
     return {
@@ -31,6 +32,14 @@ export const documentAdministrativeRepository: DocumentAdministrativeRepository 
             .where(eq(documentAdministrativeTable.fileDocumentId, fileDocumentId))
             .limit(1);
         return result[0] ? rowToDocumentAdministrative(result[0]) : undefined;
+    },
+    async findByStudentId(studentId) {
+        const rows = await db
+            .select({ doc: documentAdministrativeTable })
+            .from(documentAdministrativeTable)
+            .innerJoin(fileDocumentTable, eq(documentAdministrativeTable.fileDocumentId, fileDocumentTable.id))
+            .where(eq(fileDocumentTable.studentId, studentId));
+        return rows.map((row) => rowToDocumentAdministrative(row.doc));
     },
     async save(documentAdministrative) {
         await db

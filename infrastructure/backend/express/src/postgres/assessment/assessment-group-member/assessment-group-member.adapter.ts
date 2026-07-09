@@ -35,6 +35,10 @@ export const assessmentGroupMemberRepository: AssessmentGroupMemberRepository = 
             .where(eq(assessmentGroupMemberTable.studentId, studentId));
         return result.map(rowToAssessmentGroupMember);
     },
+    async existsByStudentId(studentId) {
+        const rows = await db.select({ id: assessmentGroupMemberTable.id }).from(assessmentGroupMemberTable).where(eq(assessmentGroupMemberTable.studentId, studentId)).limit(1);
+        return rows.length > 0;
+    },
     async findByGroupAndStudent(assessmentGroupId, studentId) {
         const result = await db
             .select()

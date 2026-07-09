@@ -19,20 +19,19 @@ export const grade = pgTable("grade", {
     id: text("id").primaryKey(),
     studentId: text("student_id")
         .notNull()
-        .references(() => student.id),
+        .references(() => student.id, { onDelete: "cascade" }),
     value: real("value").notNull(),
     isLocked: boolean("is_locked").notNull().default(false),
     enteredAt: timestamp("entered_at", { withTimezone: true }).notNull(),
     enteredBy: text("entered_by")
-        .notNull()
-        .references(() => users.id),
+        .references(() => users.id, { onDelete: "set null" }),
 });
 
 export const gradeAssessment = pgTable("grade_assessment", {
     id: text("id").primaryKey(),
     gradeId: text("grade_id")
         .notNull()
-        .references(() => grade.id),
+        .references(() => grade.id, { onDelete: "cascade" }),
     assessmentId: text("assessment_id")
         .notNull()
         .references(() => assessment.id),
@@ -44,7 +43,7 @@ export const gradeManualNotation = pgTable("grade_manual_notation", {
     id: text("id").primaryKey(),
     gradeId: text("grade_id")
         .notNull()
-        .references(() => grade.id),
+        .references(() => grade.id, { onDelete: "cascade" }),
     gradeManualId: text("grade_manual_id")
         .notNull()
         .references(() => manualNotation.id),
@@ -56,7 +55,7 @@ export const gradeSessionExam = pgTable("grade_session_exam", {
     id: text("id").primaryKey(),
     gradeId: text("grade_id")
         .notNull()
-        .references(() => grade.id),
+        .references(() => grade.id, { onDelete: "cascade" }),
     sessionExamId: text("session_exam_id")
         .notNull()
         .references(() => sessionExam.id),

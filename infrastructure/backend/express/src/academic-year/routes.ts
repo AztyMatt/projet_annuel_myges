@@ -1,65 +1,63 @@
 import { Router } from "express";
-import { requireAuth, requireRole } from "@express/src/auth/middleware";
-import { AdminRole } from "@domain/admin/admin.enums";
+import { authed, getAuthFlags } from "@express/src/auth/middleware";
 import { academicYearUseCases } from "@express/src/container";
+import { respond, send } from "@express/src/http/responses";
 
 export const academicYearRouter = Router();
 
-academicYearRouter.get("/academic-years", requireAuth, async (_req, res) => {
+academicYearRouter.get("/academic-years", ...authed(async (_req, res) => {
     const result = await academicYearUseCases.list();
-    res.status(200).json(result.academicYears);
-});
+    send(res, { status: 200, body: result.academicYears });
+}));
 
-academicYearRouter.get("/academic-years/current", requireAuth, async (_req, res) => {
+academicYearRouter.get("/academic-years/current", ...authed(async (_req, res) => {
     const result = await academicYearUseCases.getCurrent();
-    if (result.kind === "not_found") return void res.status(404).json({ error: "No current academic year found" });
-    res.status(200).json(result.academicYear);
-});
+    respond(res, result, {
+        not_found: { status: 404, error: "No current academic year found" },
+        academic_year_found: (r) => ({ status: 200, body: r.academicYear }),
+    });
+}));
 
-academicYearRouter.get("/academic-years/:id", requireAuth, async (req, res) => {
+academicYearRouter.get("/academic-years/:id", ...authed(async (req, res) => {
     const result = await academicYearUseCases.findById(String(req.params.id));
-    if (result.kind === "not_found") return void res.status(404).json({ error: "Academic year not found" });
-    res.status(200).json(result.academicYear);
-});
+    respond(res, result, {
+        not_found: { status: 404, error: "Academic year not found" },
+        academic_year_found: (r) => ({ status: 200, body: r.academicYear }),
+    });
+}));
 
-academicYearRouter.post(
-    "/academic-years",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN),
-    async (req, res) => {
-        const result = await academicYearUseCases.create(req.body);
-        if (result.kind === "missing_fields")
-            return void res.status(400).json({ error: "startDate and endDate are required" });
-        if (result.kind === "academic_year_already_exists")
-            return void res.status(409).json({ error: "An academic year with these dates already exists" });
-        res.status(201).json(result.academicYear);
-    },
-);
+academicYearRouter.post("/academic-years", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await academicYearUseCases.create(req.body, auth);
+    respond(res, result, {
+        missing_fields: { status: 400, error: "startDate and endDate are required" },
+        academic_year_already_exists: { blocked: { type: "Creation", reason: "An academic year with these dates already exists" } },
+        academic_year_created: (r) => ({ status: 201, body: r.academicYear }),
+    });
+}));
 
-academicYearRouter.patch(
-    "/academic-years/:id",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN),
-    async (req, res) => {
-        const result = await academicYearUseCases.update(String(req.params.id), req.body);
-        if (result.kind === "not_found") return void res.status(404).json({ error: "Academic year not found" });
-        res.status(200).json(result.academicYear);
-    },
-);
+academicYearRouter.patch("/academic-years/:id", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await academicYearUseCases.update(String(req.params.id), req.body, auth);
+    respond(res, result, {
+        not_found: { status: 404, error: "Academic year not found" },
+        academic_year_updated: (r) => ({ status: 200, body: r.academicYear }),
+    });
+}));
 
-academicYearRouter.delete(
-    "/academic-years/:id",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN),
-    async (req, res) => {
-        const result = await academicYearUseCases.delete(String(req.params.id));
-        if (result.kind === "not_found") return void res.status(404).json({ error: "Academic year not found" });
-        res.status(200).json({ message: "Academic year deleted" });
-    },
-);
+academicYearRouter.delete("/academic-years/:id", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await academicYearUseCases.delete(String(req.params.id), auth);
+    respond(res, result, {
+        not_found: { status: 404, error: "Academic year not found" },
+        academic_year_is_current: { blocked: { type: "Operation", reason: "Cannot delete the current academic year" } },
+        academic_year_has_periods: { blocked: { type: "Deletion", reason: "Academic year has periods" } },
+        academic_year_deleted: { status: 200, body: { message: "Academic year deleted" } },
+    });
+}));
 
-academicYearRouter.get("/academic-years/:id/periods", requireAuth, async (req, res) => {
+academicYearRouter.get("/academic-years/:id/periods", ...authed(async (req, res) => {
     const { periodUseCases } = await import("@express/src/container");
     const result = await periodUseCases.listByAcademicYear(String(req.params.id));
-    res.status(200).json(result.periods);
-});
+    send(res, { status: 200, body: result.periods });
+}));

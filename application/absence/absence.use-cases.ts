@@ -2,7 +2,17 @@ import { randomUUID } from "node:crypto";
 import { type Absence } from "@domain/absence/absence.entity";
 import { BasicStatus } from "@domain/absence/absence.enums";
 import { type AbsenceRepository } from "@application/absence/absence.repository";
-import { NotFound, MissingFields } from "@application/types/results";
+import { type StudentRepository } from "@application/student/student.repository";
+import { type SessionRepository } from "@application/session/session.repository";
+import { type CourseRepository } from "@application/course/course.repository";
+import { type InstructorRepository } from "@application/instructor/instructor.repository";
+import { isCourseInstructor } from "@application/course/course-access";
+import { type FileJustificationRepository } from "@application/file/file-justification/file-justification.repository";
+import { type FileRepository } from "@application/file/file.repository";
+import { type StorageService } from "@application/file/storage.service";
+import { type UnitOfWork } from "@application/types/unit-of-work";
+import { type AuthContext } from "@application/types/auth-context";
+import { NotFound, MissingFields, Forbidden } from "@application/types/results";
 
 export type AbsenceView = {
     id: string;
@@ -15,18 +25,25 @@ export type AbsenceView = {
 
 export type DeclareAbsenceResult =
     | MissingFields
+    | NotFound
+    | Forbidden
     | { kind: "absence_already_exists" }
     | { kind: "absence_declared"; absence: AbsenceView };
 
-export type ValidateAbsenceResult = NotFound | { kind: "absence_validated"; absence: AbsenceView };
+export type ValidateAbsenceResult = NotFound | Forbidden | { kind: "absence_validated"; absence: AbsenceView };
 
-export type RejectAbsenceResult = NotFound | { kind: "absence_rejected"; absence: AbsenceView };
+export type RejectAbsenceResult = NotFound | Forbidden | { kind: "absence_rejected"; absence: AbsenceView };
 
-export type DeleteAbsenceResult = NotFound | { kind: "absence_deleted" };
+export type DeleteAbsenceResult =
+    | NotFound
+    | Forbidden
+    | { kind: "absence_is_validated" }
+    | { kind: "absence_deleted" }
+    | { kind: "absence_deleted_with_warnings"; failedPaths: string[] };
 
-export type GetAbsenceResult = NotFound | { kind: "absence_found"; absence: AbsenceView };
+export type GetAbsenceResult = NotFound | Forbidden | { kind: "absence_found"; absence: AbsenceView };
 
-export type ListAbsencesResult = { kind: "absences_listed"; absences: AbsenceView[] };
+export type ListAbsencesResult = Forbidden | { kind: "absences_listed"; absences: AbsenceView[] };
 
 const toView = (a: Absence): AbsenceView => ({
     id: a.id,
@@ -38,11 +55,34 @@ const toView = (a: Absence): AbsenceView => ({
 });
 
 export class AbsenceUseCases {
-    constructor(private readonly absences: AbsenceRepository) {}
+    constructor(
+        private readonly absences: AbsenceRepository,
+        private readonly fileJustifications: FileJustificationRepository,
+        private readonly files: FileRepository,
+        private readonly storage: StorageService,
+        private readonly unitOfWork: UnitOfWork,
+        private readonly students: StudentRepository,
+        private readonly sessions: SessionRepository,
+        private readonly courses: CourseRepository,
+        private readonly instructors: InstructorRepository,
+    ) {}
 
-    async declare(input: { studentId?: string; sessionId?: string; reason?: string }): Promise<DeclareAbsenceResult> {
+    async declare(
+        input: { studentId?: string; sessionId?: string; reason?: string },
+        auth: AuthContext,
+    ): Promise<DeclareAbsenceResult> {
         const { studentId, sessionId, reason } = input;
         if (!studentId || !sessionId || !reason) return MissingFields;
+        const session = await this.sessions.findById(sessionId);
+        if (!session) return NotFound;
+        if (!auth.isAdmin) {
+            const ownsCourse = await isCourseInstructor(
+                { courses: this.courses, instructors: this.instructors },
+                session.courseId,
+                auth.requesterId,
+            );
+            if (!ownsCourse) return Forbidden;
+        }
         if (await this.absences.findByStudentAndSession(studentId, sessionId)) return { kind: "absence_already_exists" };
         const absence: Absence = {
             id: randomUUID(),
@@ -56,7 +96,8 @@ export class AbsenceUseCases {
         return { kind: "absence_declared", absence: toView(absence) };
     }
 
-    async validate(id: string): Promise<ValidateAbsenceResult> {
+    async validate(id: string, auth: AuthContext): Promise<ValidateAbsenceResult> {
+        if (!auth.isStaff) return Forbidden;
         const absence = await this.absences.findById(id);
         if (!absence) return NotFound;
         absence.status = BasicStatus.VALIDATED;
@@ -64,7 +105,8 @@ export class AbsenceUseCases {
         return { kind: "absence_validated", absence: toView(absence) };
     }
 
-    async reject(id: string): Promise<RejectAbsenceResult> {
+    async reject(id: string, auth: AuthContext): Promise<RejectAbsenceResult> {
+        if (!auth.isStaff) return Forbidden;
         const absence = await this.absences.findById(id);
         if (!absence) return NotFound;
         absence.status = BasicStatus.REJECTED;
@@ -72,29 +114,52 @@ export class AbsenceUseCases {
         return { kind: "absence_rejected", absence: toView(absence) };
     }
 
-    async delete(id: string): Promise<DeleteAbsenceResult> {
+    async delete(id: string, auth: AuthContext): Promise<DeleteAbsenceResult> {
+        if (!auth.isAdmin) return Forbidden;
         const absence = await this.absences.findById(id);
         if (!absence) return NotFound;
-        await this.absences.deleteById(id);
-        return { kind: "absence_deleted" };
+        if (absence.status === BasicStatus.VALIDATED && !auth.isSuperAdmin) return { kind: "absence_is_validated" };
+        const justifications = await this.fileJustifications.findByAbsenceId(id);
+        const fileOrNulls = await Promise.all(justifications.map((j) => this.files.findById(j.fileId)));
+        const storagePaths = fileOrNulls.filter(Boolean).map((f) => f!.storagePath);
+        await this.unitOfWork.run(async () => {
+            for (const j of justifications) await this.fileJustifications.deleteById(j.id);
+            for (const f of fileOrNulls) if (f) await this.files.deleteById(f.id);
+            await this.absences.deleteById(id);
+        });
+        const failedPaths = await this.storage.deleteMany(storagePaths);
+        return failedPaths.length > 0
+            ? { kind: "absence_deleted_with_warnings", failedPaths }
+            : { kind: "absence_deleted" };
     }
 
-    async list(): Promise<ListAbsencesResult> {
+    async list(auth: AuthContext): Promise<ListAbsencesResult> {
+        if (!auth.isStaff) return Forbidden;
         const absences = await this.absences.list();
         return { kind: "absences_listed", absences: absences.map(toView) };
     }
 
-    async listByStudent(studentId: string): Promise<ListAbsencesResult> {
+    async listByStudent(studentId: string, auth: AuthContext): Promise<ListAbsencesResult> {
+        if (!auth.isStaff) return Forbidden;
         const absences = await this.absences.findByStudentId(studentId);
         return { kind: "absences_listed", absences: absences.map(toView) };
     }
 
-    async listBySession(sessionId: string): Promise<ListAbsencesResult> {
+    async listMine(auth: AuthContext): Promise<NotFound | { kind: "absences_listed"; absences: AbsenceView[] }> {
+        const student = await this.students.findByUserId(auth.requesterId);
+        if (!student) return NotFound;
+        const absences = await this.absences.findByStudentId(student.id);
+        return { kind: "absences_listed", absences: absences.map(toView) };
+    }
+
+    async listBySession(sessionId: string, auth: AuthContext): Promise<ListAbsencesResult> {
+        if (!auth.isStaff) return Forbidden;
         const absences = await this.absences.findBySessionId(sessionId);
         return { kind: "absences_listed", absences: absences.map(toView) };
     }
 
-    async findById(id: string): Promise<GetAbsenceResult> {
+    async findById(id: string, auth: AuthContext): Promise<GetAbsenceResult> {
+        if (!auth.isStaff) return Forbidden;
         const absence = await this.absences.findById(id);
         if (!absence) return NotFound;
         return { kind: "absence_found", absence: toView(absence) };

@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, inArray } from "drizzle-orm";
 import { type FileRepository } from "@application/file/file.repository";
 import { type File } from "@domain/file/file.entity";
 import { db } from "@express/src/postgres/db";
@@ -30,6 +30,10 @@ export const fileRepository: FileRepository = {
             .orderBy(desc(fileTable.uploadedAt));
         return result.map(rowToFile);
     },
+    async existsByUploadedBy(userId) {
+        const rows = await db.select({ id: fileTable.id }).from(fileTable).where(eq(fileTable.uploadedBy, userId)).limit(1);
+        return rows.length > 0;
+    },
     async save(fileEntity) {
         await db
             .insert(fileTable)
@@ -58,6 +62,10 @@ export const fileRepository: FileRepository = {
     },
     async deleteById(id) {
         await db.delete(fileTable).where(eq(fileTable.id, id));
+    },
+    async deleteByIds(ids) {
+        if (ids.length === 0) return;
+        await db.delete(fileTable).where(inArray(fileTable.id, ids));
     },
     async list() {
         const result = await db.select().from(fileTable).orderBy(desc(fileTable.uploadedAt));

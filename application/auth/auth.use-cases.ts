@@ -13,11 +13,17 @@ import { Role } from "@domain/auth/user.enums";
 import { type AdminRepository } from "@application/admin/admin.repository";
 import { type InstructorRepository } from "@application/instructor/instructor.repository";
 import { type StudentRepository } from "@application/student/student.repository";
+import { type FileRepository } from "@application/file/file.repository";
+import { type MessageRepository } from "@application/message/message.repository";
+import { type MessageReadRepository } from "@application/message/message-read/message-read.repository";
+import { type AuditLogRepository } from "@application/audit-log/audit-log.repository";
 import { type PasswordHasher } from "@application/auth/password-hasher.port";
 import { type TokenProvider } from "@application/auth/token-provider.port";
 import { type TotpProvider } from "@application/auth/totp-provider.port";
 import { type UserRepository } from "@application/auth/user.repository";
 import { type TwoFactorSessionRepository } from "@application/auth/two-factor-session.repository";
+import { type AuthContext } from "@application/types/auth-context";
+import { Forbidden } from "@application/types/results";
 
 const MAX_2FA_ATTEMPTS = 5;
 const TWO_FACTOR_SESSION_EXPIRY_MS = 5 * 60 * 1000;
@@ -86,19 +92,21 @@ export type GetMeResult =
           };
       };
 
-export type ListUsersResult = {
-    kind: "users_listed";
-    users: Array<{
-        id: string;
-        firstname: string;
-        lastname: string;
-        email: string;
-        failedAttempts: number;
-        lockedUntil: Date | null;
-        passwordExpired: boolean;
-        twoFactorEnabled: boolean;
-    }>;
-};
+export type ListUsersResult =
+    | Forbidden
+    | {
+          kind: "users_listed";
+          users: Array<{
+              id: string;
+              firstname: string;
+              lastname: string;
+              email: string;
+              failedAttempts: number;
+              lockedUntil: Date | null;
+              passwordExpired: boolean;
+              twoFactorEnabled: boolean;
+          }>;
+      };
 
 export type GdprExportResult =
     | { kind: "user_not_found" }
@@ -107,7 +115,15 @@ export type GdprExportResult =
           data: { id: string; firstname: string; lastname: string; email: string; gdprConsentAt: Date; createdAt: Date; lastLoginAt: Date | null };
       };
 
-export type DeleteAccountResult = { kind: "user_not_found" } | { kind: "account_deleted" };
+export type DeleteAccountResult =
+    | Forbidden
+    | { kind: "user_not_found" }
+    | { kind: "user_has_active_role" }
+    | { kind: "user_has_files" }
+    | { kind: "user_has_messages" }
+    | { kind: "user_has_message_reads" }
+    | { kind: "user_has_audit_logs" }
+    | { kind: "account_deleted" };
 
 export type Enable2faResult =
     | { kind: "unauthorized" }
@@ -124,6 +140,10 @@ export class AuthUseCases {
         private readonly admins: AdminRepository,
         private readonly students: StudentRepository,
         private readonly instructors: InstructorRepository,
+        private readonly files: FileRepository,
+        private readonly messages: MessageRepository,
+        private readonly messageReads: MessageReadRepository,
+        private readonly auditLogs: AuditLogRepository,
         private readonly hasher: PasswordHasher,
         private readonly tokens: TokenProvider,
         private readonly totp: TotpProvider,
@@ -316,7 +336,8 @@ export class AuthUseCases {
         return { kind: "password_updated" };
     }
 
-    async listUsersForAdmin(): Promise<ListUsersResult> {
+    async listUsersForAdmin(auth: AuthContext): Promise<ListUsersResult> {
+        if (!auth.isSuperAdmin) return Forbidden;
         const users = await this.users.list();
         return {
             kind: "users_listed",
@@ -397,9 +418,15 @@ export class AuthUseCases {
         await this.twoFactorSessions.deleteOlderThan(cutoff);
     }
 
-    async deleteAccount(userId: string): Promise<DeleteAccountResult> {
+    async deleteAccount(userId: string, auth: AuthContext): Promise<DeleteAccountResult> {
+        if (!auth.isSuperAdmin) return Forbidden;
         const user = await this.users.findById(userId);
         if (!user) return { kind: "user_not_found" };
+        if (await this.resolveRole(userId)) return { kind: "user_has_active_role" };
+        if (await this.files.existsByUploadedBy(userId)) return { kind: "user_has_files" };
+        if (await this.messages.existsBySenderId(userId)) return { kind: "user_has_messages" };
+        if (await this.messageReads.existsByUserId(userId)) return { kind: "user_has_message_reads" };
+        if (await this.auditLogs.existsByUserId(userId)) return { kind: "user_has_audit_logs" };
         await this.users.deleteById(user.id);
         return { kind: "account_deleted" };
     }

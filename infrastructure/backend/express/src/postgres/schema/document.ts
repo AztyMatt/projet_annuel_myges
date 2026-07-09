@@ -6,6 +6,7 @@ export const documentAdministrative = pgTable("document_administrative", {
     id: text("id").primaryKey(),
     fileDocumentId: text("file_document_id")
         .notNull()
+        .unique()
         .references(() => fileDocument.id),
     type: text("type").notNull(),
     expiration: timestamp("expiration", { withTimezone: true }),
@@ -18,7 +19,6 @@ export const documentApprenticeshipContract = pgTable("document_apprenticeship_c
         .unique()
         .references(() => fileDocument.id),
     companyId: text("company_id")
-        .notNull()
         .references(() => company.id),
     type: text("type").notNull(),
     startDate: timestamp("start_date", { withTimezone: true }).notNull(),

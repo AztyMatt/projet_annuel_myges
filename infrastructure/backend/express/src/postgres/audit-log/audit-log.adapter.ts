@@ -32,6 +32,10 @@ export const auditLogRepository: AuditLogRepository = {
             .orderBy(desc(auditLogTable.createdAt));
         return result.map(rowToAuditLog);
     },
+    async existsByUserId(userId) {
+        const rows = await db.select({ id: auditLogTable.id }).from(auditLogTable).where(eq(auditLogTable.userId, userId)).limit(1);
+        return rows.length > 0;
+    },
     async findByEntityId(entityId) {
         const result = await db
             .select()
