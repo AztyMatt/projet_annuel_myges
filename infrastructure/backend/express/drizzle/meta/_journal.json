@@ -43,6 +43,13 @@
       "when": 1783562090034,
       "tag": "0005_sad_the_leader",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1783600000000,
+      "tag": "0006_password_reset_tokens",
+      "breakpoints": true
     }
   ]
 }

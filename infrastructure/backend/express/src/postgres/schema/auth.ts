@@ -24,3 +24,11 @@ export const twoFactorSessions = pgTable("two_factor_sessions", {
     attempts: integer("attempts").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
 });
+
+export const passwordResetTokens = pgTable("password_reset_tokens", {
+    token: text("token").primaryKey(),
+    userId: text("user_id")
+        .notNull()
+        .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+});

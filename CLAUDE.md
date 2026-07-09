@@ -22,11 +22,10 @@ Next.js (frontend) · Express.js (backend) · PostgreSQL + Drizzle (ORM) · Dock
 
 - [x] Inscription — `POST /auth/signup`, front `/signup` branché
 - [x] Connexion — `POST /auth/login` (+ étape 2FA `POST /auth/login/2fa`), front `/login` branché
-- [ ] **Mot de passe oublié** (vrai flux par email, sans connaître l'ancien mot de passe) — **aucun endpoint backend, aucune page front**
-  - [ ] Backend : générer un token à usage unique + expiration, endpoint d'envoi d'email, endpoint de confirmation
-  - [ ] Front : page `/forgot-password` (saisie email) + page de confirmation (`/reset-password?token=...`)
-- [~] Réinitialisation de mot de passe — existe uniquement en mode "renouvellement forcé tous les 60 jours" (`POST /auth/password/reset-with-credentials`, nécessite email + ancien mdp + nouveau mdp)
-  - [ ] Ce n'est pas un "mot de passe oublié" : il faut déjà connaître l'ancien mot de passe. À bien distinguer les deux usages sur `/reset-password`
+- [x] **Mot de passe oublié** (vrai flux par email, sans connaître l'ancien mot de passe)
+  - [x] Backend : token à usage unique + expiration (`POST /auth/password/forgot`, `POST /auth/password/reset-with-token`), envoi d'email (log console en dev via `email-sender.adapter.ts`)
+  - [x] Front : page `/forgot-password` + confirmation via `/reset-password?token=...`
+- [x] Réinitialisation de mot de passe — deux usages distincts sur `/reset-password` : renouvellement forcé (email + ancien mdp) via `POST /auth/password/reset-with-credentials` · mot de passe oublié (token email, sans ancien mdp) via `POST /auth/password/reset-with-token`
 - [x] Mot de passe fort (12 caractères min., maj./min./chiffre/symbole) — `domain/auth/security-policy.ts` (`isStrongPassword`)
 - [x] Renouvellement obligatoire tous les 60 jours — `PASSWORD_MAX_AGE_DAYS = 60`, vérifié à chaque login (`needsPasswordReset`)
 - [x] Blocage après tentatives infructueuses — 5 tentatives (`MAX_FAILED_ATTEMPTS`) → verrouillage 15 min (`LOCK_DURATION_MS`), déverrouillage automatique après délai (pas d'action admin nécessaire)
@@ -120,7 +119,7 @@ Next.js (frontend) · Express.js (backend) · PostgreSQL + Drizzle (ORM) · Dock
 
 Ces gaps backend conditionnent des pages listées en section 11 — à traiter en parallèle du travail front, pas après :
 
-- [ ] Endpoint mot de passe oublié par email (token à usage unique)
+- [x] Endpoint mot de passe oublié par email (token à usage unique)
 - [x] Endpoint d'activation de la 2FA sur un compte existant (`POST /auth/2fa/enable`)
 - [ ] Upload réel de fichiers (multipart + stockage disque/S3), au-delà de la simple création de métadonnées `POST /files`
 - [ ] Mécanisme de notifications temps réel (WebSocket) pour planning/notes/documents
@@ -172,12 +171,8 @@ Seulement 4 rôles (pas les 6-7 décrits dans `cahierDesCharges.md` §2, l'admin
   - À retirer : le sélecteur de rôle actuel (le champ envoyé n'est lu par aucun endpoit backend)
   - Endpoint : `POST /auth/signup`
 
-- [ ] **`/forgot-password`** — 🆕, dépend d'un endpoint backend à créer (section 10)
-  - Contenu : un seul champ email + bouton "Envoyer le lien de réinitialisation" · message de confirmation neutre après envoi (ne jamais indiquer si l'email existe en base, c'est une fuite d'information)
-
-- [~] **`/reset-password`** — branché sur `POST /auth/password/reset-with-credentials`
-  - Contenu actuel (à conserver) : champs email (pré-rempli si redirigé depuis `/login`), ancien mot de passe, nouveau mot de passe + confirmation, indicateur de force
-  - À ajouter : si la page est ouverte avec un paramètre `?token=...` (lien reçu par email via `/forgot-password`), afficher un **second formulaire** sans champ "ancien mot de passe" (juste nouveau mot de passe + confirmation) — les deux usages ("renouvellement expiré" et "mot de passe oublié") ne doivent pas être confondus dans le même formulaire
+- [x] **`/forgot-password`** — saisie email + message de confirmation neutre après envoi
+- [x] **`/reset-password`** — deux formulaires selon le contexte : renouvellement expiré (email + ancien + nouveau mdp) · lien email `?token=...` (nouveau mdp + confirmation, sans ancien mdp)
 
 - [x] **`/2fa/setup`** — QR code + secret TOTP + confirmation par code à 6 chiffres
 
@@ -347,5 +342,5 @@ Fusionne les responsabilités "Scolarité / Pédagogique / Relations Entreprises
 4. ~~Zone Administration (`/scolarite/*`)~~ ✅ fait — les 13 pages (année académique, campus, formations, classes, intervenants, cours, planning, étudiants, absences, documents, entreprises, externes, examens) sont construites. `Sidebar.tsx` mis à jour avec les 13 entrées de menu correspondantes
 5. ~~`/etudiant/cours` + `/etudiant/evaluations` + `/intervenant/evaluations` (boucle supports/rendus complète)~~ ✅ fait — `Sidebar.tsx`/`TopBar.tsx` mis à jour avec les 3 entrées de menu/titres correspondants
 6. ~~`/superadmin/securite` (audit-log détaillé, filtres)~~ ✅ fait
-7. `/forgot-password` + `/2fa/setup` une fois les endpoints back correspondants ajoutés (section 10) — `/2fa/setup` fait entretemps, `/forgot-password` reste à faire
+7. ~~`/forgot-password` + `/2fa/setup`~~ ✅ fait
 8. ~~Composants à mutualiser (modal de confirmation, toast, badge de statut)~~ ✅ fait — `StatusBadge`/`ConfirmDialog`/`useToast`, déployés sur les suppressions d'entité et les badges de statut dupliqués (détail section 11.7). Table générique et dropzone d'upload restent à faire

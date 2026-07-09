@@ -206,9 +206,12 @@ export default function LoginPage() {
                     </button>
 
                     {!totpRequired && (
-                        <div className="mt-4 flex items-center justify-start text-xs">
+                        <div className="mt-4 flex items-center justify-between text-xs">
                             <Link href="/signup" className="text-blue-700 hover:text-blue-900 font-medium">
                                 Créer un compte
+                            </Link>
+                            <Link href="/forgot-password" className="text-blue-700 hover:text-blue-900 font-medium">
+                                Mot de passe oublié ?
                             </Link>
                         </div>
                     )}
