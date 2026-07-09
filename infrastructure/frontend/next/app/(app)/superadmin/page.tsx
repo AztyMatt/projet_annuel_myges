@@ -16,8 +16,8 @@ type AuditLogEntry = {
 };
 
 async function loadKpis() {
-    const [securityUsers, students, instructors, admins] = await Promise.all([
-        api.get<SecurityUser[]>("/admin/security/users"),
+    const [{ users: securityUsers }, students, instructors, admins] = await Promise.all([
+        api.get<{ users: SecurityUser[] }>("/admin/security/users"),
         api.get<{ userId: string }[]>("/students"),
         api.get<{ userId: string }[]>("/instructors"),
         api.get<{ userId: string }[]>("/admins"),
