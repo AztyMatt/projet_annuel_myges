@@ -22,11 +22,14 @@ import { type TokenProvider } from "@application/auth/token-provider.port";
 import { type TotpProvider } from "@application/auth/totp-provider.port";
 import { type UserRepository } from "@application/auth/user.repository";
 import { type TwoFactorSessionRepository } from "@application/auth/two-factor-session.repository";
+import { type PasswordResetTokenRepository } from "@application/auth/password-reset-token.repository";
+import { type EmailSender } from "@application/auth/email-sender.port";
 import { type AuthContext } from "@application/types/auth-context";
 import { Forbidden } from "@application/types/results";
 
 const MAX_2FA_ATTEMPTS = 5;
 const TWO_FACTOR_SESSION_EXPIRY_MS = 5 * 60 * 1000;
+const PASSWORD_RESET_TOKEN_EXPIRY_MS = 60 * 60 * 1000;
 
 type RoleKey = keyof typeof Role;
 
@@ -80,7 +83,13 @@ export type ResetPasswordResult =
     | { kind: "weak_password" }
     | { kind: "user_not_found" }
     | { kind: "invalid_old_password" }
+    | { kind: "invalid_or_expired_token" }
     | { kind: "password_updated" };
+
+export type RequestPasswordResetResult =
+    | { kind: "missing_email" }
+    | { kind: "invalid_email" }
+    | { kind: "reset_email_sent" };
 
 export type GetMeResult =
     | { kind: "user_not_found" }
@@ -148,6 +157,9 @@ export class AuthUseCases {
         private readonly tokens: TokenProvider,
         private readonly totp: TotpProvider,
         private readonly twoFactorSessions: TwoFactorSessionRepository,
+        private readonly passwordResetTokens: PasswordResetTokenRepository,
+        private readonly emailSender: EmailSender,
+        private readonly frontendPublicUrl: string,
     ) {}
 
     private async resolveRole(userId: string): Promise<Role | undefined> {
@@ -286,6 +298,43 @@ export class AuthUseCases {
         const user = await this.users.findByEmail(email.toLowerCase());
         if (!user) return { kind: "user_not_found" };
         if (!(await this.hasher.verify(user.passwordHash, oldPassword))) return { kind: "invalid_old_password" };
+        return this.applyPasswordUpdate(user, newPassword);
+    }
+
+    async requestPasswordReset(input: { email?: string }): Promise<RequestPasswordResetResult> {
+        const email = input.email?.trim();
+        if (!email) return { kind: "missing_email" };
+        if (!emailIsValid(email)) return { kind: "invalid_email" };
+
+        const user = await this.users.findByEmail(email.toLowerCase());
+        if (user) {
+            await this.passwordResetTokens.deleteByUserId(user.id);
+            const resetToken = await this.passwordResetTokens.create(user.id);
+            const resetUrl = `${this.frontendPublicUrl}/reset-password?token=${encodeURIComponent(resetToken.token)}`;
+            await this.emailSender.sendPasswordResetEmail({ to: user.email, resetUrl });
+        }
+
+        return { kind: "reset_email_sent" };
+    }
+
+    async resetWithToken(input: { token?: string; newPassword?: string }): Promise<ResetPasswordResult> {
+        const { token, newPassword } = input;
+        if (!token || !newPassword) return { kind: "missing_reset_payload" };
+        if (!isStrongPassword(newPassword)) return { kind: "weak_password" };
+
+        const notBefore = new Date(Date.now() - PASSWORD_RESET_TOKEN_EXPIRY_MS);
+        const resetToken = await this.passwordResetTokens.find(token, notBefore);
+        if (!resetToken) return { kind: "invalid_or_expired_token" };
+
+        const user = await this.users.findById(resetToken.userId);
+        if (!user) return { kind: "invalid_or_expired_token" };
+
+        await this.applyPasswordUpdate(user, newPassword);
+        await this.passwordResetTokens.delete(resetToken.token);
+        return { kind: "password_updated" };
+    }
+
+    private async applyPasswordUpdate(user: User, newPassword: string): Promise<ResetPasswordResult> {
         user.passwordHash = await this.hasher.hash(newPassword);
         user.passwordUpdatedAt = new Date();
         user.failedAttempts = 0;
@@ -328,12 +377,7 @@ export class AuthUseCases {
         const user = await this.users.findById(userId);
         if (!user) return { kind: "user_not_found" };
         if (!(await this.hasher.verify(user.passwordHash, oldPassword))) return { kind: "invalid_old_password" };
-        user.passwordHash = await this.hasher.hash(newPassword);
-        user.passwordUpdatedAt = new Date();
-        user.failedAttempts = 0;
-        user.lockedUntil = null;
-        await this.users.save(user);
-        return { kind: "password_updated" };
+        return this.applyPasswordUpdate(user, newPassword);
     }
 
     async listUsersForAdmin(auth: AuthContext): Promise<ListUsersResult> {
@@ -414,8 +458,10 @@ export class AuthUseCases {
     }
 
     async cleanupExpiredSessions(): Promise<void> {
-        const cutoff = new Date(Date.now() - TWO_FACTOR_SESSION_EXPIRY_MS);
-        await this.twoFactorSessions.deleteOlderThan(cutoff);
+        const twoFactorCutoff = new Date(Date.now() - TWO_FACTOR_SESSION_EXPIRY_MS);
+        await this.twoFactorSessions.deleteOlderThan(twoFactorCutoff);
+        const passwordResetCutoff = new Date(Date.now() - PASSWORD_RESET_TOKEN_EXPIRY_MS);
+        await this.passwordResetTokens.deleteOlderThan(passwordResetCutoff);
     }
 
     async deleteAccount(userId: string, auth: AuthContext): Promise<DeleteAccountResult> {

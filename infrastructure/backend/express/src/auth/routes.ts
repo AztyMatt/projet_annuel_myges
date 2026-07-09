@@ -2,6 +2,7 @@ import {
     type Enable2faResult,
     type GetMeResult,
     type LoginResult,
+    type RequestPasswordResetResult,
     type ResetPasswordResult,
     type Verify2faResult,
 } from "@application/auth/auth.use-cases";
@@ -105,8 +106,29 @@ const resetPasswordResponse = (result: ResetPasswordResult): { status: HttpStatu
             return { status: 404, body: { error: "User not found" } };
         case "invalid_old_password":
             return { status: 401, body: { error: "Invalid old password" } };
+        case "invalid_or_expired_token":
+            return { status: 401, body: { error: "Invalid or expired reset token" } };
         case "password_updated":
             return { status: 200, body: { message: "Password updated" } };
+    }
+};
+
+const requestPasswordResetResponse = (
+    result: RequestPasswordResetResult,
+): { status: HttpStatus; body: ResetPasswordResponseBody } => {
+    switch (result.kind) {
+        case "missing_email":
+            return { status: 400, body: { error: "Email is required" } };
+        case "invalid_email":
+            return { status: 400, body: { error: "Invalid email format" } };
+        case "reset_email_sent":
+            return {
+                status: 200,
+                body: {
+                    message:
+                        "If an account exists for this email, a password reset link has been sent.",
+                },
+            };
     }
 };
 
@@ -205,6 +227,20 @@ authRouter.post("/auth/password/reset", ...authed(async (request, response) => {
 
 authRouter.post("/auth/password/reset-with-credentials", async (request, response) => {
     const httpResponse = resetPasswordResponse(await authUseCases.resetWithCredentials(request.body));
+    send(response, { status: httpResponse.status, body: httpResponse.body });
+});
+
+authRouter.post("/auth/password/forgot", async (request, response) => {
+    const httpResponse = requestPasswordResetResponse(
+        await authUseCases.requestPasswordReset(request.body as { email?: string }),
+    );
+    send(response, { status: httpResponse.status, body: httpResponse.body });
+});
+
+authRouter.post("/auth/password/reset-with-token", async (request, response) => {
+    const httpResponse = resetPasswordResponse(
+        await authUseCases.resetWithToken(request.body as { token?: string; newPassword?: string }),
+    );
     send(response, { status: httpResponse.status, body: httpResponse.body });
 });
 
