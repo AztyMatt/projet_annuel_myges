@@ -33,6 +33,28 @@ type Role = "etudiant" | "intervenant" | "scolarite" | "superadmin";
 
 type NavItem = { label: string; href: string; icon: React.ElementType };
 
+const ADMIN_PAGES: NavItem[] = [
+    { label: "Étudiants", href: "/scolarite/etudiants", icon: Users },
+    { label: "Absences", href: "/scolarite/absences", icon: AlertCircle },
+    { label: "Documents", href: "/scolarite/documents", icon: FileText },
+    { label: "Notes & jurys", href: "/scolarite/notes", icon: BookOpen },
+    { label: "Planning", href: "/scolarite/planning", icon: Calendar },
+    { label: "Examens", href: "/scolarite/examens", icon: ClipboardList },
+    { label: "Formations", href: "/scolarite/formations", icon: Library },
+    { label: "Classes", href: "/scolarite/classes", icon: Boxes },
+    { label: "Cours", href: "/scolarite/cours", icon: FolderOpen },
+    { label: "Intervenants", href: "/scolarite/intervenants", icon: Briefcase },
+    { label: "Entreprises", href: "/scolarite/entreprises", icon: Landmark },
+    { label: "Externes", href: "/scolarite/externes", icon: UserPlus },
+    { label: "Campus", href: "/scolarite/campus", icon: Building2 },
+    { label: "Année académique", href: "/scolarite/annee-academique", icon: CalendarDays },
+];
+
+const COMMON_PAGES: NavItem[] = [
+    { label: "Messagerie", href: "/messagerie", icon: MessageSquare },
+    { label: "Paramètres", href: "/parametres", icon: Settings },
+];
+
 const navConfig: Record<Role, NavItem[]> = {
     etudiant: [
         { label: "Tableau de bord", href: "/etudiant", icon: LayoutDashboard },
@@ -56,29 +78,16 @@ const navConfig: Record<Role, NavItem[]> = {
     ],
     scolarite: [
         { label: "Tableau de bord", href: "/scolarite", icon: LayoutDashboard },
-        { label: "Étudiants", href: "/scolarite/etudiants", icon: Users },
-        { label: "Absences", href: "/scolarite/absences", icon: AlertCircle },
-        { label: "Documents", href: "/scolarite/documents", icon: FileText },
-        { label: "Notes & jurys", href: "/scolarite/notes", icon: BookOpen },
-        { label: "Planning", href: "/scolarite/planning", icon: Calendar },
-        { label: "Examens", href: "/scolarite/examens", icon: ClipboardList },
-        { label: "Formations", href: "/scolarite/formations", icon: Library },
-        { label: "Classes", href: "/scolarite/classes", icon: Boxes },
-        { label: "Cours", href: "/scolarite/cours", icon: FolderOpen },
-        { label: "Intervenants", href: "/scolarite/intervenants", icon: Briefcase },
-        { label: "Entreprises", href: "/scolarite/entreprises", icon: Landmark },
-        { label: "Externes", href: "/scolarite/externes", icon: UserPlus },
-        { label: "Campus", href: "/scolarite/campus", icon: Building2 },
-        { label: "Année académique", href: "/scolarite/annee-academique", icon: CalendarDays },
-        { label: "Messagerie", href: "/messagerie", icon: MessageSquare },
-        { label: "Paramètres", href: "/parametres", icon: Settings },
+        ...ADMIN_PAGES,
+        ...COMMON_PAGES,
     ],
+
     superadmin: [
         { label: "Tableau de bord", href: "/superadmin", icon: LayoutDashboard },
         { label: "Gestion utilisateurs", href: "/superadmin/gestion", icon: UserCog },
         { label: "Sécurité", href: "/superadmin/securite", icon: Shield },
-        { label: "Messagerie", href: "/messagerie", icon: MessageSquare },
-        { label: "Paramètres", href: "/parametres", icon: Settings },
+        ...ADMIN_PAGES,
+        ...COMMON_PAGES,
     ],
 };
 
@@ -108,16 +117,13 @@ function roleFromApi(apiRole: string | undefined): Role {
     }
 }
 
-// Les pages sous /etudiant, /intervenant, /scolarite, /superadmin sont préfixées par rôle : on peut
-// se fier au chemin (rapide, pas d'attente réseau). Mais /parametres et /messagerie sont partagées
-// par tous les rôles et n'ont pas de préfixe : il faut alors se fier au rôle réel de l'utilisateur
-// connecté (GET /users/me), sinon tout le monde y voit le menu "étudiant" par défaut.
+
 function getRole(pathname: string, apiRole: string | undefined): Role {
+    if (apiRole) return roleFromApi(apiRole);
     if (pathname.startsWith("/intervenant")) return "intervenant";
     if (pathname.startsWith("/scolarite")) return "scolarite";
     if (pathname.startsWith("/superadmin")) return "superadmin";
-    if (pathname.startsWith("/etudiant")) return "etudiant";
-    return roleFromApi(apiRole);
+    return "etudiant";
 }
 
 function isNavActive(pathname: string, href: string): boolean {
