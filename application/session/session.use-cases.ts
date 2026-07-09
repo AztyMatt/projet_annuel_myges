@@ -1,8 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { type Session } from "@domain/session/session.entity";
-import { type SessionMode } from "@domain/session/session.enums";
+import { SessionMode } from "@domain/session/session.enums";
 import { type SessionRepository } from "@application/session/session.repository";
-import { NotFound, MissingFields } from "@application/types/results";
+import { type SessionExamRepository } from "@application/session/session-exam/session-exam.repository";
+import { type AbsenceRepository } from "@application/absence/absence.repository";
+import { type CourseRepository } from "@application/course/course.repository";
+import { type InstructorRepository } from "@application/instructor/instructor.repository";
+import { NotFound, MissingFields, Forbidden } from "@application/types/results";
+import { type AuthContext } from "@application/types/auth-context";
+import { isCourseInstructor as resolveCourseInstructor } from "@application/course/course-access";
 
 export type SessionView = {
     id: string;
@@ -15,15 +21,24 @@ export type SessionView = {
 
 export type CreateSessionResult =
     | MissingFields
+    | Forbidden
+    | { kind: "classroom_required" }
+    | { kind: "classroom_forbidden" }
     | { kind: "classroom_conflict" }
     | { kind: "session_created"; session: SessionView };
 
 export type UpdateSessionResult =
     | NotFound
+    | Forbidden
     | { kind: "classroom_conflict" }
     | { kind: "session_updated"; session: SessionView };
 
-export type DeleteSessionResult = NotFound | { kind: "session_deleted" };
+export type DeleteSessionResult =
+    | NotFound
+    | Forbidden
+    | { kind: "session_has_exams" }
+    | { kind: "session_has_absences" }
+    | { kind: "session_deleted" };
 
 export type GetSessionResult = NotFound | { kind: "session_found"; session: SessionView };
 
@@ -39,7 +54,17 @@ const toView = (s: Session): SessionView => ({
 });
 
 export class SessionUseCases {
-    constructor(private readonly sessions: SessionRepository) {}
+    constructor(
+        private readonly sessions: SessionRepository,
+        private readonly sessionExams: SessionExamRepository,
+        private readonly absences: AbsenceRepository,
+        private readonly courses: CourseRepository,
+        private readonly instructors: InstructorRepository,
+    ) {}
+
+    private isCourseInstructor(courseId: string, requesterId: string): Promise<boolean> {
+        return resolveCourseInstructor({ courses: this.courses, instructors: this.instructors }, courseId, requesterId);
+    }
 
     async create(input: {
         courseId?: string;
@@ -47,12 +72,17 @@ export class SessionUseCases {
         endTime?: string;
         mode?: SessionMode;
         classroomId?: string;
-    }): Promise<CreateSessionResult> {
+    }, auth: AuthContext): Promise<CreateSessionResult> {
         const { courseId, startTime, endTime, mode, classroomId } = input;
-        if (!courseId || !startTime || !endTime || !mode || !classroomId) return MissingFields;
+        if (!courseId || !startTime || !endTime || !mode) return MissingFields;
+        if (!auth.isAdmin && !(await this.isCourseInstructor(courseId, auth.requesterId)))
+            return Forbidden;
+        if (mode === SessionMode.ON_SITE && !classroomId) return { kind: "classroom_required" };
+        if (mode === SessionMode.REMOTE && classroomId) return { kind: "classroom_forbidden" };
+        const resolvedClassroomId = mode === SessionMode.REMOTE ? null : classroomId!;
         const parsedStart = new Date(startTime);
         const parsedEnd = new Date(endTime);
-        if (await this.sessions.findBySlot(courseId, classroomId, parsedStart, parsedEnd))
+        if (resolvedClassroomId && (await this.sessions.findBySlot(courseId, resolvedClassroomId, parsedStart, parsedEnd)))
             return { kind: "classroom_conflict" };
         const session: Session = {
             id: randomUUID(),
@@ -60,7 +90,7 @@ export class SessionUseCases {
             startTime: parsedStart,
             endTime: parsedEnd,
             mode,
-            classroomId,
+            classroomId: resolvedClassroomId,
         };
         await this.sessions.save(session);
         return { kind: "session_created", session: toView(session) };
@@ -75,9 +105,12 @@ export class SessionUseCases {
             mode?: SessionMode;
             classroomId?: string | null;
         },
+        auth: AuthContext,
     ): Promise<UpdateSessionResult> {
         const session = await this.sessions.findById(id);
         if (!session) return NotFound;
+        if (!auth.isAdmin && !(await this.isCourseInstructor(session.courseId, auth.requesterId)))
+            return Forbidden;
         const newCourseId = input.courseId !== undefined ? input.courseId : session.courseId;
         const newStart = input.startTime ? new Date(input.startTime) : session.startTime;
         const newEnd = input.endTime ? new Date(input.endTime) : session.endTime;
@@ -93,9 +126,13 @@ export class SessionUseCases {
         return { kind: "session_updated", session: toView(session) };
     }
 
-    async delete(id: string): Promise<DeleteSessionResult> {
+    async delete(id: string, auth: AuthContext): Promise<DeleteSessionResult> {
         const session = await this.sessions.findById(id);
         if (!session) return NotFound;
+        if (!auth.isAdmin && !(await this.isCourseInstructor(session.courseId, auth.requesterId)))
+            return Forbidden;
+        if (await this.sessionExams.existsBySessionId(id)) return { kind: "session_has_exams" };
+        if (await this.absences.existsBySessionId(id)) return { kind: "session_has_absences" };
         await this.sessions.deleteById(id);
         return { kind: "session_deleted" };
     }

@@ -1,120 +1,103 @@
 import { Router } from "express";
-import { requireAuth, requireRole } from "@express/src/auth/middleware";
-import { AdminRole } from "@domain/admin/admin.enums";
+import { authed, getAuthFlags } from "@express/src/auth/middleware";
 import { groupUseCases } from "@express/src/container";
+import { send, respond } from "@express/src/http/responses";
 
 export const groupRouter = Router();
 
-groupRouter.get("/groups", requireAuth, async (_req, res) => {
+groupRouter.get("/groups", ...authed(async (_req, res) => {
     const result = await groupUseCases.list();
-    res.status(200).json(result.groups);
-});
+    send(res, { status: 200, body: result.groups });
+}));
 
-groupRouter.get("/groups/:id", requireAuth, async (req, res) => {
+groupRouter.get("/groups/:id", ...authed(async (req, res) => {
     const result = await groupUseCases.findById(String(req.params.id));
-    if (result.kind === "not_found") return void res.status(404).json({ error: "Group not found" });
-    res.status(200).json(result.group);
-});
+    respond(res, result, {
+        not_found: { status: 404, error: "Group not found" },
+        group_found: (r) => ({ status: 200, body: r.group }),
+    });
+}));
 
-groupRouter.post("/groups", requireAuth, requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN), async (req, res) => {
-    const result = await groupUseCases.create(req.body);
-    if (result.kind === "missing_fields")
-        return void res.status(400).json({ error: "classId and name are required" });
-    if (result.kind === "group_already_exists")
-        return void res.status(409).json({ error: "A group with this name already exists in this class" });
-    res.status(201).json(result.group);
-});
+groupRouter.post("/groups", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await groupUseCases.create(req.body, auth);
+    respond(res, result, {
+        missing_fields: { status: 400, error: "classId and name are required" },
+        group_already_exists: { blocked: { type: "Creation", reason: "A group with this name already exists in this class" } },
+        group_created: (r) => ({ status: 201, body: r.group }),
+    });
+}));
 
-groupRouter.patch(
-    "/groups/:id",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN),
-    async (req, res) => {
-        const result = await groupUseCases.update(String(req.params.id), req.body);
-        if (result.kind === "not_found") return void res.status(404).json({ error: "Group not found" });
-        res.status(200).json(result.group);
-    },
-);
+groupRouter.patch("/groups/:id", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await groupUseCases.update(String(req.params.id), req.body, auth);
+    respond(res, result, {
+        not_found: { status: 404, error: "Group not found" },
+        group_is_general: { blocked: { type: "Operation", reason: "The General group cannot be renamed (it is the class base group)" } },
+        group_updated: (r) => ({ status: 200, body: r.group }),
+    });
+}));
 
-groupRouter.delete(
-    "/groups/:id",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN),
-    async (req, res) => {
-        const result = await groupUseCases.delete(String(req.params.id));
-        if (result.kind === "not_found") return void res.status(404).json({ error: "Group not found" });
-        res.status(200).json({ message: "Group deleted" });
-    },
-);
+groupRouter.delete("/groups/:id", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await groupUseCases.delete(String(req.params.id), auth);
+    respond(res, result, {
+        not_found: { status: 404, error: "Group not found" },
+        group_is_general: { blocked: { type: "Operation", reason: "Cannot delete the General group (delete the class instead)" } },
+        group_has_students: { blocked: { type: "Deletion", reason: "Group has students" } },
+        group_has_courses: { blocked: { type: "Deletion", reason: "Group has courses" } },
+        group_deleted: { status: 200, body: { message: "Group deleted" } },
+    });
+}));
 
-groupRouter.get("/groups/:id/students", requireAuth, async (req, res) => {
+groupRouter.get("/groups/:id/students", ...authed(async (req, res) => {
     const result = await groupUseCases.listStudentsByGroup(String(req.params.id));
-    res.status(200).json(result.studentGroups);
-});
+    send(res, { status: 200, body: result.studentGroups });
+}));
 
-groupRouter.post(
-    "/groups/:id/students",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN),
-    async (req, res) => {
-        const result = await groupUseCases.addStudent({ groupId: String(req.params.id), studentId: req.body.studentId });
-        if (result.kind === "missing_fields")
-            return void res.status(400).json({ error: "studentId is required" });
-        if (result.kind === "student_already_in_group")
-            return void res.status(409).json({ error: "Student is already in this group" });
-        res.status(201).json(result.studentGroup);
-    },
-);
+groupRouter.post("/groups/:id/students", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await groupUseCases.addStudent({ groupId: String(req.params.id), studentId: req.body.studentId }, auth);
+    respond(res, result, {
+        missing_fields: { status: 400, error: "studentId is required" },
+        student_already_in_group: { blocked: { type: "Creation", reason: "This student is already in this group" } },
+        student_group_created: (r) => ({ status: 201, body: r.studentGroup }),
+    });
+}));
 
-groupRouter.delete(
-    "/groups/:groupId/students/:id",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN),
-    async (req, res) => {
-        const result = await groupUseCases.removeStudent(String(req.params.id));
-        if (result.kind === "not_found") return void res.status(404).json({ error: "Student group not found" });
-        res.status(200).json({ message: "Student removed from group" });
-    },
-);
-
-groupRouter.get("/student-groups/student/:studentId", requireAuth, async (req, res) => {
+groupRouter.get("/student-groups/student/:studentId", ...authed(async (req, res) => {
     const result = await groupUseCases.listGroupsByStudent(String(req.params.studentId));
-    res.status(200).json(result.studentGroups);
-});
+    send(res, { status: 200, body: result.studentGroups });
+}));
 
-groupRouter.get("/student-groups/group/:groupId", requireAuth, async (req, res) => {
+groupRouter.get("/student-groups/group/:groupId", ...authed(async (req, res) => {
     const result = await groupUseCases.listStudentsByGroup(String(req.params.groupId));
-    res.status(200).json(result.studentGroups);
-});
+    send(res, { status: 200, body: result.studentGroups });
+}));
 
-groupRouter.post(
-    "/student-groups",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN),
-    async (req, res) => {
-        const result = await groupUseCases.addStudent(req.body);
-        if (result.kind === "missing_fields")
-            return void res.status(400).json({ error: "studentId and groupId are required" });
-        if (result.kind === "student_already_in_group")
-            return void res.status(409).json({ error: "Student is already in this group" });
-        res.status(201).json(result.studentGroup);
-    },
-);
+groupRouter.post("/student-groups", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await groupUseCases.addStudent(req.body, auth);
+    respond(res, result, {
+        missing_fields: { status: 400, error: "studentId and groupId are required" },
+        student_already_in_group: { blocked: { type: "Creation", reason: "This student is already in this group" } },
+        student_group_created: (r) => ({ status: 201, body: r.studentGroup }),
+    });
+}));
 
-groupRouter.delete(
-    "/student-groups/:id",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN),
-    async (req, res) => {
-        const result = await groupUseCases.removeStudent(String(req.params.id));
-        if (result.kind === "not_found")
-            return void res.status(404).json({ error: "Student group not found" });
-        res.status(200).json({ message: "Student group deleted" });
-    },
-);
+groupRouter.delete("/student-groups/:id", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await groupUseCases.removeStudent(String(req.params.id), auth);
+    respond(res, result, {
+        not_found: { status: 404, error: "Student group not found" },
+        student_group_deleted: { status: 200, body: { message: "Student group deleted" } },
+    });
+}));
 
-groupRouter.get("/groups/:id/courses", requireAuth, async (req, res) => {
+groupRouter.get("/groups/:id/courses", ...authed(async (req, res) => {
     const { courseUseCases } = await import("@express/src/container");
     const result = await courseUseCases.listByGroup(String(req.params.id));
-    res.status(200).json(result.courses);
-});
+    respond(res, result, {
+        courses_listed: (r) => ({ status: 200, body: r.courses }),
+    });
+}));

@@ -1,298 +1,242 @@
 import { Router } from "express";
-import { requireAuth, requireRole, type AuthRequest } from "@express/src/auth/middleware";
-import { AdminRole } from "@domain/admin/admin.enums";
-import { Role } from "@domain/auth/user.enums";
-import { gradeUseCases, studentUseCases } from "@express/src/container";
+import { authed, getAuthFlags } from "@express/src/auth/middleware";
+import { gradeUseCases } from "@express/src/container";
+import { send, respond } from "@express/src/http/responses";
 
 export const gradeRouter = Router();
 
-gradeRouter.get("/grades", requireAuth, requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN), async (_req, res) => {
-    const result = await gradeUseCases.list();
-    res.status(200).json(result.grades);
-});
+gradeRouter.get("/grades", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await gradeUseCases.list(auth);
+    respond(res, result, {
+        grades_listed: (r) => ({ status: 200, body: r.grades }),
+    });
+}));
 
-gradeRouter.get(
-    "/grades/student/:studentId",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN),
-    async (req, res) => {
-        const result = await gradeUseCases.listByStudent(String(req.params.studentId));
-        res.status(200).json(result.grades);
-    },
-);
+gradeRouter.get("/grades/student/:studentId", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await gradeUseCases.listByStudent(String(req.params.studentId), auth);
+    respond(res, result, {
+        grades_listed: (r) => ({ status: 200, body: r.grades }),
+    });
+}));
 
-gradeRouter.get("/grades/mine", requireAuth, async (req: AuthRequest, res) => {
-    if (!req.auth) return void res.status(401).json({ error: "Unauthorized" });
-    if (req.auth.role !== Role.STUDENT)
-        return void res.status(403).json({ error: "Only students can access this endpoint" });
-    const student = await studentUseCases.findByUserId(req.auth.userId);
-    if (student.kind === "not_found") return void res.status(404).json({ error: "Student profile not found" });
-    const result = await gradeUseCases.listByStudent(student.student.id);
-    res.status(200).json(result.grades);
-});
+gradeRouter.get("/grades/mine", ...authed(async (req, res) => {
+    const result = await gradeUseCases.listMine(getAuthFlags(req.auth));
+    respond(res, result, {
+        not_found: { status: 404, error: "Student profile not found" },
+        grades_listed: (r) => ({ status: 200, body: r.grades }),
+    });
+}));
 
-gradeRouter.get("/grades/:id", requireAuth, async (req, res) => {
-    const result = await gradeUseCases.findById(String(req.params.id));
-    if (result.kind === "not_found") return void res.status(404).json({ error: "Grade not found" });
-    res.status(200).json(result.grade);
-});
+gradeRouter.get("/grades/:id", ...authed(async (req, res) => {
+    const result = await gradeUseCases.findById(String(req.params.id), getAuthFlags(req.auth));
+    respond(res, result, {
+        not_found: { status: 404, error: "Grade not found" },
+        grade_found: (r) => ({ status: 200, body: r.grade }),
+    });
+}));
 
-gradeRouter.post(
-    "/grades",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN, Role.INSTRUCTOR),
-    async (req: AuthRequest, res) => {
-        if (!req.auth) return void res.status(401).json({ error: "Unauthorized" });
-        const result = await gradeUseCases.create({ ...req.body, enteredBy: req.auth.userId });
-        if (result.kind === "missing_fields")
-            return void res.status(400).json({ error: "studentId and value are required" });
-        res.status(201).json(result.grade);
-    },
-);
+gradeRouter.post("/grades", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await gradeUseCases.create({ ...req.body, enteredBy: auth.requesterId }, auth);
+    respond(res, result, {
+        missing_fields: { status: 400, error: "studentId and value are required" },
+        grade_created: (r) => ({ status: 201, body: r.grade }),
+    });
+}));
 
-gradeRouter.patch(
-    "/grades/:id",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN, Role.INSTRUCTOR),
-    async (req: AuthRequest, res) => {
-        if (!req.auth) return void res.status(401).json({ error: "Unauthorized" });
-        const result = await gradeUseCases.update(String(req.params.id), { ...req.body, enteredBy: req.auth.userId });
-        if (result.kind === "not_found") return void res.status(404).json({ error: "Grade not found" });
-        res.status(200).json(result.grade);
-    },
-);
+gradeRouter.patch("/grades/:id", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await gradeUseCases.update(String(req.params.id), { value: req.body.value }, auth);
+    respond(res, result, {
+        not_found: { status: 404, error: "Grade not found" },
+        grade_is_locked: { blocked: { type: "Operation", reason: "Grade is locked" } },
+        grade_updated: (r) => ({ status: 200, body: r.grade }),
+    });
+}));
 
-gradeRouter.post(
-    "/grades/:id/lock",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN),
-    async (req, res) => {
-        const result = await gradeUseCases.lock(String(req.params.id));
-        if (result.kind === "not_found") return void res.status(404).json({ error: "Grade not found" });
-        res.status(200).json(result.grade);
-    },
-);
+gradeRouter.post("/grades/:id/lock", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await gradeUseCases.lock(String(req.params.id), auth);
+    respond(res, result, {
+        not_found: { status: 404, error: "Grade not found" },
+        grade_locked_ok: (r) => ({ status: 200, body: r.grade }),
+    });
+}));
 
-gradeRouter.delete(
-    "/grades/:id",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN),
-    async (req, res) => {
-        const result = await gradeUseCases.delete(String(req.params.id));
-        if (result.kind === "not_found") return void res.status(404).json({ error: "Grade not found" });
-        res.status(200).json({ message: "Grade deleted" });
-    },
-);
+gradeRouter.post("/grades/:id/unlock", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await gradeUseCases.unlock(String(req.params.id), auth);
+    respond(res, result, {
+        not_found: { status: 404, error: "Grade not found" },
+        grade_locked_ok: (r) => ({ status: 200, body: r.grade }),
+    });
+}));
 
-// grade-assessment routes
-gradeRouter.get("/grade-assessments/grade/:gradeId", requireAuth, async (req, res) => {
+gradeRouter.delete("/grades/:id", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await gradeUseCases.delete(String(req.params.id), auth);
+    respond(res, result, {
+        not_found: { status: 404, error: "Grade not found" },
+        not_owner: { status: 403, error: "Forbidden: you can only delete a grade you entered yourself" },
+        grade_has_no_owner: { status: 403, error: "Forbidden: this grade has no owner, only a super admin can delete it" },
+        grade_is_locked: { blocked: { type: "Operation", reason: "Grade is locked" } },
+        grade_deleted: { status: 200, body: { message: "Grade deleted" } },
+    });
+}));
+
+
+gradeRouter.get("/grade-assessments/grade/:gradeId", ...authed(async (req, res) => {
     const result = await gradeUseCases.listAssessmentLinksByGrade(String(req.params.gradeId));
-    res.status(200).json(result.gradeAssessments);
-});
+    respond(res, result, {
+        grade_assessments_listed: (r) => ({ status: 200, body: r.gradeAssessments }),
+    });
+}));
 
-gradeRouter.get(
-    "/grade-assessments/assessment/:assessmentId",
-    requireAuth,
-    async (req, res) => {
-        const result = await gradeUseCases.listAssessmentLinksByAssessment(String(req.params.assessmentId));
-        res.status(200).json(result.gradeAssessments);
-    },
-);
+gradeRouter.get("/grade-assessments/assessment/:assessmentId", ...authed(async (req, res) => {
+    const result = await gradeUseCases.listAssessmentLinksByAssessment(String(req.params.assessmentId));
+    respond(res, result, {
+        grade_assessments_listed: (r) => ({ status: 200, body: r.gradeAssessments }),
+    });
+}));
 
-gradeRouter.get("/grade-assessments/:id", requireAuth, async (req, res) => {
+gradeRouter.get("/grade-assessments/:id", ...authed(async (req, res) => {
     const result = await gradeUseCases.findAssessmentLinkById(String(req.params.id));
-    if (result.kind === "not_found")
-        return void res.status(404).json({ error: "Grade assessment not found" });
-    res.status(200).json(result.gradeAssessment);
-});
+    respond(res, result, {
+        not_found: { status: 404, error: "Grade assessment not found" },
+        grade_assessment_found: (r) => ({ status: 200, body: r.gradeAssessment }),
+    });
+}));
 
-gradeRouter.post(
-    "/grade-assessments",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN, Role.INSTRUCTOR),
-    async (req, res) => {
-        const result = await gradeUseCases.linkAssessment(req.body);
-        if (result.kind === "missing_fields")
-            return void res.status(400).json({ error: "gradeId and assessmentId are required" });
-        if (result.kind === "grade_assessment_already_exists")
-            return void res.status(409).json({ error: "This grade is already linked to this assessment" });
-        res.status(201).json(result.gradeAssessment);
-    },
-);
+gradeRouter.post("/grade-assessments", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await gradeUseCases.linkAssessment(req.body, auth);
+    respond(res, result, {
+        missing_fields: { status: 400, error: "gradeId and assessmentId are required" },
+        grade_assessment_already_exists: { blocked: { type: "Creation", reason: "This grade is already linked to this assessment" } },
+        grade_already_has_source: { blocked: { type: "Operation", reason: "Grade is already linked to another source" } },
+        grade_assessment_linked: (r) => ({ status: 201, body: r.gradeAssessment }),
+    });
+}));
 
-gradeRouter.delete(
-    "/grade-assessments/:id",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN),
-    async (req, res) => {
-        const result = await gradeUseCases.deleteAssessmentLink(String(req.params.id));
-        if (result.kind === "not_found")
-            return void res.status(404).json({ error: "Grade assessment not found" });
-        res.status(200).json({ message: "Grade assessment deleted" });
-    },
-);
 
-// grade-session-exam routes
-gradeRouter.get("/grade-session-exams/grade/:gradeId", requireAuth, async (req, res) => {
+gradeRouter.get("/grade-session-exams/grade/:gradeId", ...authed(async (req, res) => {
     const result = await gradeUseCases.listSessionExamLinksByGrade(String(req.params.gradeId));
-    res.status(200).json(result.gradeSessionExams);
-});
+    respond(res, result, {
+        grade_session_exams_listed: (r) => ({ status: 200, body: r.gradeSessionExams }),
+    });
+}));
 
-gradeRouter.get(
-    "/grade-session-exams/session-exam/:sessionExamId",
-    requireAuth,
-    async (req, res) => {
-        const result = await gradeUseCases.listSessionExamLinksBySessionExam(
-            String(req.params.sessionExamId),
-        );
-        res.status(200).json(result.gradeSessionExams);
-    },
-);
+gradeRouter.get("/grade-session-exams/session-exam/:sessionExamId", ...authed(async (req, res) => {
+    const result = await gradeUseCases.listSessionExamLinksBySessionExam(String(req.params.sessionExamId));
+    respond(res, result, {
+        grade_session_exams_listed: (r) => ({ status: 200, body: r.gradeSessionExams }),
+    });
+}));
 
-gradeRouter.get("/grade-session-exams/:id", requireAuth, async (req, res) => {
+gradeRouter.get("/grade-session-exams/:id", ...authed(async (req, res) => {
     const result = await gradeUseCases.findSessionExamLinkById(String(req.params.id));
-    if (result.kind === "not_found")
-        return void res.status(404).json({ error: "Grade session exam not found" });
-    res.status(200).json(result.gradeSessionExam);
-});
+    respond(res, result, {
+        not_found: { status: 404, error: "Grade session exam not found" },
+        grade_session_exam_found: (r) => ({ status: 200, body: r.gradeSessionExam }),
+    });
+}));
 
-gradeRouter.post(
-    "/grade-session-exams",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN, Role.INSTRUCTOR),
-    async (req, res) => {
-        const result = await gradeUseCases.linkSessionExam(req.body);
-        if (result.kind === "missing_fields")
-            return void res.status(400).json({ error: "gradeId and sessionExamId are required" });
-        if (result.kind === "grade_session_exam_already_exists")
-            return void res.status(409).json({ error: "This grade is already linked to this session exam" });
-        res.status(201).json(result.gradeSessionExam);
-    },
-);
+gradeRouter.post("/grade-session-exams", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await gradeUseCases.linkSessionExam(req.body, auth);
+    respond(res, result, {
+        missing_fields: { status: 400, error: "gradeId and sessionExamId are required" },
+        grade_session_exam_already_exists: { blocked: { type: "Creation", reason: "This grade is already linked to this session exam" } },
+        grade_already_has_source: { blocked: { type: "Operation", reason: "Grade is already linked to another source" } },
+        grade_session_exam_linked: (r) => ({ status: 201, body: r.gradeSessionExam }),
+    });
+}));
 
-gradeRouter.delete(
-    "/grade-session-exams/:id",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN),
-    async (req, res) => {
-        const result = await gradeUseCases.deleteSessionExamLink(String(req.params.id));
-        if (result.kind === "not_found")
-            return void res.status(404).json({ error: "Grade session exam not found" });
-        res.status(200).json({ message: "Grade session exam deleted" });
-    },
-);
 
-// grade-manual-notation routes
-gradeRouter.get(
-    "/grade-manual-notations/grade/:gradeId",
-    requireAuth,
-    async (req, res) => {
-        const result = await gradeUseCases.listManualNotationLinksByGrade(String(req.params.gradeId));
-        res.status(200).json(result.gradeManualNotations);
-    },
-);
+gradeRouter.get("/grade-manual-notations/grade/:gradeId", ...authed(async (req, res) => {
+    const result = await gradeUseCases.listManualNotationLinksByGrade(String(req.params.gradeId));
+    respond(res, result, {
+        grade_manual_notations_listed: (r) => ({ status: 200, body: r.gradeManualNotations }),
+    });
+}));
 
-gradeRouter.get(
-    "/grade-manual-notations/manual/:gradeManualId",
-    requireAuth,
-    async (req, res) => {
-        const result = await gradeUseCases.listManualNotationLinksByGradeManual(
-            String(req.params.gradeManualId),
-        );
-        res.status(200).json(result.gradeManualNotations);
-    },
-);
+gradeRouter.get("/grade-manual-notations/manual/:gradeManualId", ...authed(async (req, res) => {
+    const result = await gradeUseCases.listManualNotationLinksByGradeManual(String(req.params.gradeManualId));
+    respond(res, result, {
+        grade_manual_notations_listed: (r) => ({ status: 200, body: r.gradeManualNotations }),
+    });
+}));
 
-gradeRouter.get("/grade-manual-notations/:id", requireAuth, async (req, res) => {
+gradeRouter.get("/grade-manual-notations/:id", ...authed(async (req, res) => {
     const result = await gradeUseCases.findManualNotationLinkById(String(req.params.id));
-    if (result.kind === "not_found")
-        return void res.status(404).json({ error: "Grade manual notation not found" });
-    res.status(200).json(result.gradeManualNotation);
-});
+    respond(res, result, {
+        not_found: { status: 404, error: "Grade manual notation not found" },
+        grade_manual_notation_found: (r) => ({ status: 200, body: r.gradeManualNotation }),
+    });
+}));
 
-gradeRouter.post(
-    "/grade-manual-notations",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN, Role.INSTRUCTOR),
-    async (req, res) => {
-        const result = await gradeUseCases.linkManualNotation(req.body);
-        if (result.kind === "missing_fields")
-            return void res.status(400).json({ error: "gradeId and gradeManualId are required" });
-        if (result.kind === "grade_manual_notation_already_exists")
-            return void res.status(409).json({ error: "This grade is already linked to this manual notation" });
-        res.status(201).json(result.gradeManualNotation);
-    },
-);
+gradeRouter.post("/grade-manual-notations", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await gradeUseCases.linkManualNotation(req.body, auth);
+    respond(res, result, {
+        missing_fields: { status: 400, error: "gradeId and gradeManualId are required" },
+        grade_manual_notation_already_exists: { blocked: { type: "Creation", reason: "This grade is already linked to this manual notation" } },
+        grade_already_has_source: { blocked: { type: "Operation", reason: "Grade is already linked to another source" } },
+        grade_manual_notation_linked: (r) => ({ status: 201, body: r.gradeManualNotation }),
+    });
+}));
 
-gradeRouter.delete(
-    "/grade-manual-notations/:id",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN),
-    async (req, res) => {
-        const result = await gradeUseCases.deleteManualNotationLink(String(req.params.id));
-        if (result.kind === "not_found")
-            return void res.status(404).json({ error: "Grade manual notation not found" });
-        res.status(200).json({ message: "Grade manual notation deleted" });
-    },
-);
 
-// manual-notation routes
-gradeRouter.get(
-    "/manual-notations",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN),
-    async (_req, res) => {
-        const result = await gradeUseCases.listManualNotations();
-        res.status(200).json(result.manualNotations);
-    },
-);
+gradeRouter.get("/manual-notations", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await gradeUseCases.listManualNotations(auth);
+    respond(res, result, {
+        manual_notations_listed: (r) => ({ status: 200, body: r.manualNotations }),
+    });
+}));
 
-gradeRouter.get("/manual-notations/module/:moduleId", requireAuth, async (req, res) => {
+gradeRouter.get("/manual-notations/module/:moduleId", ...authed(async (req, res) => {
     const result = await gradeUseCases.listManualNotationsByModule(String(req.params.moduleId));
-    res.status(200).json(result.manualNotations);
-});
+    respond(res, result, {
+        manual_notations_listed: (r) => ({ status: 200, body: r.manualNotations }),
+    });
+}));
 
-gradeRouter.get("/manual-notations/:id", requireAuth, async (req, res) => {
+gradeRouter.get("/manual-notations/:id", ...authed(async (req, res) => {
     const result = await gradeUseCases.findManualNotationById(String(req.params.id));
-    if (result.kind === "not_found")
-        return void res.status(404).json({ error: "Manual notation not found" });
-    res.status(200).json(result.manualNotation);
-});
+    respond(res, result, {
+        not_found: { status: 404, error: "Manual notation not found" },
+        manual_notation_found: (r) => ({ status: 200, body: r.manualNotation }),
+    });
+}));
 
-gradeRouter.post(
-    "/manual-notations",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN),
-    async (req, res) => {
-        const result = await gradeUseCases.createManualNotation(req.body);
-        if (result.kind === "missing_fields")
-            return void res.status(400).json({ error: "moduleId and name are required" });
-        if (result.kind === "notation_already_exists")
-            return void res.status(409).json({ error: "A manual notation with this name already exists for this module" });
-        res.status(201).json(result.manualNotation);
-    },
-);
+gradeRouter.post("/manual-notations", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await gradeUseCases.createManualNotation(req.body, auth);
+    respond(res, result, {
+        missing_fields: { status: 400, error: "moduleId and name are required" },
+        notation_already_exists: { blocked: { type: "Creation", reason: "A manual notation with this name already exists for this module" } },
+        manual_notation_created: (r) => ({ status: 201, body: r.manualNotation }),
+    });
+}));
 
-gradeRouter.patch(
-    "/manual-notations/:id",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN),
-    async (req, res) => {
-        const result = await gradeUseCases.updateManualNotation(String(req.params.id), req.body);
-        if (result.kind === "not_found")
-            return void res.status(404).json({ error: "Manual notation not found" });
-        res.status(200).json(result.manualNotation);
-    },
-);
+gradeRouter.patch("/manual-notations/:id", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await gradeUseCases.updateManualNotation(String(req.params.id), req.body, auth);
+    respond(res, result, {
+        not_found: { status: 404, error: "Manual notation not found" },
+        manual_notation_updated: (r) => ({ status: 200, body: r.manualNotation }),
+    });
+}));
 
-gradeRouter.delete(
-    "/manual-notations/:id",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN),
-    async (req, res) => {
-        const result = await gradeUseCases.deleteManualNotation(String(req.params.id));
-        if (result.kind === "not_found")
-            return void res.status(404).json({ error: "Manual notation not found" });
-        res.status(200).json({ message: "Manual notation deleted" });
-    },
-);
+gradeRouter.delete("/manual-notations/:id", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await gradeUseCases.deleteManualNotation(String(req.params.id), auth);
+    respond(res, result, {
+        not_found: { status: 404, error: "Manual notation not found" },
+        manual_notation_has_grades: { blocked: { type: "Deletion", reason: "Manual notation has grades" } },
+        manual_notation_deleted: { status: 200, body: { message: "Manual notation deleted" } },
+    });
+}));

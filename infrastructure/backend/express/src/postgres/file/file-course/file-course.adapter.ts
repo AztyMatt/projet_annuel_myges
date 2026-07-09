@@ -55,4 +55,7 @@ export const fileCourseRepository: FileCourseRepository = {
     async deleteById(id) {
         await db.delete(fileCourseTable).where(eq(fileCourseTable.id, id));
     },
+    async deleteByCourseId(courseId) {
+        await db.delete(fileCourseTable).where(eq(fileCourseTable.courseId, courseId));
+    },
 };

@@ -26,6 +26,7 @@ import { externalRouter } from "@express/src/external/routes";
 import { fileRouter } from "@express/src/file/routes";
 import { documentRouter } from "@express/src/document/routes";
 import { auditLogRouter } from "@express/src/audit-log/routes";
+import { send } from "@express/src/http/responses";
 
 const routers = [
     authRouter,
@@ -64,10 +65,13 @@ app.use(express.json());
 routers.forEach((router) => app.use("/api", router));
 
 app.get("/api/hello", (_request, response) => {
-    response.json({ message: "Hello from Express!" });
+    send(response, { status: 200, body: { message: "Hello from Express!" } });
 });
 
 app.use((err: { code?: string }, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-    if (err.code === "23505") return void res.status(409).json({ error: "Conflict: this entry already exists" });
-    res.status(500).json({ error: "Internal server error" });
+    if (err.code === "23505") return void send(res, { blocked: { type: "Creation", reason: "This entry already exists" } });
+    if (err.code === "23503") return void send(res, { blocked: { type: "Deletion", reason: "This record is still referenced by other data" } });
+    
+    console.error(err);
+    send(res, { status: 500, error: "Internal server error" });
 });

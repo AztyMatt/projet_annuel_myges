@@ -29,7 +29,7 @@ export const fileAssessment = pgTable("file_assessment", {
         .references(() => assessmentGroup.id),
     fileId: text("file_id")
         .notNull()
-        .references(() => file.id),
+        .references(() => file.id, { onDelete: "cascade" }),
 }, (table) => ({
     submissionUnique: unique().on(table.assessmentGroupId, table.fileId),
 }));
@@ -39,7 +39,7 @@ export const fileCourse = pgTable("file_course", {
     name: text("name").notNull(),
     fileId: text("file_id")
         .notNull()
-        .references(() => file.id),
+        .references(() => file.id, { onDelete: "cascade" }),
     courseId: text("course_id")
         .notNull()
         .references(() => course.id),
@@ -67,10 +67,10 @@ export const fileJustification = pgTable("file_justification", {
         .references(() => absence.id),
     fileId: text("file_id")
         .notNull()
-        .references(() => file.id),
+        .references(() => file.id, { onDelete: "cascade" }),
     validationStatus: text("validation_status").notNull(),
     processedBy: text("processed_by")
-        .references(() => admin.id),
+        .references(() => admin.id, { onDelete: "set null" }),
 }, (table) => ({
     linkUnique: unique().on(table.absenceId, table.fileId),
 }));
@@ -82,7 +82,7 @@ export const fileAssessmentInstruction = pgTable("file_assessment_instruction", 
         .references(() => assessment.id),
     fileId: text("file_id")
         .notNull()
-        .references(() => file.id),
+        .references(() => file.id, { onDelete: "cascade" }),
     uploadedAt: timestamp("uploaded_at", { withTimezone: true }).notNull(),
 }, (table) => ({
     linkUnique: unique().on(table.assessmentId, table.fileId),

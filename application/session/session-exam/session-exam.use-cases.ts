@@ -8,7 +8,10 @@ import { type SessionExamRepository } from "@application/session/session-exam/se
 import { type SessionExamStudentRepository } from "@application/session/session-exam/session-exam-student/session-exam-student.repository";
 import { type SessionExamInstructorRepository } from "@application/session/session-exam/session-exam-instructor/session-exam-instructor.repository";
 import { type SessionExamExternalRepository } from "@application/session/session-exam/session-exam-external/session-exam-external.repository";
-import { NotFound, MissingFields } from "@application/types/results";
+import { type SessionRepository } from "@application/session/session.repository";
+import { type GradeSessionExamRepository } from "@application/grade/grade-session-exam/grade-session-exam.repository";
+import { NotFound, MissingFields, Forbidden } from "@application/types/results";
+import { type AuthContext } from "@application/types/auth-context";
 
 export type SessionExamView = {
     id: string;
@@ -38,27 +41,38 @@ export type SessionExamExternalView = {
 
 export type CreateSessionExamResult =
     | MissingFields
+    | Forbidden
     | { kind: "session_exam_created"; sessionExam: SessionExamView };
 
 export type UpdateSessionExamResult =
     | NotFound
+    | Forbidden
     | { kind: "session_exam_updated"; sessionExam: SessionExamView };
 
-export type DeleteSessionExamResult = NotFound | { kind: "session_exam_deleted" };
+export type DeleteSessionExamResult =
+    | NotFound
+    | Forbidden
+    | { kind: "session_exam_already_started" }
+    | { kind: "session_exam_has_grades" }
+    | { kind: "session_exam_deleted" };
 
 export type GetSessionExamResult =
     | NotFound
     | { kind: "session_exam_found"; sessionExam: SessionExamView };
 
-export type ListSessionExamsResult = { kind: "session_exams_listed"; sessionExams: SessionExamView[] };
+export type ListSessionExamsResult = Forbidden | { kind: "session_exams_listed"; sessionExams: SessionExamView[] };
 
 export type AddSessionExamStudentResult =
     | MissingFields
+    | Forbidden
     | { kind: "student_already_registered" }
     | { kind: "session_exam_student_added"; sessionExamStudent: SessionExamStudentView };
 
 export type DeleteSessionExamStudentResult =
     | NotFound
+    | Forbidden
+    | { kind: "session_exam_already_started" }
+    | { kind: "session_exam_has_grades" }
     | { kind: "session_exam_student_deleted" };
 
 export type GetSessionExamStudentResult =
@@ -72,11 +86,14 @@ export type ListSessionExamStudentsResult = {
 
 export type AddSessionExamInstructorResult =
     | MissingFields
+    | Forbidden
     | { kind: "instructor_already_in_jury" }
     | { kind: "session_exam_instructor_added"; sessionExamInstructor: SessionExamInstructorView };
 
 export type DeleteSessionExamInstructorResult =
     | NotFound
+    | Forbidden
+    | { kind: "session_exam_already_started" }
     | { kind: "session_exam_instructor_deleted" };
 
 export type GetSessionExamInstructorResult =
@@ -90,11 +107,14 @@ export type ListSessionExamInstructorsResult = {
 
 export type AddSessionExamExternalResult =
     | MissingFields
+    | Forbidden
     | { kind: "external_already_in_jury" }
     | { kind: "session_exam_external_added"; sessionExamExternal: SessionExamExternalView };
 
 export type DeleteSessionExamExternalResult =
     | NotFound
+    | Forbidden
+    | { kind: "session_exam_already_started" }
     | { kind: "session_exam_external_deleted" };
 
 export type GetSessionExamExternalResult =
@@ -138,14 +158,28 @@ export class SessionExamUseCases {
         private readonly sessionExamStudents: SessionExamStudentRepository,
         private readonly sessionExamInstructors: SessionExamInstructorRepository,
         private readonly sessionExamExternals: SessionExamExternalRepository,
+        private readonly sessions: SessionRepository,
+        private readonly gradeSessionExams: GradeSessionExamRepository,
     ) {}
+
+    private async isSessionStarted(sessionExamId: string): Promise<boolean> {
+        const sessionExam = await this.sessionExams.findById(sessionExamId);
+        if (!sessionExam) return false;
+        return this.hasSessionStarted(sessionExam);
+    }
+
+    private async hasSessionStarted(sessionExam: { sessionId: string }): Promise<boolean> {
+        const session = await this.sessions.findById(sessionExam.sessionId);
+        return !!session && new Date() >= session.startTime;
+    }
 
     async create(input: {
         sessionId?: string;
         type?: SessionExamType;
         isRetake?: boolean;
         assessmentId?: string | null;
-    }): Promise<CreateSessionExamResult> {
+    }, auth: AuthContext): Promise<CreateSessionExamResult> {
+        if (!auth.isAdmin) return Forbidden;
         const { sessionId, type, isRetake, assessmentId } = input;
         if (!sessionId || !type) return MissingFields;
         const sessionExam: SessionExam = {
@@ -162,7 +196,9 @@ export class SessionExamUseCases {
     async update(
         id: string,
         input: { type?: SessionExamType; isRetake?: boolean; assessmentId?: string | null },
+        auth: AuthContext,
     ): Promise<UpdateSessionExamResult> {
+        if (!auth.isAdmin) return Forbidden;
         const sessionExam = await this.sessionExams.findById(id);
         if (!sessionExam) return NotFound;
         if (input.type !== undefined) sessionExam.type = input.type;
@@ -172,9 +208,12 @@ export class SessionExamUseCases {
         return { kind: "session_exam_updated", sessionExam: toSessionExamView(sessionExam) };
     }
 
-    async delete(id: string): Promise<DeleteSessionExamResult> {
+    async delete(id: string, auth: AuthContext): Promise<DeleteSessionExamResult> {
+        if (!auth.isAdmin) return Forbidden;
         const sessionExam = await this.sessionExams.findById(id);
         if (!sessionExam) return NotFound;
+        if (await this.hasSessionStarted(sessionExam)) return { kind: "session_exam_already_started" };
+        if (await this.gradeSessionExams.existsBySessionExamId(id)) return { kind: "session_exam_has_grades" };
         await this.sessionExams.deleteById(id);
         return { kind: "session_exam_deleted" };
     }
@@ -185,7 +224,8 @@ export class SessionExamUseCases {
         return { kind: "session_exam_found", sessionExam: toSessionExamView(sessionExam) };
     }
 
-    async list(): Promise<ListSessionExamsResult> {
+    async list(auth: AuthContext): Promise<ListSessionExamsResult> {
+        if (!auth.isAdmin) return Forbidden;
         const sessionExams = await this.sessionExams.list();
         return { kind: "session_exams_listed", sessionExams: sessionExams.map(toSessionExamView) };
     }
@@ -203,7 +243,8 @@ export class SessionExamUseCases {
     async addStudent(input: {
         sessionExamId?: string;
         studentId?: string;
-    }): Promise<AddSessionExamStudentResult> {
+    }, auth: AuthContext): Promise<AddSessionExamStudentResult> {
+        if (!auth.isAdmin) return Forbidden;
         const { sessionExamId, studentId } = input;
         if (!sessionExamId || !studentId) return MissingFields;
         if (await this.sessionExamStudents.findByExamAndStudent(sessionExamId, studentId)) return { kind: "student_already_registered" };
@@ -212,9 +253,13 @@ export class SessionExamUseCases {
         return { kind: "session_exam_student_added", sessionExamStudent: toSessionExamStudentView(entry) };
     }
 
-    async removeStudent(id: string): Promise<DeleteSessionExamStudentResult> {
+    async removeStudent(id: string, auth: AuthContext): Promise<DeleteSessionExamStudentResult> {
+        if (!auth.isAdmin) return Forbidden;
         const entry = await this.sessionExamStudents.findById(id);
         if (!entry) return NotFound;
+        if (await this.isSessionStarted(entry.sessionExamId)) return { kind: "session_exam_already_started" };
+        if (await this.gradeSessionExams.existsBySessionExamIdAndStudentId(entry.sessionExamId, entry.studentId))
+            return { kind: "session_exam_has_grades" };
         await this.sessionExamStudents.deleteById(id);
         return { kind: "session_exam_student_deleted" };
     }
@@ -244,7 +289,8 @@ export class SessionExamUseCases {
     async addInstructor(input: {
         sessionExamId?: string;
         instructorId?: string;
-    }): Promise<AddSessionExamInstructorResult> {
+    }, auth: AuthContext): Promise<AddSessionExamInstructorResult> {
+        if (!auth.isAdmin) return Forbidden;
         const { sessionExamId, instructorId } = input;
         if (!sessionExamId || !instructorId) return MissingFields;
         if (await this.sessionExamInstructors.findByExamAndInstructor(sessionExamId, instructorId)) return { kind: "instructor_already_in_jury" };
@@ -256,9 +302,11 @@ export class SessionExamUseCases {
         };
     }
 
-    async removeInstructor(id: string): Promise<DeleteSessionExamInstructorResult> {
+    async removeInstructor(id: string, auth: AuthContext): Promise<DeleteSessionExamInstructorResult> {
+        if (!auth.isAdmin) return Forbidden;
         const entry = await this.sessionExamInstructors.findById(id);
         if (!entry) return NotFound;
+        if (await this.isSessionStarted(entry.sessionExamId)) return { kind: "session_exam_already_started" };
         await this.sessionExamInstructors.deleteById(id);
         return { kind: "session_exam_instructor_deleted" };
     }
@@ -291,7 +339,8 @@ export class SessionExamUseCases {
     async addExternal(input: {
         sessionExamId?: string;
         externalId?: string;
-    }): Promise<AddSessionExamExternalResult> {
+    }, auth: AuthContext): Promise<AddSessionExamExternalResult> {
+        if (!auth.isAdmin) return Forbidden;
         const { sessionExamId, externalId } = input;
         if (!sessionExamId || !externalId) return MissingFields;
         if (await this.sessionExamExternals.findByExamAndExternal(sessionExamId, externalId)) return { kind: "external_already_in_jury" };
@@ -303,9 +352,11 @@ export class SessionExamUseCases {
         };
     }
 
-    async removeExternal(id: string): Promise<DeleteSessionExamExternalResult> {
+    async removeExternal(id: string, auth: AuthContext): Promise<DeleteSessionExamExternalResult> {
+        if (!auth.isAdmin) return Forbidden;
         const entry = await this.sessionExamExternals.findById(id);
         if (!entry) return NotFound;
+        if (await this.isSessionStarted(entry.sessionExamId)) return { kind: "session_exam_already_started" };
         await this.sessionExamExternals.deleteById(id);
         return { kind: "session_exam_external_deleted" };
     }

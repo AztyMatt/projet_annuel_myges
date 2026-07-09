@@ -6,7 +6,7 @@ export const message = pgTable("message", {
     id: text("id").primaryKey(),
     conversationId: text("conversation_id")
         .notNull()
-        .references(() => conversation.id),
+        .references(() => conversation.id, { onDelete: "cascade" }),
     senderId: text("sender_id")
         .notNull()
         .references(() => users.id),
@@ -18,7 +18,7 @@ export const messageRead = pgTable("message_read", {
     id: text("id").primaryKey(),
     messageId: text("message_id")
         .notNull()
-        .references(() => message.id),
+        .references(() => message.id, { onDelete: "cascade" }),
     userId: text("user_id")
         .notNull()
         .references(() => users.id),

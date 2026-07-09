@@ -28,6 +28,14 @@ export const gradeRepository: GradeRepository = {
             .orderBy(desc(gradeTable.enteredAt));
         return result.map(rowToGrade);
     },
+    async findByEnteredBy(userId) {
+        const result = await db
+            .select()
+            .from(gradeTable)
+            .where(eq(gradeTable.enteredBy, userId))
+            .orderBy(desc(gradeTable.enteredAt));
+        return result.map(rowToGrade);
+    },
     async save(grade) {
         await db
             .insert(gradeTable)

@@ -1,15 +1,33 @@
-import { type NextFunction, type Request, type Response } from "express";
+import { type NextFunction, type Request, type RequestHandler, type Response } from "express";
 import { tokenProvider } from "@express/src/auth/token-provider.adapter";
-import { type Role } from "@domain/auth/user.enums";
+import { Role } from "@domain/auth/user.enums";
+import { capabilitiesForRole } from "@domain/auth/authorization-policy";
+import { type AuthContext } from "@application/types/auth-context";
+import { send, FORBIDDEN_MESSAGE, UNAUTHORIZED_MESSAGE } from "@express/src/http/responses";
 
 export type AuthRequest = Request & {
     auth?: { userId: string; role: Role; email: string };
 };
 
+export type AuthedRequest = AuthRequest & { auth: NonNullable<AuthRequest["auth"]> };
+
+export const getAuthFlags = (auth: NonNullable<AuthRequest["auth"]>): AuthContext => ({
+    requesterId: auth.userId,
+    ...capabilitiesForRole(auth.role),
+});
+
+export const sendForbidden = (res: Response, message = FORBIDDEN_MESSAGE): void => {
+    send(res, { status: 403, error: message });
+};
+
+export const sendUnauthorized = (res: Response, message = UNAUTHORIZED_MESSAGE): void => {
+    send(res, { status: 401, error: message });
+};
+
 export const requireAuth = (request: AuthRequest, response: Response, nextFunction: NextFunction): void => {
     const authorization = request.headers.authorization;
     if (!authorization?.startsWith("Bearer ")) {
-        response.status(401).json({ error: "Unauthorized" });
+        sendUnauthorized(response);
         return;
     }
     try {
@@ -18,30 +36,24 @@ export const requireAuth = (request: AuthRequest, response: Response, nextFuncti
         request.auth = { userId: payload.sub, role: payload.role, email: payload.email };
         nextFunction();
     } catch {
-        response.status(401).json({ error: "Invalid token" });
+        sendUnauthorized(response, "Invalid token");
     }
 };
+
+export const authed = (handler: (req: AuthedRequest, res: Response) => unknown): RequestHandler[] => [
+    requireAuth,
+    (req: AuthRequest, res) => {
+        if (!req.auth) return void sendUnauthorized(res);
+        void handler(req as AuthedRequest, res);
+    },
+];
 
 export const requireCronSecret = (request: Request, response: Response, nextFunction: NextFunction): void => {
     const authorization = request.headers.authorization;
     const secret = process.env.CRON_SECRET;
     if (!secret || !authorization || authorization !== `Bearer ${secret}`) {
-        response.status(401).json({ error: "Unauthorized" });
+        sendUnauthorized(response);
         return;
     }
     nextFunction();
 };
-
-export const requireRole =
-    (...allowedRoles: Role[]) =>
-    (request: AuthRequest, response: Response, nextFunction: NextFunction): void => {
-        if (!request.auth) {
-            response.status(401).json({ error: "Unauthorized" });
-            return;
-        }
-        if (!allowedRoles.includes(request.auth.role)) {
-            response.status(403).json({ error: "Forbidden: insufficient role" });
-            return;
-        }
-        nextFunction();
-    };

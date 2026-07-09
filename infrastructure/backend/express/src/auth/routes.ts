@@ -2,21 +2,16 @@ import {
     type GetMeResult,
     type LoginResult,
     type ResetPasswordResult,
-    type SignupResult,
     type Verify2faResult,
 } from "@application/auth/auth.use-cases";
-import { Router } from "express";
-import { requireAuth, requireCronSecret, requireRole, type AuthRequest } from "@express/src/auth/middleware";
-import { AdminRole } from "@domain/admin/admin.enums";
+import { Router, type Response } from "express";
+import { authed, requireCronSecret, getAuthFlags } from "@express/src/auth/middleware";
 import { authUseCases } from "@express/src/container";
+import { respond, send, type HttpStatus } from "@express/src/http/responses";
 
 export const authRouter = Router();
 
 type AuthUserView = { id: string; firstname: string; lastname: string; email: string; role: string };
-
-type SignupResponseBody =
-    | { error: string }
-    | { userId: string; email: string; message: string; totpSecret?: string; totpProvisioningUri?: string };
 
 type LoginResponseBody =
     | { error: string }
@@ -34,36 +29,7 @@ type GetMeResponseBody =
     | { error: string }
     | { id: string; firstname: string; lastname: string; email: string; role: string; passwordExpiresInDays: number; twoFactorEnabled: boolean };
 
-const signupResponse = (result: SignupResult): { status: number; body: SignupResponseBody } => {
-    switch (result.kind) {
-        case "missing_credentials":
-            return { status: 400, body: { error: "firstname, lastname, email and password are required" } };
-        case "invalid_email":
-            return { status: 400, body: { error: "Invalid email format" } };
-        case "missing_gdpr_consent":
-            return { status: 400, body: { error: "GDPR consent is required" } };
-        case "weak_password":
-            return {
-                status: 400,
-                body: { error: "Weak password. Minimum 12 chars with uppercase, lowercase, number and symbol." },
-            };
-        case "user_already_exists":
-            return { status: 409, body: { error: "User already exists" } };
-        case "user_created":
-            return {
-                status: 201,
-                body: {
-                    userId: result.user.id,
-                    email: result.user.email,
-                    message: "User created",
-                    totpSecret: result.twoFactor?.secret,
-                    totpProvisioningUri: result.twoFactor?.provisioningUri,
-                },
-            };
-    }
-};
-
-const loginResponse = (result: LoginResult): { status: number; body: LoginResponseBody } => {
+const loginResponse = (result: LoginResult): { status: HttpStatus; body: LoginResponseBody } => {
     switch (result.kind) {
         case "missing_credentials":
             return { status: 400, body: { error: "Email and password are required" } };
@@ -102,7 +68,7 @@ const loginResponse = (result: LoginResult): { status: number; body: LoginRespon
     }
 };
 
-const verify2faResponse = (result: Verify2faResult): { status: number; body: Verify2faResponseBody } => {
+const verify2faResponse = (result: Verify2faResult): { status: HttpStatus; body: Verify2faResponseBody } => {
     switch (result.kind) {
         case "missing_2fa_payload":
             return { status: 400, body: { error: "tempSessionToken and code are required" } };
@@ -115,7 +81,7 @@ const verify2faResponse = (result: Verify2faResult): { status: number; body: Ver
     }
 };
 
-const resetPasswordResponse = (result: ResetPasswordResult): { status: number; body: ResetPasswordResponseBody } => {
+const resetPasswordResponse = (result: ResetPasswordResult): { status: HttpStatus; body: ResetPasswordResponseBody } => {
     switch (result.kind) {
         case "missing_reset_payload":
             return { status: 400, body: { error: "email, oldPassword and newPassword are required" } };
@@ -133,7 +99,7 @@ const resetPasswordResponse = (result: ResetPasswordResult): { status: number; b
     }
 };
 
-const getMeResponse = (result: GetMeResult): { status: number; body: GetMeResponseBody } => {
+const getMeResponse = (result: GetMeResult): { status: HttpStatus; body: GetMeResponseBody } => {
     switch (result.kind) {
         case "user_not_found":
             return { status: 404, body: { error: "User not found" } };
@@ -146,22 +112,37 @@ const getMeResponse = (result: GetMeResult): { status: number; body: GetMeRespon
 };
 
 authRouter.post("/auth/signup", async (request, response) => {
-    const httpResponse = signupResponse(await authUseCases.signup(request.body));
-    response.status(httpResponse.status).json(httpResponse.body);
+    const result = await authUseCases.signup(request.body);
+    respond(response, result, {
+        missing_credentials: { status: 400, error: "firstname, lastname, email and password are required" },
+        invalid_email: { status: 400, error: "Invalid email format" },
+        missing_gdpr_consent: { status: 400, error: "GDPR consent is required" },
+        weak_password: { status: 400, error: "Weak password. Minimum 12 chars with uppercase, lowercase, number and symbol." },
+        user_already_exists: { blocked: { type: "Creation", reason: "A user with this email already exists" } },
+        user_created: (r) => ({
+            status: 201,
+            body: {
+                userId: r.user.id,
+                email: r.user.email,
+                message: "User created",
+                totpSecret: r.twoFactor?.secret,
+                totpProvisioningUri: r.twoFactor?.provisioningUri,
+            },
+        }),
+    });
 });
 
 authRouter.post("/auth/login", async (request, response) => {
     const httpResponse = loginResponse(await authUseCases.login(request.body));
-    response.status(httpResponse.status).json(httpResponse.body);
+    send(response, { status: httpResponse.status, body: httpResponse.body });
 });
 
 authRouter.post("/auth/login/2fa", async (request, response) => {
     const httpResponse = verify2faResponse(await authUseCases.verify2fa(request.body));
-    response.status(httpResponse.status).json(httpResponse.body);
+    send(response, { status: httpResponse.status, body: httpResponse.body });
 });
 
-authRouter.post("/auth/password/reset", requireAuth, async (request: AuthRequest, response) => {
-    if (!request.auth) return void response.status(401).json({ error: "Unauthorized" });
+authRouter.post("/auth/password/reset", ...authed(async (request, response) => {
     const { oldPassword, newPassword } = request.body as { oldPassword?: string; newPassword?: string };
     const result = await authUseCases.resetAuthenticatedPassword({
         userId: request.auth.userId,
@@ -169,54 +150,65 @@ authRouter.post("/auth/password/reset", requireAuth, async (request: AuthRequest
         newPassword,
     });
     const httpResponse = resetPasswordResponse(result);
-    response.status(httpResponse.status).json(httpResponse.body);
-});
+    send(response, { status: httpResponse.status, body: httpResponse.body });
+}));
 
 authRouter.post("/auth/password/reset-with-credentials", async (request, response) => {
     const httpResponse = resetPasswordResponse(await authUseCases.resetWithCredentials(request.body));
-    response.status(httpResponse.status).json(httpResponse.body);
+    send(response, { status: httpResponse.status, body: httpResponse.body });
 });
 
-authRouter.get("/users/me", requireAuth, async (request: AuthRequest, response) => {
-    if (!request.auth) return void response.status(401).json({ error: "Unauthorized" });
+authRouter.get("/users/me", ...authed(async (request, response) => {
     const httpResponse = getMeResponse(await authUseCases.getMe(request.auth.userId));
-    response.status(httpResponse.status).json(httpResponse.body);
-});
+    send(response, { status: httpResponse.status, body: httpResponse.body });
+}));
 
-authRouter.get(
-    "/admin/security/users",
-    requireAuth,
-    requireRole(AdminRole.SUPER_ADMIN),
-    async (_request: AuthRequest, response) => {
-        const result = await authUseCases.listUsersForAdmin();
-        response.status(200).json({
-            users: result.users.map((user) => ({ ...user, lockedUntil: user.lockedUntil?.toISOString() ?? null })),
+authRouter.get("/admin/security/users", ...authed(async (request, response) => {
+        const auth = getAuthFlags(request.auth);
+        const result = await authUseCases.listUsersForAdmin(auth);
+        respond(response, result, {
+            users_listed: (r) => ({ status: 200, body: {
+                users: r.users.map((user) => ({ ...user, lockedUntil: user.lockedUntil?.toISOString() ?? null })),
+            } }),
         });
-    },
-);
+    }));
 
-authRouter.get("/gdpr/export", requireAuth, async (request: AuthRequest, response) => {
-    if (!request.auth) return void response.status(401).json({ error: "Unauthorized" });
+authRouter.get("/gdpr/export", ...authed(async (request, response) => {
     const result = await authUseCases.exportGdprData(request.auth.userId);
-    if (result.kind === "user_not_found") return void response.status(404).json({ error: "User not found" });
-    response.status(200).json({
-        data: {
-            ...result.data,
-            gdprConsentAt: result.data.gdprConsentAt.toISOString(),
-            createdAt: result.data.createdAt.toISOString(),
-            lastLoginAt: result.data.lastLoginAt?.toISOString() ?? null,
-        },
+    respond(response, result, {
+        user_not_found: { status: 404, error: "User not found" },
+        data_exported: (r) => ({ status: 200, body: {
+            data: {
+                ...r.data,
+                gdprConsentAt: r.data.gdprConsentAt.toISOString(),
+                createdAt: r.data.createdAt.toISOString(),
+                lastLoginAt: r.data.lastLoginAt?.toISOString() ?? null,
+            },
+        } }),
     });
-});
+}));
 
 authRouter.post("/admin/auth/cleanup-sessions", requireCronSecret, async (_request, response) => {
     await authUseCases.cleanupExpiredSessions();
-    response.status(200).json({ message: "Expired 2FA sessions deleted" });
+    send(response, { status: 200, body: { message: "Expired 2FA sessions deleted" } });
 });
 
-authRouter.delete("/users/me", requireAuth, async (request: AuthRequest, response) => {
-    if (!request.auth) return void response.status(401).json({ error: "Unauthorized" });
-    const result = await authUseCases.deleteAccount(request.auth.userId);
-    if (result.kind === "user_not_found") return void response.status(404).json({ error: "User not found" });
-    response.status(200).json({ message: "Account deleted and personal data erased" });
-});
+type DeleteAccountResult = Awaited<ReturnType<typeof authUseCases.deleteAccount>>;
+
+const sendDeleteAccountResult = (result: DeleteAccountResult, response: Response): void => {
+    respond(response, result, {
+        user_not_found: { status: 404, error: "User not found" },
+        user_has_active_role: { blocked: { type: "Deletion", reason: "User still has an active role (remove the role first)" } },
+        user_has_files: { blocked: { type: "Deletion", reason: "Account has uploaded files" } },
+        user_has_messages: { blocked: { type: "Deletion", reason: "Account has sent messages" } },
+        user_has_message_reads: { blocked: { type: "Deletion", reason: "Account has message read records" } },
+        user_has_audit_logs: { blocked: { type: "Deletion", reason: "Account has audit log entries" } },
+        account_deleted: { status: 200, body: { message: "Account deleted" } },
+    });
+};
+
+authRouter.delete("/users/:id", ...authed(async (request, response) => {
+    const auth = getAuthFlags(request.auth);
+    const result = await authUseCases.deleteAccount(String(request.params.id), auth);
+    sendDeleteAccountResult(result, response);
+}));

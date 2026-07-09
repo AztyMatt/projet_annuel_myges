@@ -31,6 +31,10 @@ export const assessmentRepository: AssessmentRepository = {
             .orderBy(asc(assessmentTable.dueDate));
         return result.map(rowToAssessment);
     },
+    async existsByCourseId(courseId) {
+        const rows = await db.select({ id: assessmentTable.id }).from(assessmentTable).where(eq(assessmentTable.courseId, courseId)).limit(1);
+        return rows.length > 0;
+    },
     async findByCourseAndTitle(courseId, title, dueDate) {
         const result = await db
             .select()

@@ -22,6 +22,10 @@ export const programRepository: ProgramRepository = {
         const result = await db.select().from(programTable).where(eq(programTable.periodId, periodId));
         return result.map(rowToProgram);
     },
+    async existsByPeriodId(periodId) {
+        const rows = await db.select({ id: programTable.id }).from(programTable).where(eq(programTable.periodId, periodId)).limit(1);
+        return rows.length > 0;
+    },
     async findByNameAndCode(name, code) {
         const result = await db
             .select()

@@ -13,7 +13,16 @@ import { type FileDocumentRepository } from "@application/file/file-document/fil
 import { type FileJustificationRepository } from "@application/file/file-justification/file-justification.repository";
 import { type FileAssessmentRepository } from "@application/file/file-assessment/file-assessment.repository";
 import { type FileAssessmentInstructionRepository } from "@application/file/file-assessment-instruction/file-assessment-instruction.repository";
-import { NotFound, MissingFields } from "@application/types/results";
+import { type AssessmentRepository } from "@application/assessment/assessment.repository";
+import { type AssessmentGroupMemberRepository } from "@application/assessment/assessment-group-member/assessment-group-member.repository";
+import { type StudentRepository } from "@application/student/student.repository";
+import { type DocumentAdministrativeRepository } from "@application/document/document-administrative/document-administrative.repository";
+import { type DocumentApprenticeshipContractRepository } from "@application/document/document-apprenticeship-contract/document-apprenticeship-contract.repository";
+import { type StorageService } from "@application/file/storage.service";
+import { type UnitOfWork } from "@application/types/unit-of-work";
+import { NotFound, MissingFields, Forbidden } from "@application/types/results";
+import { type AuthContext } from "@application/types/auth-context";
+import { isFileOwner } from "@application/file/file-access";
 
 export type FileView = {
     id: string;
@@ -59,18 +68,30 @@ export type CreateFileResult =
     | MissingFields
     | { kind: "file_created"; file: FileView };
 
-export type DeleteFileResult = NotFound | { kind: "file_deleted" };
+export type DeleteFileResult =
+    | NotFound
+    | Forbidden
+    | { kind: "file_has_contextual_links" }
+    | { kind: "file_deleted" }
+    | { kind: "file_deleted_with_warnings"; failedPaths: string[] };
 
 export type GetFileResult = NotFound | { kind: "file_found"; file: FileView };
 
-export type ListFilesResult = { kind: "files_listed"; files: FileView[] };
+export type ListFilesResult = Forbidden | { kind: "files_listed"; files: FileView[] };
 
 export type AttachFileCourseResult =
     | MissingFields
+    | Forbidden
     | { kind: "file_course_already_exists" }
+    | { kind: "file_already_linked" }
     | { kind: "file_course_attached"; fileCourse: FileCourseView };
 
-export type DeleteFileCourseResult = NotFound | { kind: "file_course_deleted" };
+export type DeleteFileCourseResult =
+    | NotFound
+    | Forbidden
+    | { kind: "orphan_super_admin_only" }
+    | { kind: "file_course_deleted" }
+    | { kind: "file_course_deleted_with_warnings"; failedPaths: string[] };
 
 export type GetFileCourseResult =
     | NotFound
@@ -81,23 +102,35 @@ export type ListFileCoursesResult = { kind: "file_courses_listed"; fileCourses: 
 export type AttachFileDocumentResult =
     | MissingFields
     | { kind: "file_document_already_exists" }
+    | { kind: "file_already_linked" }
     | { kind: "file_document_attached"; fileDocument: FileDocumentView };
 
 export type ValidateFileDocumentResult =
     | NotFound
+    | Forbidden
+    | { kind: "file_document_has_no_doc_type" }
     | { kind: "file_document_validated"; fileDocument: FileDocumentView };
 
 export type ExpireFileDocumentResult =
     | NotFound
+    | Forbidden
     | { kind: "file_document_expired"; fileDocument: FileDocumentView };
 
-export type DeleteFileDocumentResult = NotFound | { kind: "file_document_deleted" };
+
+export type DeleteFileDocumentResult =
+    | NotFound
+    | Forbidden
+    | { kind: "orphan_super_admin_only" }
+    | { kind: "file_document_has_doc_type" }
+    | { kind: "file_document_is_valid" }
+    | { kind: "file_document_deleted" }
+    | { kind: "file_document_deleted_with_warnings"; failedPaths: string[] };
 
 export type GetFileDocumentResult =
     | NotFound
     | { kind: "file_document_found"; fileDocument: FileDocumentView };
 
-export type ListFileDocumentsResult = {
+export type ListFileDocumentsResult = Forbidden | {
     kind: "file_documents_listed";
     fileDocuments: FileDocumentView[];
 };
@@ -105,6 +138,7 @@ export type ListFileDocumentsResult = {
 export type AttachFileJustificationResult =
     | MissingFields
     | { kind: "file_justification_already_exists" }
+    | { kind: "file_already_linked" }
     | { kind: "file_justification_attached"; fileJustification: FileJustificationView };
 
 export type ValidateFileJustificationResult =
@@ -117,7 +151,11 @@ export type RejectFileJustificationResult =
 
 export type DeleteFileJustificationResult =
     | NotFound
-    | { kind: "file_justification_deleted" };
+    | Forbidden
+    | { kind: "orphan_super_admin_only" }
+    | { kind: "justification_already_validated" }
+    | { kind: "file_justification_deleted" }
+    | { kind: "file_justification_deleted_with_warnings"; failedPaths: string[] };
 
 export type GetFileJustificationResult =
     | NotFound
@@ -131,11 +169,17 @@ export type ListFileJustificationsResult = {
 export type SubmitFileAssessmentResult =
     | MissingFields
     | { kind: "file_assessment_already_exists" }
+    | { kind: "file_already_linked" }
     | { kind: "file_assessment_submitted"; fileAssessment: FileAssessmentView };
 
 export type DeleteFileAssessmentResult =
     | NotFound
-    | { kind: "file_assessment_deleted" };
+    | Forbidden
+    | { kind: "assessment_missing" }
+    | { kind: "assessment_past_due_date" }
+    | { kind: "file_missing" }
+    | { kind: "file_assessment_deleted" }
+    | { kind: "file_assessment_deleted_with_warnings"; failedPaths: string[] };
 
 export type GetFileAssessmentResult =
     | NotFound
@@ -155,12 +199,17 @@ export type FileAssessmentInstructionView = {
 
 export type UploadAssessmentInstructionResult =
     | MissingFields
+    | Forbidden
     | { kind: "file_assessment_instruction_already_exists" }
+    | { kind: "file_already_linked" }
     | { kind: "instruction_uploaded"; instruction: FileAssessmentInstructionView };
 
 export type DeleteAssessmentInstructionResult =
     | NotFound
-    | { kind: "instruction_deleted" };
+    | Forbidden
+    | { kind: "orphan_super_admin_only" }
+    | { kind: "instruction_deleted" }
+    | { kind: "instruction_deleted_with_warnings"; failedPaths: string[] };
 
 export type GetAssessmentInstructionResult =
     | NotFound
@@ -226,21 +275,29 @@ export class FileUseCases {
         private readonly fileJustifications: FileJustificationRepository,
         private readonly fileAssessments: FileAssessmentRepository,
         private readonly fileAssessmentInstructions: FileAssessmentInstructionRepository,
+        private readonly assessments: AssessmentRepository,
+        private readonly documentAdministratives: DocumentAdministrativeRepository,
+        private readonly documentApprenticeshipContracts: DocumentApprenticeshipContractRepository,
+        private readonly storage: StorageService,
+        private readonly assessmentGroupMembers: AssessmentGroupMemberRepository,
+        private readonly students: StudentRepository,
+        private readonly unitOfWork: UnitOfWork,
     ) {}
 
     async create(input: {
-        storagePath?: string;
         name?: string;
         originalName?: string;
         mimeType?: string;
         sizeBytes?: number;
         uploadedBy?: string;
     }): Promise<CreateFileResult> {
-        const { storagePath, name, originalName, mimeType, sizeBytes, uploadedBy } = input;
-        if (!storagePath || !name || !originalName || !mimeType || sizeBytes === undefined || !uploadedBy)
+        const { name, originalName, mimeType, sizeBytes, uploadedBy } = input;
+        if (!name || !originalName || !mimeType || sizeBytes === undefined || !uploadedBy)
             return MissingFields;
+        const id = randomUUID();
+        const storagePath = `files/${id}`;
         const file: File = {
-            id: randomUUID(),
+            id,
             storagePath,
             name,
             originalName,
@@ -253,47 +310,106 @@ export class FileUseCases {
         return { kind: "file_created", file: toFileView(file) };
     }
 
-    async delete(id: string): Promise<DeleteFileResult> {
+    async delete(id: string, auth: AuthContext): Promise<DeleteFileResult> {
+        if (!auth.isSuperAdmin) return Forbidden;
         const file = await this.files.findById(id);
         if (!file) return NotFound;
-        await this.files.deleteById(id);
-        return { kind: "file_deleted" };
+        if (await this.isFileLinked(id)) return { kind: "file_has_contextual_links" };
+        await this.unitOfWork.run(async () => {
+            await this.files.deleteById(id);
+        });
+        const failedPaths = await this.storage.deleteMany([file.storagePath]);
+        return failedPaths.length > 0
+            ? { kind: "file_deleted_with_warnings", failedPaths }
+            : { kind: "file_deleted" };
     }
 
-    async findById(id: string): Promise<GetFileResult> {
+    async findById(id: string, auth: AuthContext): Promise<GetFileResult> {
+        if (!auth.isAdmin) return NotFound;
         const file = await this.files.findById(id);
         if (!file) return NotFound;
         return { kind: "file_found", file: toFileView(file) };
     }
 
-    async list(): Promise<ListFilesResult> {
+    async list(auth: AuthContext): Promise<ListFilesResult> {
+        if (!auth.isAdmin) return Forbidden;
         const files = await this.files.list();
         return { kind: "files_listed", files: files.map(toFileView) };
     }
 
-    async listByUploadedBy(userId: string): Promise<ListFilesResult> {
+    async listMine(auth: AuthContext): Promise<{ kind: "files_listed"; files: FileView[] }> {
+        const files = await this.files.findByUploadedBy(auth.requesterId);
+        return { kind: "files_listed", files: files.map(toFileView) };
+    }
+
+    async listByUploadedBy(userId: string, auth: AuthContext): Promise<ListFilesResult> {
+        if (!auth.isAdmin) return Forbidden;
         const files = await this.files.findByUploadedBy(userId);
         return { kind: "files_listed", files: files.map(toFileView) };
+    }
+
+    private async isFileLinked(fileId: string): Promise<boolean> {
+        const [courses, document, justification, assessment, instructions] = await Promise.all([
+            this.fileCourses.findByFileId(fileId),
+            this.fileDocuments.findByFileId(fileId),
+            this.fileJustifications.findByFileId(fileId),
+            this.fileAssessments.findByFileId(fileId),
+            this.fileAssessmentInstructions.findByFileId(fileId),
+        ]);
+        return courses.length > 0 || !!document || !!justification || !!assessment || instructions.length > 0;
+    }
+
+    private authorizeFileDetach(
+        file: File | undefined,
+        auth: AuthContext,
+    ): { kind: "ok" } | Forbidden | { kind: "orphan_super_admin_only" } {
+        if (!auth.isAdmin && !isFileOwner(file, auth)) return Forbidden;
+        if (!file && !auth.isSuperAdmin) return { kind: "orphan_super_admin_only" };
+        return { kind: "ok" };
+    }
+
+    private async cascadeDeleteLinkAndFile(
+        file: File | undefined,
+        deleteLink: () => Promise<void>,
+    ): Promise<{ kind: "deleted" } | { kind: "deleted_with_warnings"; failedPaths: string[] }> {
+        await this.unitOfWork.run(async () => {
+            await deleteLink();
+            if (file) await this.files.deleteById(file.id);
+        });
+        const failedPaths = file ? await this.storage.deleteMany([file.storagePath]) : [];
+        return failedPaths.length > 0
+            ? { kind: "deleted_with_warnings", failedPaths }
+            : { kind: "deleted" };
     }
 
     async attachToCourse(input: {
         name?: string;
         fileId?: string;
         courseId?: string;
-    }): Promise<AttachFileCourseResult> {
+    }, auth: AuthContext): Promise<AttachFileCourseResult> {
         const { name, fileId, courseId } = input;
         if (!name || !fileId || !courseId) return MissingFields;
+        if (!auth.isAdmin) {
+            const file = await this.files.findById(fileId);
+            if (!isFileOwner(file, auth)) return Forbidden;
+        }
         if (await this.fileCourses.findByFileAndCourse(fileId, courseId)) return { kind: "file_course_already_exists" };
+        if (await this.isFileLinked(fileId)) return { kind: "file_already_linked" };
         const entry: FileCourse = { id: randomUUID(), name, fileId, courseId };
         await this.fileCourses.save(entry);
         return { kind: "file_course_attached", fileCourse: toFileCourseView(entry) };
     }
 
-    async detachFromCourse(id: string): Promise<DeleteFileCourseResult> {
+    async detachFromCourse(id: string, auth: AuthContext): Promise<DeleteFileCourseResult> {
         const entry = await this.fileCourses.findById(id);
         if (!entry) return NotFound;
-        await this.fileCourses.deleteById(id);
-        return { kind: "file_course_deleted" };
+        const file = await this.files.findById(entry.fileId);
+        const authResult = this.authorizeFileDetach(file, auth);
+        if (authResult.kind !== "ok") return authResult;
+        const outcome = await this.cascadeDeleteLinkAndFile(file, () => this.fileCourses.deleteById(id));
+        return outcome.kind === "deleted"
+            ? { kind: "file_course_deleted" }
+            : { kind: "file_course_deleted_with_warnings", failedPaths: outcome.failedPaths };
     }
 
     async findFileCourseById(id: string): Promise<GetFileCourseResult> {
@@ -320,20 +436,28 @@ export class FileUseCases {
         const { fileId, studentId, status } = input;
         if (!fileId || !studentId || !status) return MissingFields;
         if (await this.fileDocuments.findByFileAndStudent(fileId, studentId)) return { kind: "file_document_already_exists" };
+        if (await this.isFileLinked(fileId)) return { kind: "file_already_linked" };
         const entry: FileDocument = { id: randomUUID(), fileId, studentId, status };
         await this.fileDocuments.save(entry);
         return { kind: "file_document_attached", fileDocument: toFileDocumentView(entry) };
     }
 
-    async validateDocument(id: string): Promise<ValidateFileDocumentResult> {
+    async validateDocument(id: string, auth: AuthContext): Promise<ValidateFileDocumentResult> {
+        if (!auth.isAdmin) return Forbidden;
         const entry = await this.fileDocuments.findById(id);
         if (!entry) return NotFound;
+        const [administrative, contract] = await Promise.all([
+            this.documentAdministratives.findByFileDocumentId(id),
+            this.documentApprenticeshipContracts.findByFileDocumentId(id),
+        ]);
+        if (!administrative && !contract) return { kind: "file_document_has_no_doc_type" };
         entry.status = DocumentStatus.VALID;
         await this.fileDocuments.save(entry);
         return { kind: "file_document_validated", fileDocument: toFileDocumentView(entry) };
     }
 
-    async expireDocument(id: string): Promise<ExpireFileDocumentResult> {
+    async expireDocument(id: string, auth: AuthContext): Promise<ExpireFileDocumentResult> {
+        if (!auth.isAdmin) return Forbidden;
         const entry = await this.fileDocuments.findById(id);
         if (!entry) return NotFound;
         entry.status = DocumentStatus.EXPIRED;
@@ -341,26 +465,44 @@ export class FileUseCases {
         return { kind: "file_document_expired", fileDocument: toFileDocumentView(entry) };
     }
 
-    async deleteFileDocument(id: string): Promise<DeleteFileDocumentResult> {
+    async deleteFileDocument(id: string, auth: AuthContext): Promise<DeleteFileDocumentResult> {
         const entry = await this.fileDocuments.findById(id);
         if (!entry) return NotFound;
-        await this.fileDocuments.deleteById(id);
-        return { kind: "file_document_deleted" };
+        const file = await this.files.findById(entry.fileId);
+        const authResult = this.authorizeFileDetach(file, auth);
+        if (authResult.kind !== "ok") return authResult;
+        if (await this.documentAdministratives.findByFileDocumentId(id)) return { kind: "file_document_has_doc_type" };
+        if (await this.documentApprenticeshipContracts.findByFileDocumentId(id)) return { kind: "file_document_has_doc_type" };
+        if (entry.status === DocumentStatus.VALID) return { kind: "file_document_is_valid" };
+        const outcome = await this.cascadeDeleteLinkAndFile(file, () => this.fileDocuments.deleteById(id));
+        return outcome.kind === "deleted"
+            ? { kind: "file_document_deleted" }
+            : { kind: "file_document_deleted_with_warnings", failedPaths: outcome.failedPaths };
     }
 
-    async findFileDocumentById(id: string): Promise<GetFileDocumentResult> {
+    async findFileDocumentById(id: string, auth: AuthContext): Promise<GetFileDocumentResult> {
+        if (!auth.isAdmin) return NotFound;
         const entry = await this.fileDocuments.findById(id);
         if (!entry) return NotFound;
         return { kind: "file_document_found", fileDocument: toFileDocumentView(entry) };
     }
 
-    async listFileDocuments(): Promise<ListFileDocumentsResult> {
+    async listFileDocuments(auth: AuthContext): Promise<ListFileDocumentsResult> {
+        if (!auth.isAdmin) return Forbidden;
         const entries = await this.fileDocuments.list();
         return { kind: "file_documents_listed", fileDocuments: entries.map(toFileDocumentView) };
     }
 
-    async listFileDocumentsByStudent(studentId: string): Promise<ListFileDocumentsResult> {
+    async listFileDocumentsByStudent(studentId: string, auth: AuthContext): Promise<NotFound | { kind: "file_documents_listed"; fileDocuments: FileDocumentView[] }> {
+        if (!auth.isAdmin) return NotFound;
         const entries = await this.fileDocuments.findByStudentId(studentId);
+        return { kind: "file_documents_listed", fileDocuments: entries.map(toFileDocumentView) };
+    }
+
+    async listMineFileDocuments(auth: AuthContext): Promise<NotFound | { kind: "file_documents_listed"; fileDocuments: FileDocumentView[] }> {
+        const student = await this.students.findByUserId(auth.requesterId);
+        if (!student) return NotFound;
+        const entries = await this.fileDocuments.findByStudentId(student.id);
         return { kind: "file_documents_listed", fileDocuments: entries.map(toFileDocumentView) };
     }
 
@@ -371,6 +513,7 @@ export class FileUseCases {
         const { absenceId, fileId } = input;
         if (!absenceId || !fileId) return MissingFields;
         if (await this.fileJustifications.findByAbsenceAndFile(absenceId, fileId)) return { kind: "file_justification_already_exists" };
+        if (await this.isFileLinked(fileId)) return { kind: "file_already_linked" };
         const entry: FileJustification = {
             id: randomUUID(),
             absenceId,
@@ -400,21 +543,36 @@ export class FileUseCases {
         return { kind: "file_justification_rejected", fileJustification: toFileJustificationView(entry) };
     }
 
-    async deleteJustification(id: string): Promise<DeleteFileJustificationResult> {
+    async deleteJustification(id: string, auth: AuthContext): Promise<DeleteFileJustificationResult> {
         const entry = await this.fileJustifications.findById(id);
         if (!entry) return NotFound;
-        await this.fileJustifications.deleteById(id);
-        return { kind: "file_justification_deleted" };
+        const file = await this.files.findById(entry.fileId);
+        const authResult = this.authorizeFileDetach(file, auth);
+        if (authResult.kind !== "ok") return authResult;
+        if (entry.validationStatus === BasicStatus.VALIDATED) return { kind: "justification_already_validated" };
+        const outcome = await this.cascadeDeleteLinkAndFile(file, () => this.fileJustifications.deleteById(id));
+        return outcome.kind === "deleted"
+            ? { kind: "file_justification_deleted" }
+            : { kind: "file_justification_deleted_with_warnings", failedPaths: outcome.failedPaths };
     }
 
-    async findJustificationById(id: string): Promise<GetFileJustificationResult> {
+    async findJustificationById(id: string, auth: AuthContext): Promise<GetFileJustificationResult> {
+        if (!auth.isAdmin) return NotFound;
         const entry = await this.fileJustifications.findById(id);
         if (!entry) return NotFound;
         return { kind: "file_justification_found", fileJustification: toFileJustificationView(entry) };
     }
 
-    async listJustificationsByAbsence(absenceId: string): Promise<ListFileJustificationsResult> {
+    async listJustificationsByAbsence(absenceId: string, auth: AuthContext): Promise<NotFound | { kind: "file_justifications_listed"; fileJustifications: FileJustificationView[] }> {
+        if (!auth.isAdmin) return NotFound;
         const entries = await this.fileJustifications.findByAbsenceId(absenceId);
+        return { kind: "file_justifications_listed", fileJustifications: entries.map(toFileJustificationView) };
+    }
+
+    async listMineJustifications(auth: AuthContext): Promise<NotFound | { kind: "file_justifications_listed"; fileJustifications: FileJustificationView[] }> {
+        const student = await this.students.findByUserId(auth.requesterId);
+        if (!student) return NotFound;
+        const entries = await this.fileJustifications.findByStudentId(student.id);
         return { kind: "file_justifications_listed", fileJustifications: entries.map(toFileJustificationView) };
     }
 
@@ -426,6 +584,7 @@ export class FileUseCases {
         const { assessmentId, assessmentGroupId, fileId } = input;
         if (!assessmentId || !assessmentGroupId || !fileId) return MissingFields;
         if (await this.fileAssessments.findByGroupAndFile(assessmentGroupId, fileId)) return { kind: "file_assessment_already_exists" };
+        if (await this.isFileLinked(fileId)) return { kind: "file_already_linked" };
         const entry: FileAssessment = {
             id: randomUUID(),
             assessmentId,
@@ -436,11 +595,31 @@ export class FileUseCases {
         return { kind: "file_assessment_submitted", fileAssessment: toFileAssessmentView(entry) };
     }
 
-    async deleteAssessmentFile(id: string): Promise<DeleteFileAssessmentResult> {
+    async deleteAssessmentFile(id: string, auth: AuthContext): Promise<DeleteFileAssessmentResult> {
         const entry = await this.fileAssessments.findById(id);
         if (!entry) return NotFound;
-        await this.fileAssessments.deleteById(id);
-        return { kind: "file_assessment_deleted" };
+        if (!auth.isSuperAdmin) {
+            const student = await this.students.findByUserId(auth.requesterId);
+            if (!student) return Forbidden;
+            const membership = await this.assessmentGroupMembers.findByGroupAndStudent(entry.assessmentGroupId, student.id);
+            if (!membership) return Forbidden;
+        }
+        const assessment = await this.assessments.findById(entry.assessmentId);
+        if (!assessment) {
+            if (!auth.isSuperAdmin) return { kind: "assessment_missing" };
+        } else if (!auth.isSuperAdmin && new Date() > assessment.dueDate) {
+            return { kind: "assessment_past_due_date" };
+        }
+        const file = await this.files.findById(entry.fileId);
+        if (!file && !auth.isSuperAdmin) return { kind: "file_missing" };
+        await this.unitOfWork.run(async () => {
+            await this.fileAssessments.deleteById(id);
+            if (file) await this.files.deleteById(file.id);
+        });
+        const failedPaths = file ? await this.storage.deleteMany([file.storagePath]) : [];
+        return failedPaths.length > 0
+            ? { kind: "file_assessment_deleted_with_warnings", failedPaths }
+            : { kind: "file_assessment_deleted" };
     }
 
     async findAssessmentFileById(id: string): Promise<GetFileAssessmentResult> {
@@ -462,10 +641,15 @@ export class FileUseCases {
     async uploadInstruction(input: {
         assessmentId?: string;
         fileId?: string;
-    }): Promise<UploadAssessmentInstructionResult> {
+    }, auth: AuthContext): Promise<UploadAssessmentInstructionResult> {
         const { assessmentId, fileId } = input;
         if (!assessmentId || !fileId) return MissingFields;
+        if (!auth.isAdmin) {
+            const file = await this.files.findById(fileId);
+            if (!isFileOwner(file, auth)) return Forbidden;
+        }
         if (await this.fileAssessmentInstructions.findByAssessmentAndFile(assessmentId, fileId)) return { kind: "file_assessment_instruction_already_exists" };
+        if (await this.isFileLinked(fileId)) return { kind: "file_already_linked" };
         const entry: FileAssessmentInstruction = {
             id: randomUUID(),
             assessmentId,
@@ -476,11 +660,16 @@ export class FileUseCases {
         return { kind: "instruction_uploaded", instruction: toFileAssessmentInstructionView(entry) };
     }
 
-    async deleteInstruction(id: string): Promise<DeleteAssessmentInstructionResult> {
+    async deleteInstruction(id: string, auth: AuthContext): Promise<DeleteAssessmentInstructionResult> {
         const entry = await this.fileAssessmentInstructions.findById(id);
         if (!entry) return NotFound;
-        await this.fileAssessmentInstructions.deleteById(id);
-        return { kind: "instruction_deleted" };
+        const file = await this.files.findById(entry.fileId);
+        const authResult = this.authorizeFileDetach(file, auth);
+        if (authResult.kind !== "ok") return authResult;
+        const outcome = await this.cascadeDeleteLinkAndFile(file, () => this.fileAssessmentInstructions.deleteById(id));
+        return outcome.kind === "deleted"
+            ? { kind: "instruction_deleted" }
+            : { kind: "instruction_deleted_with_warnings", failedPaths: outcome.failedPaths };
     }
 
     async findInstructionById(id: string): Promise<GetAssessmentInstructionResult> {

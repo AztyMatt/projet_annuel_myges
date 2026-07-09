@@ -1,53 +1,48 @@
 import { Router } from "express";
-import { requireAuth, requireRole } from "@express/src/auth/middleware";
-import { AdminRole } from "@domain/admin/admin.enums";
+import { authed, getAuthFlags } from "@express/src/auth/middleware";
 import { companyUseCases } from "@express/src/container";
+import { respond, send } from "@express/src/http/responses";
 
 export const companyRouter = Router();
 
-companyRouter.get("/companies", requireAuth, async (_req, res) => {
+companyRouter.get("/companies", ...authed(async (_req, res) => {
     const result = await companyUseCases.list();
-    res.status(200).json(result.companies);
-});
+    send(res, { status: 200, body: result.companies });
+}));
 
-companyRouter.get("/companies/:id", requireAuth, async (req, res) => {
+companyRouter.get("/companies/:id", ...authed(async (req, res) => {
     const result = await companyUseCases.findById(String(req.params.id));
-    if (result.kind === "not_found") return void res.status(404).json({ error: "Company not found" });
-    res.status(200).json(result.company);
-});
+    respond(res, result, {
+        not_found: { status: 404, error: "Company not found" },
+        company_found: (r) => ({ status: 200, body: r.company }),
+    });
+}));
 
-companyRouter.post(
-    "/companies",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN),
-    async (req, res) => {
-        const result = await companyUseCases.create(req.body);
-        if (result.kind === "missing_fields")
-            return void res.status(400).json({ error: "name, siret, address and contactName are required" });
-        if (result.kind === "siret_already_exists")
-            return void res.status(409).json({ error: "A company with this SIRET already exists" });
-        res.status(201).json(result.company);
-    },
-);
+companyRouter.post("/companies", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await companyUseCases.create(req.body, auth);
+    respond(res, result, {
+        missing_fields: { status: 400, error: "name, siret, address and contactName are required" },
+        siret_already_exists: { blocked: { type: "Creation", reason: "A company with this SIRET already exists" } },
+        company_created: (r) => ({ status: 201, body: r.company }),
+    });
+}));
 
-companyRouter.patch(
-    "/companies/:id",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN),
-    async (req, res) => {
-        const result = await companyUseCases.update(String(req.params.id), req.body);
-        if (result.kind === "not_found") return void res.status(404).json({ error: "Company not found" });
-        res.status(200).json(result.company);
-    },
-);
+companyRouter.patch("/companies/:id", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await companyUseCases.update(String(req.params.id), req.body, auth);
+    respond(res, result, {
+        not_found: { status: 404, error: "Company not found" },
+        company_updated: (r) => ({ status: 200, body: r.company }),
+    });
+}));
 
-companyRouter.delete(
-    "/companies/:id",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN),
-    async (req, res) => {
-        const result = await companyUseCases.delete(String(req.params.id));
-        if (result.kind === "not_found") return void res.status(404).json({ error: "Company not found" });
-        res.status(200).json({ message: "Company deleted" });
-    },
-);
+companyRouter.delete("/companies/:id", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await companyUseCases.delete(String(req.params.id), auth);
+    respond(res, result, {
+        not_found: { status: 404, error: "Company not found" },
+        company_has_contracts: { blocked: { type: "Deletion", reason: "Company has apprenticeship contracts" } },
+        company_deleted: { status: 200, body: { message: "Company deleted" } },
+    });
+}));

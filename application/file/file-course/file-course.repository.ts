@@ -7,4 +7,5 @@ export interface FileCourseRepository {
     findByFileAndCourse(fileId: string, courseId: string): Promise<FileCourse | undefined>;
     save(fileCourse: FileCourse): Promise<void>;
     deleteById(id: string): Promise<void>;
+    deleteByCourseId(courseId: string): Promise<void>;
 }

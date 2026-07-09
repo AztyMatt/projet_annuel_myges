@@ -1,66 +1,66 @@
 import { Router } from "express";
-import { requireAuth, requireRole, type AuthRequest } from "@express/src/auth/middleware";
-import { AdminRole } from "@domain/admin/admin.enums";
+import { authed, getAuthFlags, sendForbidden } from "@express/src/auth/middleware";
 import { Role } from "@domain/auth/user.enums";
 import { courseUseCases, instructorUseCases } from "@express/src/container";
+import { send, respond } from "@express/src/http/responses";
 
 export const courseRouter = Router();
 
-courseRouter.get("/courses", requireAuth, requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN), async (_req, res) => {
-    const result = await courseUseCases.list();
-    res.status(200).json(result.courses);
-});
+courseRouter.get("/courses", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await courseUseCases.list(auth);
+    respond(res, result, {
+        courses_listed: (r) => ({ status: 200, body: r.courses }),
+    });
+}));
 
-courseRouter.get("/courses/mine", requireAuth, async (req: AuthRequest, res) => {
-    if (!req.auth) return void res.status(401).json({ error: "Unauthorized" });
+courseRouter.get("/courses/mine", ...authed(async (req, res) => {
     if (req.auth.role !== Role.INSTRUCTOR)
-        return void res.status(403).json({ error: "Only instructors can access this endpoint" });
+        return void sendForbidden(res, "Forbidden: only instructors can access this");
     const instructor = await instructorUseCases.findByUserId(req.auth.userId);
-    if (instructor.kind === "not_found") return void res.status(404).json({ error: "Instructor profile not found" });
+    if (instructor.kind === "not_found") return void send(res, { status: 404, error: "Instructor profile not found" });
+    if (instructor.kind === "forbidden") return void sendForbidden(res);
     const result = await courseUseCases.listByInstructor(instructor.instructor.id);
-    res.status(200).json(result.courses);
-});
+    respond(res, result, {
+        courses_listed: (r) => ({ status: 200, body: r.courses }),
+    });
+}));
 
-courseRouter.get("/courses/:id", requireAuth, async (req, res) => {
+courseRouter.get("/courses/:id", ...authed(async (req, res) => {
     const result = await courseUseCases.findById(String(req.params.id));
-    if (result.kind === "not_found") return void res.status(404).json({ error: "Course not found" });
-    res.status(200).json(result.course);
-});
+    respond(res, result, {
+        not_found: { status: 404, error: "Course not found" },
+        course_found: (r) => ({ status: 200, body: r.course }),
+    });
+}));
 
-courseRouter.post(
-    "/courses",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN),
-    async (req, res) => {
-        const result = await courseUseCases.create(req.body);
-        if (result.kind === "missing_fields")
-            return void res
-                .status(400)
-                .json({ error: "instructorId, moduleId, classId, blocId and conversationId are required" });
-        if (result.kind === "course_already_exists")
-            return void res.status(409).json({ error: "A course with this instructor, module and group already exists" });
-        res.status(201).json(result.course);
-    },
-);
+courseRouter.post("/courses", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await courseUseCases.create(req.body, auth);
+    respond(res, result, {
+        missing_fields: { status: 400, error: "instructorId, moduleId, groupId and blocId are required" },
+        course_already_exists: { blocked: { type: "Creation", reason: "A course with this instructor, module and group already exists" } },
+        course_created: (r) => ({ status: 201, body: r.course }),
+    });
+}));
 
-courseRouter.patch(
-    "/courses/:id",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN),
-    async (req, res) => {
-        const result = await courseUseCases.update(String(req.params.id), req.body);
-        if (result.kind === "not_found") return void res.status(404).json({ error: "Course not found" });
-        res.status(200).json(result.course);
-    },
-);
+courseRouter.patch("/courses/:id", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await courseUseCases.update(String(req.params.id), req.body, auth);
+    respond(res, result, {
+        not_found: { status: 404, error: "Course not found" },
+        course_updated: (r) => ({ status: 200, body: r.course }),
+    });
+}));
 
-courseRouter.delete(
-    "/courses/:id",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN),
-    async (req, res) => {
-        const result = await courseUseCases.delete(String(req.params.id));
-        if (result.kind === "not_found") return void res.status(404).json({ error: "Course not found" });
-        res.status(200).json({ message: "Course deleted" });
-    },
-);
+courseRouter.delete("/courses/:id", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await courseUseCases.delete(String(req.params.id), auth);
+    respond(res, result, {
+        not_found: { status: 404, error: "Course not found" },
+        course_has_sessions: { blocked: { type: "Deletion", reason: "Course has sessions" } },
+        course_has_assessments: { blocked: { type: "Deletion", reason: "Course has assessments" } },
+        course_deleted_with_warnings: (r) => ({ status: 200, body: { message: "Course deleted", storageWarnings: r.failedPaths } }),
+        course_deleted: { status: 200, body: { message: "Course deleted" } },
+    });
+}));

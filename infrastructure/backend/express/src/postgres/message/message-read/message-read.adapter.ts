@@ -30,6 +30,10 @@ export const messageReadRepository: MessageReadRepository = {
         const result = await db.select().from(messageReadTable).where(eq(messageReadTable.userId, userId));
         return result.map(rowToMessageRead);
     },
+    async existsByUserId(userId) {
+        const rows = await db.select({ id: messageReadTable.id }).from(messageReadTable).where(eq(messageReadTable.userId, userId)).limit(1);
+        return rows.length > 0;
+    },
     async save(messageRead) {
         await db
             .insert(messageReadTable)

@@ -41,7 +41,7 @@ export const sessionExamExternal = pgTable("session_exam_external", {
     id: text("id").primaryKey(),
     sessionExamId: text("session_exam_id")
         .notNull()
-        .references(() => sessionExam.id),
+        .references(() => sessionExam.id, { onDelete: "cascade" }),
     externalId: text("external_id")
         .notNull()
         .references(() => external.id),
@@ -53,7 +53,7 @@ export const sessionExamInstructor = pgTable("session_exam_instructor", {
     id: text("id").primaryKey(),
     sessionExamId: text("session_exam_id")
         .notNull()
-        .references(() => sessionExam.id),
+        .references(() => sessionExam.id, { onDelete: "cascade" }),
     instructorId: text("instructor_id")
         .notNull()
         .references(() => instructor.id),
@@ -65,7 +65,7 @@ export const sessionExamStudent = pgTable("session_exam_student", {
     id: text("id").primaryKey(),
     sessionExamId: text("session_exam_id")
         .notNull()
-        .references(() => sessionExam.id),
+        .references(() => sessionExam.id, { onDelete: "cascade" }),
     studentId: text("student_id")
         .notNull()
         .references(() => student.id),

@@ -25,9 +25,17 @@ export const sessionExamRepository: SessionExamRepository = {
         const result = await db.select().from(sessionExamTable).where(eq(sessionExamTable.sessionId, sessionId));
         return result.map(rowToSessionExam);
     },
+    async existsBySessionId(sessionId) {
+        const rows = await db.select({ id: sessionExamTable.id }).from(sessionExamTable).where(eq(sessionExamTable.sessionId, sessionId)).limit(1);
+        return rows.length > 0;
+    },
     async findByAssessmentId(assessmentId) {
         const result = await db.select().from(sessionExamTable).where(eq(sessionExamTable.assessmentId, assessmentId));
         return result.map(rowToSessionExam);
+    },
+    async existsByAssessmentId(assessmentId) {
+        const rows = await db.select({ id: sessionExamTable.id }).from(sessionExamTable).where(eq(sessionExamTable.assessmentId, assessmentId)).limit(1);
+        return rows.length > 0;
     },
     async save(sessionExam) {
         await db

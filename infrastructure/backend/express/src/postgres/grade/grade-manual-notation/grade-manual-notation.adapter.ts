@@ -35,6 +35,10 @@ export const gradeManualNotationRepository: GradeManualNotationRepository = {
             .where(eq(gradeManualNotationTable.gradeManualId, gradeManualId));
         return result.map(rowToGradeManualNotation);
     },
+    async existsByGradeManualId(gradeManualId) {
+        const rows = await db.select({ id: gradeManualNotationTable.id }).from(gradeManualNotationTable).where(eq(gradeManualNotationTable.gradeManualId, gradeManualId)).limit(1);
+        return rows.length > 0;
+    },
     async findByGradeAndManualNotation(gradeId, gradeManualId) {
         const result = await db
             .select()

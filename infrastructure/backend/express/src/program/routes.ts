@@ -1,124 +1,114 @@
 import { Router } from "express";
-import { requireAuth, requireRole } from "@express/src/auth/middleware";
-import { AdminRole } from "@domain/admin/admin.enums";
+import { authed, getAuthFlags } from "@express/src/auth/middleware";
 import { programUseCases } from "@express/src/container";
+import { send, respond } from "@express/src/http/responses";
 
 export const programRouter = Router();
 
-programRouter.get("/programs", requireAuth, async (_req, res) => {
+programRouter.get("/programs", ...authed(async (_req, res) => {
     const result = await programUseCases.list();
-    res.status(200).json(result.programs);
-});
+    send(res, { status: 200, body: result.programs });
+}));
 
-programRouter.get("/programs/:id", requireAuth, async (req, res) => {
+programRouter.get("/programs/:id", ...authed(async (req, res) => {
     const result = await programUseCases.findById(String(req.params.id));
-    if (result.kind === "not_found") return void res.status(404).json({ error: "Program not found" });
-    res.status(200).json(result.program);
-});
+    respond(res, result, {
+        not_found: { status: 404, error: "Program not found" },
+        program_found: (r) => ({ status: 200, body: r.program }),
+    });
+}));
 
-programRouter.post(
-    "/programs",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN),
-    async (req, res) => {
-        const result = await programUseCases.create(req.body);
-        if (result.kind === "missing_fields")
-            return void res.status(400).json({ error: "name and periodId are required" });
-        if (result.kind === "program_already_exists")
-            return void res.status(409).json({ error: "A program with this name and code already exists" });
-        res.status(201).json(result.program);
-    },
-);
+programRouter.post("/programs", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await programUseCases.create(req.body, auth);
+    respond(res, result, {
+        missing_fields: { status: 400, error: "name and periodId are required" },
+        program_already_exists: { blocked: { type: "Creation", reason: "A program with this name and code already exists" } },
+        program_created: (r) => ({ status: 201, body: r.program }),
+    });
+}));
 
-programRouter.patch(
-    "/programs/:id",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN),
-    async (req, res) => {
-        const result = await programUseCases.update(String(req.params.id), req.body);
-        if (result.kind === "not_found") return void res.status(404).json({ error: "Program not found" });
-        if (result.kind === "program_already_exists")
-            return void res.status(409).json({ error: "A program with this name and code already exists" });
-        res.status(200).json(result.program);
-    },
-);
+programRouter.patch("/programs/:id", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await programUseCases.update(String(req.params.id), req.body, auth);
+    respond(res, result, {
+        not_found: { status: 404, error: "Program not found" },
+        program_already_exists: { blocked: { type: "Creation", reason: "A program with this name and code already exists" } },
+        program_updated: (r) => ({ status: 200, body: r.program }),
+    });
+}));
 
-programRouter.delete(
-    "/programs/:id",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN),
-    async (req, res) => {
-        const result = await programUseCases.delete(String(req.params.id));
-        if (result.kind === "not_found") return void res.status(404).json({ error: "Program not found" });
-        res.status(200).json({ message: "Program deleted" });
-    },
-);
+programRouter.delete("/programs/:id", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await programUseCases.delete(String(req.params.id), auth);
+    respond(res, result, {
+        not_found: { status: 404, error: "Program not found" },
+        program_has_modules: { blocked: { type: "Deletion", reason: "Program has modules" } },
+        program_has_classes: { blocked: { type: "Deletion", reason: "Program has classes" } },
+        program_has_blocs: { blocked: { type: "Deletion", reason: "Program has blocs" } },
+        program_has_students: { blocked: { type: "Deletion", reason: "Program has students" } },
+        program_deleted: { status: 200, body: { message: "Program deleted" } },
+    });
+}));
 
-programRouter.get("/programs/:id/modules", requireAuth, async (req, res) => {
+programRouter.get("/programs/:id/modules", ...authed(async (req, res) => {
     const result = await programUseCases.listModulesByProgram(String(req.params.id));
-    res.status(200).json(result.programModules);
-});
+    send(res, { status: 200, body: result.programModules });
+}));
 
-programRouter.post(
-    "/programs/:id/modules",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN),
-    async (req, res) => {
-        const result = await programUseCases.addModule({ programId: String(req.params.id), ...req.body });
-        if (result.kind === "missing_fields")
-            return void res.status(400).json({ error: "moduleId, coefficient and ectsCredits are required" });
-        res.status(201).json(result.programModule);
-    },
-);
+programRouter.post("/programs/:id/modules", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await programUseCases.addModule({ programId: String(req.params.id), ...req.body }, auth);
+    respond(res, result, {
+        missing_fields: { status: 400, error: "moduleId, coefficient and ectsCredits are required" },
+        program_module_created: (r) => ({ status: 201, body: r.programModule }),
+    });
+}));
 
-programRouter.get("/program-modules/program/:programId", requireAuth, async (req, res) => {
+programRouter.delete("/program-modules/:id", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await programUseCases.removeModule(String(req.params.id), auth);
+    respond(res, result, {
+        not_found: { status: 404, error: "Program module not found" },
+        program_module_deleted: { status: 200, body: { message: "Program module deleted" } },
+    });
+}));
+
+programRouter.get("/program-modules/program/:programId", ...authed(async (req, res) => {
     const result = await programUseCases.listModulesByProgram(String(req.params.programId));
-    res.status(200).json(result.programModules);
-});
+    send(res, { status: 200, body: result.programModules });
+}));
 
-programRouter.get("/program-modules/module/:moduleId", requireAuth, async (req, res) => {
+programRouter.get("/program-modules/module/:moduleId", ...authed(async (req, res) => {
     const result = await programUseCases.listProgramsByModule(String(req.params.moduleId));
-    res.status(200).json(result.programModules);
-});
+    send(res, { status: 200, body: result.programModules });
+}));
 
-programRouter.post(
-    "/program-modules",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN),
-    async (req, res) => {
-        const result = await programUseCases.addModule(req.body);
-        if (result.kind === "missing_fields")
-            return void res.status(400).json({ error: "programId, moduleId, coefficient and ectsCredits are required" });
-        res.status(201).json(result.programModule);
-    },
-);
+programRouter.post("/program-modules", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await programUseCases.addModule(req.body, auth);
+    respond(res, result, {
+        missing_fields: { status: 400, error: "programId, moduleId, coefficient and ectsCredits are required" },
+        program_module_created: (r) => ({ status: 201, body: r.programModule }),
+    });
+}));
 
-programRouter.delete(
-    "/program-modules/:id",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN),
-    async (req, res) => {
-        const result = await programUseCases.removeModule(String(req.params.id));
-        if (result.kind === "not_found")
-            return void res.status(404).json({ error: "Program module not found" });
-        res.status(200).json({ message: "Program module deleted" });
-    },
-);
-
-programRouter.get("/programs/:id/blocs", requireAuth, async (req, res) => {
+programRouter.get("/programs/:id/blocs", ...authed(async (req, res) => {
     const { blocUseCases } = await import("@express/src/container");
     const result = await blocUseCases.listByProgram(String(req.params.id));
-    res.status(200).json(result.blocs);
-});
+    send(res, { status: 200, body: result.blocs });
+}));
 
-programRouter.get("/programs/:id/classes", requireAuth, async (req, res) => {
+programRouter.get("/programs/:id/classes", ...authed(async (req, res) => {
     const { classUseCases } = await import("@express/src/container");
     const result = await classUseCases.listByProgram(String(req.params.id));
-    res.status(200).json(result.classes);
-});
+    send(res, { status: 200, body: result.classes });
+}));
 
-programRouter.get("/programs/:id/students", requireAuth, async (req, res) => {
+programRouter.get("/programs/:id/students", ...authed(async (req, res) => {
     const { studentUseCases } = await import("@express/src/container");
     const result = await studentUseCases.listByProgram(String(req.params.id));
-    res.status(200).json(result.students);
-});
+    respond(res, result, {
+        students_listed: (r) => ({ status: 200, body: r.students }),
+    });
+}));

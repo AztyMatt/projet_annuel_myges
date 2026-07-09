@@ -21,6 +21,10 @@ export const blocRepository: BlocRepository = {
         const result = await db.select().from(blocTable).where(eq(blocTable.programId, programId));
         return result.map(rowToBloc);
     },
+    async existsByProgramId(programId) {
+        const rows = await db.select({ id: blocTable.id }).from(blocTable).where(eq(blocTable.programId, programId)).limit(1);
+        return rows.length > 0;
+    },
     async findByProgramAndName(programId, name) {
         const result = await db
             .select()

@@ -24,17 +24,37 @@ export const courseRepository: CourseRepository = {
         const result = await db.select().from(courseTable).where(eq(courseTable.instructorId, instructorId));
         return result.map(rowToCourse);
     },
+    async existsByInstructorId(instructorId) {
+        const rows = await db.select({ id: courseTable.id }).from(courseTable).where(eq(courseTable.instructorId, instructorId)).limit(1);
+        return rows.length > 0;
+    },
     async findByModuleId(moduleId) {
         const result = await db.select().from(courseTable).where(eq(courseTable.moduleId, moduleId));
         return result.map(rowToCourse);
+    },
+    async existsByModuleId(moduleId) {
+        const rows = await db.select({ id: courseTable.id }).from(courseTable).where(eq(courseTable.moduleId, moduleId)).limit(1);
+        return rows.length > 0;
     },
     async findByGroupId(groupId) {
         const result = await db.select().from(courseTable).where(eq(courseTable.groupId, groupId));
         return result.map(rowToCourse);
     },
+    async existsByGroupId(groupId) {
+        const rows = await db.select({ id: courseTable.id }).from(courseTable).where(eq(courseTable.groupId, groupId)).limit(1);
+        return rows.length > 0;
+    },
     async findByBlocId(blocId) {
         const result = await db.select().from(courseTable).where(eq(courseTable.blocId, blocId));
         return result.map(rowToCourse);
+    },
+    async existsByBlocId(blocId) {
+        const rows = await db.select({ id: courseTable.id }).from(courseTable).where(eq(courseTable.blocId, blocId)).limit(1);
+        return rows.length > 0;
+    },
+    async findByConversationId(conversationId) {
+        const result = await db.select().from(courseTable).where(eq(courseTable.conversationId, conversationId)).limit(1);
+        return result[0] ? rowToCourse(result[0]) : undefined;
     },
     async findByInstructorModuleGroup(instructorId, moduleId, groupId) {
         const result = await db

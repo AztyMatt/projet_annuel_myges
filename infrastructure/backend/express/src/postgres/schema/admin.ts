@@ -1,6 +1,5 @@
 import { pgTable, text } from "drizzle-orm/pg-core";
 import { users } from "@express/src/postgres/schema/auth";
-import { instructor } from "@express/src/postgres/schema/instructor";
 
 export const admin = pgTable("admin", {
     id: text("id").primaryKey(),
@@ -8,6 +7,5 @@ export const admin = pgTable("admin", {
         .unique()
         .notNull()
         .references(() => users.id),
-    instructorId: text("instructor_id").references(() => instructor.id),
     role: text("role").notNull(),
 });

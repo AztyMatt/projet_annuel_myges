@@ -5,6 +5,7 @@ import { DocumentApprenticeshipContractType } from "@domain/document/document-ap
 import { assertEnum } from "@express/src/postgres/assert-enum";
 import { db } from "@express/src/postgres/db";
 import { documentApprenticeshipContract as documentApprenticeshipContractTable } from "@express/src/postgres/schema/document";
+import { fileDocument as fileDocumentTable } from "@express/src/postgres/schema/file";
 
 function rowToDocumentApprenticeshipContract(
     row: typeof documentApprenticeshipContractTable.$inferSelect,
@@ -36,6 +37,14 @@ export const documentApprenticeshipContractRepository: DocumentApprenticeshipCon
             .limit(1);
         return result[0] ? rowToDocumentApprenticeshipContract(result[0]) : undefined;
     },
+    async findByStudentId(studentId) {
+        const rows = await db
+            .select({ contract: documentApprenticeshipContractTable })
+            .from(documentApprenticeshipContractTable)
+            .innerJoin(fileDocumentTable, eq(documentApprenticeshipContractTable.fileDocumentId, fileDocumentTable.id))
+            .where(eq(fileDocumentTable.studentId, studentId));
+        return rows.map((row) => rowToDocumentApprenticeshipContract(row.contract));
+    },
     async findByCompanyId(companyId) {
         const result = await db
             .select()
@@ -43,13 +52,13 @@ export const documentApprenticeshipContractRepository: DocumentApprenticeshipCon
             .where(eq(documentApprenticeshipContractTable.companyId, companyId));
         return result.map(rowToDocumentApprenticeshipContract);
     },
-    async findByFileDocument(fileDocumentId) {
-        const result = await db
-            .select()
+    async existsByCompanyId(companyId) {
+        const rows = await db
+            .select({ id: documentApprenticeshipContractTable.id })
             .from(documentApprenticeshipContractTable)
-            .where(eq(documentApprenticeshipContractTable.fileDocumentId, fileDocumentId))
+            .where(eq(documentApprenticeshipContractTable.companyId, companyId))
             .limit(1);
-        return result[0] ? rowToDocumentApprenticeshipContract(result[0]) : undefined;
+        return rows.length > 0;
     },
     async save(documentApprenticeshipContract) {
         await db

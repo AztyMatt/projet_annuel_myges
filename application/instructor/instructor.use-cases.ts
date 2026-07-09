@@ -2,7 +2,10 @@ import { randomUUID } from "node:crypto";
 import { type Instructor } from "@domain/instructor/instructor.entity";
 import { type InstructorContractType } from "@domain/instructor/instructor.enums";
 import { type InstructorRepository } from "@application/instructor/instructor.repository";
-import { NotFound, MissingFields } from "@application/types/results";
+import { type CourseRepository } from "@application/course/course.repository";
+import { type SessionExamInstructorRepository } from "@application/session/session-exam/session-exam-instructor/session-exam-instructor.repository";
+import { type AuthContext } from "@application/types/auth-context";
+import { NotFound, MissingFields, Forbidden } from "@application/types/results";
 
 export type InstructorView = {
     id: string;
@@ -13,18 +16,20 @@ export type InstructorView = {
 
 export type CreateInstructorResult =
     | MissingFields
+    | Forbidden
     | { kind: "user_already_instructor" }
     | { kind: "instructor_created"; instructor: InstructorView };
 
 export type UpdateInstructorResult =
     | NotFound
+    | Forbidden
     | { kind: "instructor_updated"; instructor: InstructorView };
 
-export type DeleteInstructorResult = NotFound | { kind: "instructor_deleted" };
+export type DeleteInstructorResult = NotFound | Forbidden | { kind: "instructor_has_courses" } | { kind: "instructor_has_session_exams" } | { kind: "instructor_deleted" };
 
-export type GetInstructorResult = NotFound | { kind: "instructor_found"; instructor: InstructorView };
+export type GetInstructorResult = NotFound | Forbidden | { kind: "instructor_found"; instructor: InstructorView };
 
-export type ListInstructorsResult = { kind: "instructors_listed"; instructors: InstructorView[] };
+export type ListInstructorsResult = Forbidden | { kind: "instructors_listed"; instructors: InstructorView[] };
 
 const toView = (i: Instructor): InstructorView => ({
     id: i.id,
@@ -34,13 +39,18 @@ const toView = (i: Instructor): InstructorView => ({
 });
 
 export class InstructorUseCases {
-    constructor(private readonly instructors: InstructorRepository) {}
+    constructor(
+        private readonly instructors: InstructorRepository,
+        private readonly courses: CourseRepository,
+        private readonly sessionExamInstructors: SessionExamInstructorRepository,
+    ) {}
 
     async create(input: {
         userId?: string;
         contractType?: InstructorContractType;
         specialties?: string[];
-    }): Promise<CreateInstructorResult> {
+    }, auth: AuthContext): Promise<CreateInstructorResult> {
+        if (!auth.isAdmin) return Forbidden;
         const { userId, contractType, specialties } = input;
         if (!userId || !contractType) return MissingFields;
         if (await this.instructors.findByUserId(userId)) return { kind: "user_already_instructor" };
@@ -57,7 +67,9 @@ export class InstructorUseCases {
     async update(
         id: string,
         input: { contractType?: InstructorContractType; specialties?: string[] },
+        auth: AuthContext,
     ): Promise<UpdateInstructorResult> {
+        if (!auth.isAdmin) return Forbidden;
         const instructor = await this.instructors.findById(id);
         if (!instructor) return NotFound;
         if (input.contractType !== undefined) instructor.contractType = input.contractType;
@@ -66,19 +78,28 @@ export class InstructorUseCases {
         return { kind: "instructor_updated", instructor: toView(instructor) };
     }
 
-    async delete(id: string): Promise<DeleteInstructorResult> {
+    async delete(id: string, auth: AuthContext): Promise<DeleteInstructorResult> {
+        if (!auth.isAdmin) return Forbidden;
         const instructor = await this.instructors.findById(id);
         if (!instructor) return NotFound;
+        const [hasCourses, hasSessionExams] = await Promise.all([
+            this.courses.existsByInstructorId(id),
+            this.sessionExamInstructors.existsByInstructorId(id),
+        ]);
+        if (hasCourses) return { kind: "instructor_has_courses" };
+        if (hasSessionExams) return { kind: "instructor_has_session_exams" };
         await this.instructors.deleteById(id);
         return { kind: "instructor_deleted" };
     }
 
-    async list(): Promise<ListInstructorsResult> {
+    async list(auth: AuthContext): Promise<ListInstructorsResult> {
+        if (!auth.isAdmin) return Forbidden;
         const instructors = await this.instructors.list();
         return { kind: "instructors_listed", instructors: instructors.map(toView) };
     }
 
-    async findById(id: string): Promise<GetInstructorResult> {
+    async findById(id: string, auth: AuthContext): Promise<GetInstructorResult> {
+        if (!auth.isAdmin) return Forbidden;
         const instructor = await this.instructors.findById(id);
         if (!instructor) return NotFound;
         return { kind: "instructor_found", instructor: toView(instructor) };

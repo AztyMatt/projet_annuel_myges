@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, or } from "drizzle-orm";
 import { type ConversationPrivateRepository } from "@application/conversation/conversation-private/conversation-private.repository";
 import { type ConversationPrivate } from "@domain/conversation/conversation-private/conversation-private.entity";
 import { db } from "@express/src/postgres/db";
@@ -7,8 +7,8 @@ import { conversationPrivate as conversationPrivateTable } from "@express/src/po
 function rowToConversationPrivate(row: typeof conversationPrivateTable.$inferSelect): ConversationPrivate {
     return {
         id: row.id,
-        adminId: row.adminId,
-        studentId: row.studentId,
+        userAId: row.userAId ?? null,
+        userBId: row.userBId ?? null,
         conversationId: row.conversationId,
     };
 }
@@ -30,25 +30,18 @@ export const conversationPrivateRepository: ConversationPrivateRepository = {
             .limit(1);
         return result[0] ? rowToConversationPrivate(result[0]) : undefined;
     },
-    async findByAdminId(adminId) {
+    async findByUserId(userId) {
         const result = await db
             .select()
             .from(conversationPrivateTable)
-            .where(eq(conversationPrivateTable.adminId, adminId));
+            .where(or(eq(conversationPrivateTable.userAId, userId), eq(conversationPrivateTable.userBId, userId)));
         return result.map(rowToConversationPrivate);
     },
-    async findByStudentId(studentId) {
+    async findByUsers(userAId, userBId) {
         const result = await db
             .select()
             .from(conversationPrivateTable)
-            .where(eq(conversationPrivateTable.studentId, studentId));
-        return result.map(rowToConversationPrivate);
-    },
-    async findByAdminAndStudent(adminId, studentId) {
-        const result = await db
-            .select()
-            .from(conversationPrivateTable)
-            .where(and(eq(conversationPrivateTable.adminId, adminId), eq(conversationPrivateTable.studentId, studentId)))
+            .where(and(eq(conversationPrivateTable.userAId, userAId), eq(conversationPrivateTable.userBId, userBId)))
             .limit(1);
         return result[0] ? rowToConversationPrivate(result[0]) : undefined;
     },
@@ -57,15 +50,15 @@ export const conversationPrivateRepository: ConversationPrivateRepository = {
             .insert(conversationPrivateTable)
             .values({
                 id: conversationPrivate.id,
-                adminId: conversationPrivate.adminId,
-                studentId: conversationPrivate.studentId,
+                userAId: conversationPrivate.userAId,
+                userBId: conversationPrivate.userBId,
                 conversationId: conversationPrivate.conversationId,
             })
             .onConflictDoUpdate({
                 target: conversationPrivateTable.id,
                 set: {
-                    adminId: conversationPrivate.adminId,
-                    studentId: conversationPrivate.studentId,
+                    userAId: conversationPrivate.userAId,
+                    userBId: conversationPrivate.userBId,
                     conversationId: conversationPrivate.conversationId,
                 },
             });

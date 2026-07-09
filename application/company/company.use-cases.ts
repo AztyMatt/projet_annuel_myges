@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { type Company } from "@domain/company/company.entity";
 import { type CompanyRepository } from "@application/company/company.repository";
-import { NotFound, MissingFields } from "@application/types/results";
+import { type DocumentApprenticeshipContractRepository } from "@application/document/document-apprenticeship-contract/document-apprenticeship-contract.repository";
+import { NotFound, MissingFields, Forbidden } from "@application/types/results";
+import { type AuthContext } from "@application/types/auth-context";
 
 export type CompanyView = {
     id: string;
@@ -15,14 +17,16 @@ export type CompanyView = {
 
 export type CreateCompanyResult =
     | MissingFields
+    | Forbidden
     | { kind: "siret_already_exists" }
     | { kind: "company_created"; company: CompanyView };
 
 export type UpdateCompanyResult =
     | NotFound
+    | Forbidden
     | { kind: "company_updated"; company: CompanyView };
 
-export type DeleteCompanyResult = NotFound | { kind: "company_deleted" };
+export type DeleteCompanyResult = NotFound | Forbidden | { kind: "company_has_contracts" } | { kind: "company_deleted" };
 
 export type GetCompanyResult = NotFound | { kind: "company_found"; company: CompanyView };
 
@@ -39,7 +43,10 @@ const toView = (c: Company): CompanyView => ({
 });
 
 export class CompanyUseCases {
-    constructor(private readonly companies: CompanyRepository) {}
+    constructor(
+        private readonly companies: CompanyRepository,
+        private readonly documentApprenticeshipContracts: DocumentApprenticeshipContractRepository,
+    ) {}
 
     async create(input: {
         name?: string;
@@ -48,7 +55,8 @@ export class CompanyUseCases {
         contactName?: string;
         contactNumber?: string;
         contactEmail?: string;
-    }): Promise<CreateCompanyResult> {
+    }, auth: AuthContext): Promise<CreateCompanyResult> {
+        if (!auth.isAdmin) return Forbidden;
         const { name, siret, address, contactName, contactNumber, contactEmail } = input;
         if (!name || !siret || !address || !contactName) return MissingFields;
         if (await this.companies.findBySiret(siret)) return { kind: "siret_already_exists" };
@@ -75,7 +83,9 @@ export class CompanyUseCases {
             contactNumber?: string;
             contactEmail?: string;
         },
+        auth: AuthContext,
     ): Promise<UpdateCompanyResult> {
+        if (!auth.isAdmin) return Forbidden;
         const company = await this.companies.findById(id);
         if (!company) return NotFound;
         if (input.name !== undefined) company.name = input.name;
@@ -88,9 +98,11 @@ export class CompanyUseCases {
         return { kind: "company_updated", company: toView(company) };
     }
 
-    async delete(id: string): Promise<DeleteCompanyResult> {
+    async delete(id: string, auth: AuthContext): Promise<DeleteCompanyResult> {
+        if (!auth.isAdmin) return Forbidden;
         const company = await this.companies.findById(id);
         if (!company) return NotFound;
+        if (await this.documentApprenticeshipContracts.existsByCompanyId(id)) return { kind: "company_has_contracts" };
         await this.companies.deleteById(id);
         return { kind: "company_deleted" };
     }

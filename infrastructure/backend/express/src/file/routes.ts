@@ -1,313 +1,318 @@
 import { Router } from "express";
-import { requireAuth, requireRole, type AuthRequest } from "@express/src/auth/middleware";
-import { AdminRole } from "@domain/admin/admin.enums";
-import { Role } from "@domain/auth/user.enums";
+import { authed, getAuthFlags, sendForbidden } from "@express/src/auth/middleware";
 import { adminUseCases, fileUseCases } from "@express/src/container";
+import { respond, send } from "@express/src/http/responses";
+import { storageCleanupWarning } from "@express/src/storage/storage-warning";
 
 export const fileRouter = Router();
 
-fileRouter.get(
-    "/files",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN),
-    async (_req, res) => {
-        const result = await fileUseCases.list();
-        res.status(200).json(result.files);
-    },
-);
+fileRouter.get("/files", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await fileUseCases.list(auth);
+    respond(res, result, {
+        files_listed: (r) => ({ status: 200, body: r.files }),
+    });
+}));
 
-fileRouter.get("/files/uploaded-by/:userId", requireAuth, async (req, res) => {
-    const result = await fileUseCases.listByUploadedBy(String(req.params.userId));
-    res.status(200).json(result.files);
-});
+fileRouter.get("/files/uploaded-by/:userId", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await fileUseCases.listByUploadedBy(String(req.params.userId), auth);
+    respond(res, result, {
+        files_listed: (r) => ({ status: 200, body: r.files }),
+    });
+}));
 
-fileRouter.get("/files/:id", requireAuth, async (req, res) => {
-    const result = await fileUseCases.findById(String(req.params.id));
-    if (result.kind === "not_found") return void res.status(404).json({ error: "File not found" });
-    res.status(200).json(result.file);
-});
+fileRouter.get("/files/mine", ...authed(async (req, res) => {
+    const result = await fileUseCases.listMine(getAuthFlags(req.auth));
+    respond(res, result, {
+        files_listed: (r) => ({ status: 200, body: r.files }),
+    });
+}));
 
-fileRouter.post("/files", requireAuth, async (req: AuthRequest, res) => {
-    if (!req.auth) return void res.status(401).json({ error: "Unauthorized" });
+fileRouter.get("/files/:id", ...authed(async (req, res) => {
+    const result = await fileUseCases.findById(String(req.params.id), getAuthFlags(req.auth));
+    respond(res, result, {
+        not_found: { status: 404, error: "File not found" },
+        file_found: (r) => ({ status: 200, body: r.file }),
+    });
+}));
+
+fileRouter.post("/files", ...authed(async (req, res) => {
     const result = await fileUseCases.create({ ...req.body, uploadedBy: req.auth.userId });
-    if (result.kind === "missing_fields")
-        return void res
-            .status(400)
-            .json({ error: "storagePath, name, originalName, mimeType and sizeBytes are required" });
-    res.status(201).json(result.file);
-});
+    respond(res, result, {
+        missing_fields: { status: 400, error: "name, originalName, mimeType and sizeBytes are required" },
+        file_created: (r) => ({ status: 201, body: r.file }),
+    });
+}));
 
-fileRouter.delete(
-    "/files/:id",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN),
-    async (req, res) => {
-        const result = await fileUseCases.delete(String(req.params.id));
-        if (result.kind === "not_found") return void res.status(404).json({ error: "File not found" });
-        res.status(200).json({ message: "File deleted" });
-    },
-);
+fileRouter.delete("/files/:id", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await fileUseCases.delete(String(req.params.id), auth);
+    respond(res, result, {
+        not_found: { status: 404, error: "File not found" },
+        file_has_contextual_links: { blocked: { type: "Deletion", reason: "File has contextual links" } },
+        file_deleted_with_warnings: (r) => storageCleanupWarning("File deleted", r.failedPaths),
+        file_deleted: { status: 200, body: { message: "File deleted" } },
+    });
+}));
 
-// file-course routes
-fileRouter.get("/file-courses/course/:courseId", requireAuth, async (req, res) => {
+
+fileRouter.get("/file-courses/course/:courseId", ...authed(async (req, res) => {
     const result = await fileUseCases.listFileCoursesByCourse(String(req.params.courseId));
-    res.status(200).json(result.fileCourses);
-});
+    send(res, { status: 200, body: result.fileCourses });
+}));
 
-fileRouter.get("/file-courses/file/:fileId", requireAuth, async (req, res) => {
+fileRouter.get("/file-courses/file/:fileId", ...authed(async (req, res) => {
     const result = await fileUseCases.listFileCoursesByFile(String(req.params.fileId));
-    res.status(200).json(result.fileCourses);
-});
+    send(res, { status: 200, body: result.fileCourses });
+}));
 
-fileRouter.get("/file-courses/:id", requireAuth, async (req, res) => {
+fileRouter.get("/file-courses/:id", ...authed(async (req, res) => {
     const result = await fileUseCases.findFileCourseById(String(req.params.id));
-    if (result.kind === "not_found") return void res.status(404).json({ error: "File course not found" });
-    res.status(200).json(result.fileCourse);
-});
+    respond(res, result, {
+        not_found: { status: 404, error: "File course not found" },
+        file_course_found: (r) => ({ status: 200, body: r.fileCourse }),
+    });
+}));
 
-fileRouter.post(
-    "/file-courses",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN, Role.INSTRUCTOR),
-    async (req, res) => {
-        const result = await fileUseCases.attachToCourse(req.body);
-        if (result.kind === "missing_fields")
-            return void res.status(400).json({ error: "name, fileId and courseId are required" });
-        if (result.kind === "file_course_already_exists")
-            return void res.status(409).json({ error: "This file is already attached to this course" });
-        res.status(201).json(result.fileCourse);
-    },
-);
+fileRouter.post("/file-courses", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await fileUseCases.attachToCourse(req.body, auth);
+    respond(res, result, {
+        missing_fields: { status: 400, error: "name, fileId and courseId are required" },
+        file_course_already_exists: { blocked: { type: "Creation", reason: "This file is already attached to this course" } },
+        file_already_linked: { blocked: { type: "Operation", reason: "File is already linked to another context" } },
+        file_course_attached: (r) => ({ status: 201, body: r.fileCourse }),
+    });
+}));
 
-fileRouter.delete(
-    "/file-courses/:id",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN, Role.INSTRUCTOR),
-    async (req, res) => {
-        const result = await fileUseCases.detachFromCourse(String(req.params.id));
-        if (result.kind === "not_found") return void res.status(404).json({ error: "File course not found" });
-        res.status(200).json({ message: "File course deleted" });
-    },
-);
+fileRouter.delete("/file-courses/:id", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await fileUseCases.detachFromCourse(String(req.params.id), auth);
+    respond(res, result, {
+        not_found: { status: 404, error: "File course not found" },
+        orphan_super_admin_only: { blocked: { type: "Operation", reason: "Linked file is missing, only a super admin can delete this orphan link" } },
+        file_course_deleted_with_warnings: (r) => storageCleanupWarning("File course deleted", r.failedPaths),
+        file_course_deleted: { status: 200, body: { message: "File course deleted" } },
+    });
+}));
 
-// file-document routes
-fileRouter.get(
-    "/file-documents",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN),
-    async (_req, res) => {
-        const result = await fileUseCases.listFileDocuments();
-        res.status(200).json(result.fileDocuments);
-    },
-);
 
-fileRouter.get("/file-documents/student/:studentId", requireAuth, async (req, res) => {
-    const result = await fileUseCases.listFileDocumentsByStudent(String(req.params.studentId));
-    res.status(200).json(result.fileDocuments);
-});
+fileRouter.get("/file-documents", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await fileUseCases.listFileDocuments(auth);
+    respond(res, result, {
+        file_documents_listed: (r) => ({ status: 200, body: r.fileDocuments }),
+    });
+}));
 
-fileRouter.get("/file-documents/:id", requireAuth, async (req, res) => {
-    const result = await fileUseCases.findFileDocumentById(String(req.params.id));
-    if (result.kind === "not_found")
-        return void res.status(404).json({ error: "File document not found" });
-    res.status(200).json(result.fileDocument);
-});
+fileRouter.get("/file-documents/mine", ...authed(async (req, res) => {
+    const result = await fileUseCases.listMineFileDocuments(getAuthFlags(req.auth));
+    respond(res, result, {
+        not_found: { status: 404, error: "Student profile not found" },
+        file_documents_listed: (r) => ({ status: 200, body: r.fileDocuments }),
+    });
+}));
 
-fileRouter.post("/file-documents", requireAuth, async (req, res) => {
+fileRouter.get("/file-documents/student/:studentId", ...authed(async (req, res) => {
+    const result = await fileUseCases.listFileDocumentsByStudent(String(req.params.studentId), getAuthFlags(req.auth));
+    respond(res, result, {
+        not_found: { status: 404, error: "File documents not found" },
+        file_documents_listed: (r) => ({ status: 200, body: r.fileDocuments }),
+    });
+}));
+
+fileRouter.get("/file-documents/:id", ...authed(async (req, res) => {
+    const result = await fileUseCases.findFileDocumentById(String(req.params.id), getAuthFlags(req.auth));
+    respond(res, result, {
+        not_found: { status: 404, error: "File document not found" },
+        file_document_found: (r) => ({ status: 200, body: r.fileDocument }),
+    });
+}));
+
+fileRouter.post("/file-documents", ...authed(async (req, res) => {
     const result = await fileUseCases.attachAsDocument(req.body);
-    if (result.kind === "missing_fields")
-        return void res.status(400).json({ error: "fileId, studentId and status are required" });
-    if (result.kind === "file_document_already_exists")
-        return void res.status(409).json({ error: "This file is already linked as a document for this student" });
-    res.status(201).json(result.fileDocument);
-});
+    respond(res, result, {
+        missing_fields: { status: 400, error: "fileId, studentId and status are required" },
+        file_document_already_exists: { blocked: { type: "Creation", reason: "This file is already linked as a document for this student" } },
+        file_already_linked: { blocked: { type: "Operation", reason: "File is already linked to another context" } },
+        file_document_attached: (r) => ({ status: 201, body: r.fileDocument }),
+    });
+}));
 
-fileRouter.post(
-    "/file-documents/:id/validate",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN),
-    async (req, res) => {
-        const result = await fileUseCases.validateDocument(String(req.params.id));
-        if (result.kind === "not_found")
-            return void res.status(404).json({ error: "File document not found" });
-        res.status(200).json(result.fileDocument);
-    },
-);
+fileRouter.post("/file-documents/:id/validate", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await fileUseCases.validateDocument(String(req.params.id), auth);
+    respond(res, result, {
+        not_found: { status: 404, error: "File document not found" },
+        file_document_has_no_doc_type: { blocked: { type: "Operation", reason: "File document has no associated document type" } },
+        file_document_validated: (r) => ({ status: 200, body: r.fileDocument }),
+    });
+}));
 
-fileRouter.post(
-    "/file-documents/:id/expire",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN),
-    async (req, res) => {
-        const result = await fileUseCases.expireDocument(String(req.params.id));
-        if (result.kind === "not_found")
-            return void res.status(404).json({ error: "File document not found" });
-        res.status(200).json(result.fileDocument);
-    },
-);
+fileRouter.post("/file-documents/:id/expire", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await fileUseCases.expireDocument(String(req.params.id), auth);
+    respond(res, result, {
+        not_found: { status: 404, error: "File document not found" },
+        file_document_expired: (r) => ({ status: 200, body: r.fileDocument }),
+    });
+}));
 
-fileRouter.delete(
-    "/file-documents/:id",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN),
-    async (req, res) => {
-        const result = await fileUseCases.deleteFileDocument(String(req.params.id));
-        if (result.kind === "not_found")
-            return void res.status(404).json({ error: "File document not found" });
-        res.status(200).json({ message: "File document deleted" });
-    },
-);
+fileRouter.delete("/file-documents/:id", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await fileUseCases.deleteFileDocument(String(req.params.id), auth);
+    respond(res, result, {
+        not_found: { status: 404, error: "File document not found" },
+        orphan_super_admin_only: { blocked: { type: "Operation", reason: "Linked file is missing, only a super admin can delete this orphan link" } },
+        file_document_has_doc_type: { blocked: { type: "Deletion", reason: "File document has an associated document type" } },
+        file_document_is_valid: { blocked: { type: "Operation", reason: "File document is validated" } },
+        file_document_deleted_with_warnings: (r) => storageCleanupWarning("File document deleted", r.failedPaths),
+        file_document_deleted: { status: 200, body: { message: "File document deleted" } },
+    });
+}));
 
-// file-justification routes
-fileRouter.get("/file-justifications/absence/:absenceId", requireAuth, async (req, res) => {
-    const result = await fileUseCases.listJustificationsByAbsence(String(req.params.absenceId));
-    res.status(200).json(result.fileJustifications);
-});
 
-fileRouter.get("/file-justifications/:id", requireAuth, async (req, res) => {
-    const result = await fileUseCases.findJustificationById(String(req.params.id));
-    if (result.kind === "not_found")
-        return void res.status(404).json({ error: "File justification not found" });
-    res.status(200).json(result.fileJustification);
-});
+fileRouter.get("/file-justifications/absence/:absenceId", ...authed(async (req, res) => {
+    const result = await fileUseCases.listJustificationsByAbsence(String(req.params.absenceId), getAuthFlags(req.auth));
+    respond(res, result, {
+        not_found: { status: 404, error: "File justifications not found" },
+        file_justifications_listed: (r) => ({ status: 200, body: r.fileJustifications }),
+    });
+}));
 
-fileRouter.post("/file-justifications", requireAuth, async (req, res) => {
+fileRouter.get("/file-justifications/mine", ...authed(async (req, res) => {
+    const result = await fileUseCases.listMineJustifications(getAuthFlags(req.auth));
+    respond(res, result, {
+        not_found: { status: 404, error: "Student profile not found" },
+        file_justifications_listed: (r) => ({ status: 200, body: r.fileJustifications }),
+    });
+}));
+
+fileRouter.get("/file-justifications/:id", ...authed(async (req, res) => {
+    const result = await fileUseCases.findJustificationById(String(req.params.id), getAuthFlags(req.auth));
+    respond(res, result, {
+        not_found: { status: 404, error: "File justification not found" },
+        file_justification_found: (r) => ({ status: 200, body: r.fileJustification }),
+    });
+}));
+
+fileRouter.post("/file-justifications", ...authed(async (req, res) => {
     const result = await fileUseCases.attachAsJustification(req.body);
-    if (result.kind === "missing_fields")
-        return void res.status(400).json({ error: "absenceId and fileId are required" });
-    if (result.kind === "file_justification_already_exists")
-        return void res.status(409).json({ error: "This file is already attached as a justification for this absence" });
-    res.status(201).json(result.fileJustification);
-});
+    respond(res, result, {
+        missing_fields: { status: 400, error: "absenceId and fileId are required" },
+        file_justification_already_exists: { blocked: { type: "Creation", reason: "This file is already attached as a justification for this absence" } },
+        file_already_linked: { blocked: { type: "Operation", reason: "File is already linked to another context" } },
+        file_justification_attached: (r) => ({ status: 201, body: r.fileJustification }),
+    });
+}));
 
-fileRouter.post(
-    "/file-justifications/:id/validate",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN),
-    async (req: AuthRequest, res) => {
-        if (!req.auth) return void res.status(401).json({ error: "Unauthorized" });
-        const admin = await adminUseCases.findByUserId(req.auth.userId);
-        if (admin.kind === "not_found") return void res.status(403).json({ error: "Admin profile not found" });
-        const result = await fileUseCases.validateJustification(String(req.params.id), admin.admin.id);
-        if (result.kind === "not_found")
-            return void res.status(404).json({ error: "File justification not found" });
-        res.status(200).json(result.fileJustification);
-    },
-);
+fileRouter.post("/file-justifications/:id/validate", ...authed(async (req, res) => {
+    const admin = await adminUseCases.resolveOwnAdmin(getAuthFlags(req.auth));
+    if (admin.kind === "not_found") return void sendForbidden(res);
+    const result = await fileUseCases.validateJustification(String(req.params.id), admin.admin.id);
+    respond(res, result, {
+        not_found: { status: 404, error: "File justification not found" },
+        file_justification_validated: (r) => ({ status: 200, body: r.fileJustification }),
+    });
+}));
 
-fileRouter.post(
-    "/file-justifications/:id/reject",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN),
-    async (req: AuthRequest, res) => {
-        if (!req.auth) return void res.status(401).json({ error: "Unauthorized" });
-        const admin = await adminUseCases.findByUserId(req.auth.userId);
-        if (admin.kind === "not_found") return void res.status(403).json({ error: "Admin profile not found" });
-        const result = await fileUseCases.rejectJustification(String(req.params.id), admin.admin.id);
-        if (result.kind === "not_found")
-            return void res.status(404).json({ error: "File justification not found" });
-        res.status(200).json(result.fileJustification);
-    },
-);
+fileRouter.post("/file-justifications/:id/reject", ...authed(async (req, res) => {
+    const admin = await adminUseCases.resolveOwnAdmin(getAuthFlags(req.auth));
+    if (admin.kind === "not_found") return void sendForbidden(res);
+    const result = await fileUseCases.rejectJustification(String(req.params.id), admin.admin.id);
+    respond(res, result, {
+        not_found: { status: 404, error: "File justification not found" },
+        file_justification_rejected: (r) => ({ status: 200, body: r.fileJustification }),
+    });
+}));
 
-fileRouter.delete(
-    "/file-justifications/:id",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN),
-    async (req, res) => {
-        const result = await fileUseCases.deleteJustification(String(req.params.id));
-        if (result.kind === "not_found")
-            return void res.status(404).json({ error: "File justification not found" });
-        res.status(200).json({ message: "File justification deleted" });
-    },
-);
+fileRouter.delete("/file-justifications/:id", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await fileUseCases.deleteJustification(String(req.params.id), auth);
+    respond(res, result, {
+        not_found: { status: 404, error: "File justification not found" },
+        orphan_super_admin_only: { blocked: { type: "Operation", reason: "Linked file is missing, only a super admin can delete this orphan link" } },
+        justification_already_validated: { blocked: { type: "Operation", reason: "File justification is validated" } },
+        file_justification_deleted_with_warnings: (r) => storageCleanupWarning("File justification deleted", r.failedPaths),
+        file_justification_deleted: { status: 200, body: { message: "File justification deleted" } },
+    });
+}));
 
-// file-assessment routes
-fileRouter.get("/file-assessments/assessment/:assessmentId", requireAuth, async (req, res) => {
-    const result = await fileUseCases.listAssessmentFilesByAssessment(
-        String(req.params.assessmentId),
-    );
-    res.status(200).json(result.fileAssessments);
-});
 
-fileRouter.get("/file-assessments/group/:assessmentGroupId", requireAuth, async (req, res) => {
-    const result = await fileUseCases.listAssessmentFilesByGroup(
-        String(req.params.assessmentGroupId),
-    );
-    res.status(200).json(result.fileAssessments);
-});
+fileRouter.get("/file-assessments/assessment/:assessmentId", ...authed(async (req, res) => {
+    const result = await fileUseCases.listAssessmentFilesByAssessment(String(req.params.assessmentId));
+    send(res, { status: 200, body: result.fileAssessments });
+}));
 
-fileRouter.get("/file-assessments/:id", requireAuth, async (req, res) => {
+fileRouter.get("/file-assessments/group/:assessmentGroupId", ...authed(async (req, res) => {
+    const result = await fileUseCases.listAssessmentFilesByGroup(String(req.params.assessmentGroupId));
+    send(res, { status: 200, body: result.fileAssessments });
+}));
+
+fileRouter.get("/file-assessments/:id", ...authed(async (req, res) => {
     const result = await fileUseCases.findAssessmentFileById(String(req.params.id));
-    if (result.kind === "not_found")
-        return void res.status(404).json({ error: "File assessment not found" });
-    res.status(200).json(result.fileAssessment);
-});
+    respond(res, result, {
+        not_found: { status: 404, error: "File assessment not found" },
+        file_assessment_found: (r) => ({ status: 200, body: r.fileAssessment }),
+    });
+}));
 
-fileRouter.post("/file-assessments", requireAuth, async (req, res) => {
+fileRouter.post("/file-assessments", ...authed(async (req, res) => {
     const result = await fileUseCases.submitForAssessment(req.body);
-    if (result.kind === "missing_fields")
-        return void res
-            .status(400)
-            .json({ error: "assessmentId, assessmentGroupId and fileId are required" });
-    if (result.kind === "file_assessment_already_exists")
-        return void res.status(409).json({ error: "This file has already been submitted for this assessment group" });
-    res.status(201).json(result.fileAssessment);
-});
+    respond(res, result, {
+        missing_fields: { status: 400, error: "assessmentId, assessmentGroupId and fileId are required" },
+        file_assessment_already_exists: { blocked: { type: "Creation", reason: "This file has already been submitted for this assessment group" } },
+        file_already_linked: { blocked: { type: "Operation", reason: "File is already linked to another context" } },
+        file_assessment_submitted: (r) => ({ status: 201, body: r.fileAssessment }),
+    });
+}));
 
-fileRouter.delete(
-    "/file-assessments/:id",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN),
-    async (req, res) => {
-        const result = await fileUseCases.deleteAssessmentFile(String(req.params.id));
-        if (result.kind === "not_found")
-            return void res.status(404).json({ error: "File assessment not found" });
-        res.status(200).json({ message: "File assessment deleted" });
-    },
-);
+fileRouter.delete("/file-assessments/:id", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await fileUseCases.deleteAssessmentFile(String(req.params.id), auth);
+    respond(res, result, {
+        not_found: { status: 404, error: "File assessment not found" },
+        assessment_missing: { blocked: { type: "Operation", reason: "Linked assessment is missing, cannot verify due date" } },
+        assessment_past_due_date: { blocked: { type: "Operation", reason: "Assessment due date has passed" } },
+        file_missing: { blocked: { type: "Operation", reason: "Submission file is missing, only a super admin can delete this orphan submission" } },
+        file_assessment_deleted_with_warnings: (r) => storageCleanupWarning("File assessment deleted", r.failedPaths),
+        file_assessment_deleted: { status: 200, body: { message: "File assessment deleted" } },
+    });
+}));
 
-// file-assessment-instruction routes
-fileRouter.get(
-    "/file-assessment-instructions/assessment/:assessmentId",
-    requireAuth,
-    async (req, res) => {
-        const result = await fileUseCases.listInstructionsByAssessment(
-            String(req.params.assessmentId),
-        );
-        res.status(200).json(result.instructions);
-    },
-);
 
-fileRouter.get("/file-assessment-instructions/:id", requireAuth, async (req, res) => {
+fileRouter.get("/file-assessment-instructions/assessment/:assessmentId", ...authed(async (req, res) => {
+    const result = await fileUseCases.listInstructionsByAssessment(String(req.params.assessmentId));
+    send(res, { status: 200, body: result.instructions });
+}));
+
+fileRouter.get("/file-assessment-instructions/:id", ...authed(async (req, res) => {
     const result = await fileUseCases.findInstructionById(String(req.params.id));
-    if (result.kind === "not_found")
-        return void res.status(404).json({ error: "File assessment instruction not found" });
-    res.status(200).json(result.instruction);
-});
+    respond(res, result, {
+        not_found: { status: 404, error: "File assessment instruction not found" },
+        instruction_found: (r) => ({ status: 200, body: r.instruction }),
+    });
+}));
 
-fileRouter.post(
-    "/file-assessment-instructions",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN, Role.INSTRUCTOR),
-    async (req, res) => {
-        const result = await fileUseCases.uploadInstruction(req.body);
-        if (result.kind === "missing_fields")
-            return void res.status(400).json({ error: "assessmentId and fileId are required" });
-        if (result.kind === "file_assessment_instruction_already_exists")
-            return void res.status(409).json({ error: "This file is already attached as an instruction for this assessment" });
-        res.status(201).json(result.instruction);
-    },
-);
+fileRouter.post("/file-assessment-instructions", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await fileUseCases.uploadInstruction(req.body, auth);
+    respond(res, result, {
+        missing_fields: { status: 400, error: "assessmentId and fileId are required" },
+        file_assessment_instruction_already_exists: { blocked: { type: "Creation", reason: "This file is already attached as an instruction for this assessment" } },
+        file_already_linked: { blocked: { type: "Operation", reason: "File is already linked to another context" } },
+        instruction_uploaded: (r) => ({ status: 201, body: r.instruction }),
+    });
+}));
 
-fileRouter.delete(
-    "/file-assessment-instructions/:id",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN, Role.INSTRUCTOR),
-    async (req, res) => {
-        const result = await fileUseCases.deleteInstruction(String(req.params.id));
-        if (result.kind === "not_found")
-            return void res.status(404).json({ error: "File assessment instruction not found" });
-        res.status(200).json({ message: "File assessment instruction deleted" });
-    },
-);
+fileRouter.delete("/file-assessment-instructions/:id", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await fileUseCases.deleteInstruction(String(req.params.id), auth);
+    respond(res, result, {
+        not_found: { status: 404, error: "File assessment instruction not found" },
+        orphan_super_admin_only: { blocked: { type: "Operation", reason: "Linked file is missing, only a super admin can delete this orphan link" } },
+        instruction_deleted_with_warnings: (r) => storageCleanupWarning("File assessment instruction deleted", r.failedPaths),
+        instruction_deleted: { status: 200, body: { message: "File assessment instruction deleted" } },
+    });
+}));

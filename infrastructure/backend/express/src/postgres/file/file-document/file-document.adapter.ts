@@ -24,6 +24,10 @@ export const fileDocumentRepository: FileDocumentRepository = {
         const result = await db.select().from(fileDocumentTable).where(eq(fileDocumentTable.studentId, studentId));
         return result.map(rowToFileDocument);
     },
+    async existsByStudentId(studentId) {
+        const rows = await db.select({ id: fileDocumentTable.id }).from(fileDocumentTable).where(eq(fileDocumentTable.studentId, studentId)).limit(1);
+        return rows.length > 0;
+    },
     async findByFileId(fileId) {
         const result = await db.select().from(fileDocumentTable).where(eq(fileDocumentTable.fileId, fileId)).limit(1);
         return result[0] ? rowToFileDocument(result[0]) : undefined;

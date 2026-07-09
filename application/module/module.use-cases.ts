@@ -1,7 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { type Module } from "@domain/module/module.entity";
 import { type ModuleRepository } from "@application/module/module.repository";
-import { NotFound, MissingFields } from "@application/types/results";
+import { type ProgramModuleRepository } from "@application/program/program-module/program-module.repository";
+import { type CourseRepository } from "@application/course/course.repository";
+import { type ManualNotationRepository } from "@application/grade/grade-manual-notation/manual-notation/manual-notation.repository";
+import { type AuthContext } from "@application/types/auth-context";
+import { NotFound, MissingFields, Forbidden } from "@application/types/results";
 
 export type ModuleView = {
     id: string;
@@ -11,15 +15,23 @@ export type ModuleView = {
 
 export type CreateModuleResult =
     | MissingFields
+    | Forbidden
     | { kind: "module_already_exists" }
     | { kind: "module_created"; module: ModuleView };
 
 export type UpdateModuleResult =
     | NotFound
+    | Forbidden
     | { kind: "module_already_exists" }
     | { kind: "module_updated"; module: ModuleView };
 
-export type DeleteModuleResult = NotFound | { kind: "module_deleted" };
+export type DeleteModuleResult =
+    | NotFound
+    | Forbidden
+    | { kind: "module_has_programs" }
+    | { kind: "module_has_courses" }
+    | { kind: "module_has_notations" }
+    | { kind: "module_deleted" };
 
 export type GetModuleResult = NotFound | { kind: "module_found"; module: ModuleView };
 
@@ -32,9 +44,15 @@ const toView = (m: Module): ModuleView => ({
 });
 
 export class ModuleUseCases {
-    constructor(private readonly modules: ModuleRepository) {}
+    constructor(
+        private readonly modules: ModuleRepository,
+        private readonly programModules: ProgramModuleRepository,
+        private readonly courses: CourseRepository,
+        private readonly manualNotations: ManualNotationRepository,
+    ) {}
 
-    async create(input: { name?: string; code?: string }): Promise<CreateModuleResult> {
+    async create(input: { name?: string; code?: string }, auth: AuthContext): Promise<CreateModuleResult> {
+        if (!auth.isAdmin) return Forbidden;
         const { name, code } = input;
         if (!name) return MissingFields;
         const resolvedCode = code ?? "";
@@ -44,7 +62,8 @@ export class ModuleUseCases {
         return { kind: "module_created", module: toView(module) };
     }
 
-    async update(id: string, input: { name?: string; code?: string }): Promise<UpdateModuleResult> {
+    async update(id: string, input: { name?: string; code?: string }, auth: AuthContext): Promise<UpdateModuleResult> {
+        if (!auth.isAdmin) return Forbidden;
         const module = await this.modules.findById(id);
         if (!module) return NotFound;
         const newName = input.name !== undefined ? input.name : module.name;
@@ -57,9 +76,13 @@ export class ModuleUseCases {
         return { kind: "module_updated", module: toView(module) };
     }
 
-    async delete(id: string): Promise<DeleteModuleResult> {
+    async delete(id: string, auth: AuthContext): Promise<DeleteModuleResult> {
+        if (!auth.isAdmin) return Forbidden;
         const module = await this.modules.findById(id);
         if (!module) return NotFound;
+        if (await this.programModules.existsByModuleId(id)) return { kind: "module_has_programs" };
+        if (await this.courses.existsByModuleId(id)) return { kind: "module_has_courses" };
+        if (await this.manualNotations.existsByModuleId(id)) return { kind: "module_has_notations" };
         await this.modules.deleteById(id);
         return { kind: "module_deleted" };
     }

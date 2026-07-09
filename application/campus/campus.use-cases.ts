@@ -1,20 +1,28 @@
 import { randomUUID } from "node:crypto";
 import { type Campus } from "@domain/campus/campus.entity";
 import { type CampusRepository } from "@application/campus/campus.repository";
-import { NotFound, MissingFields } from "@application/types/results";
+import { type ClassroomRepository } from "@application/classroom/classroom.repository";
+import { type AuthContext } from "@application/types/auth-context";
+import { NotFound, MissingFields, Forbidden } from "@application/types/results";
 
 export type CampusView = { id: string; name: string; address: string };
 
 export type CreateCampusResult =
     | MissingFields
+    | Forbidden
     | { kind: "campus_already_exists" }
     | { kind: "campus_created"; campus: CampusView };
 
 export type UpdateCampusResult =
     | NotFound
+    | Forbidden
     | { kind: "campus_updated"; campus: CampusView };
 
-export type DeleteCampusResult = NotFound | { kind: "campus_deleted" };
+export type DeleteCampusResult =
+    | NotFound
+    | Forbidden
+    | { kind: "campus_has_classrooms" }
+    | { kind: "campus_deleted" };
 
 export type GetCampusResult = NotFound | { kind: "campus_found"; campus: CampusView };
 
@@ -23,9 +31,13 @@ export type ListCampusesResult = { kind: "campuses_listed"; campuses: CampusView
 const toView = (c: Campus): CampusView => ({ id: c.id, name: c.name, address: c.address });
 
 export class CampusUseCases {
-    constructor(private readonly campuses: CampusRepository) {}
+    constructor(
+        private readonly campuses: CampusRepository,
+        private readonly classrooms: ClassroomRepository,
+    ) {}
 
-    async create(input: { name?: string; address?: string }): Promise<CreateCampusResult> {
+    async create(input: { name?: string; address?: string }, auth: AuthContext): Promise<CreateCampusResult> {
+        if (!auth.isAdmin) return Forbidden;
         const { name, address } = input;
         if (!name || !address) return MissingFields;
         if (await this.campuses.findByName(name)) return { kind: "campus_already_exists" };
@@ -34,7 +46,8 @@ export class CampusUseCases {
         return { kind: "campus_created", campus: toView(campus) };
     }
 
-    async update(id: string, input: { name?: string; address?: string }): Promise<UpdateCampusResult> {
+    async update(id: string, input: { name?: string; address?: string }, auth: AuthContext): Promise<UpdateCampusResult> {
+        if (!auth.isAdmin) return Forbidden;
         const campus = await this.campuses.findById(id);
         if (!campus) return NotFound;
         if (input.name !== undefined) campus.name = input.name;
@@ -43,9 +56,11 @@ export class CampusUseCases {
         return { kind: "campus_updated", campus: toView(campus) };
     }
 
-    async delete(id: string): Promise<DeleteCampusResult> {
+    async delete(id: string, auth: AuthContext): Promise<DeleteCampusResult> {
+        if (!auth.isAdmin) return Forbidden;
         const campus = await this.campuses.findById(id);
         if (!campus) return NotFound;
+        if (await this.classrooms.existsByCampusId(id)) return { kind: "campus_has_classrooms" };
         await this.campuses.deleteById(id);
         return { kind: "campus_deleted" };
     }

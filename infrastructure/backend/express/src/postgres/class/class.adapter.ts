@@ -23,12 +23,20 @@ export const classRepository: ClassRepository = {
         const result = await db.select().from(classTable).where(eq(classTable.programId, programId));
         return result.map(rowToClass);
     },
+    async existsByProgramId(programId) {
+        const rows = await db.select({ id: classTable.id }).from(classTable).where(eq(classTable.programId, programId)).limit(1);
+        return rows.length > 0;
+    },
     async findByProgramAndNumber(programId, number) {
         const result = await db
             .select()
             .from(classTable)
             .where(and(eq(classTable.programId, programId), eq(classTable.number, number)))
             .limit(1);
+        return result[0] ? rowToClass(result[0]) : undefined;
+    },
+    async findByConversationId(conversationId) {
+        const result = await db.select().from(classTable).where(eq(classTable.conversationId, conversationId)).limit(1);
         return result[0] ? rowToClass(result[0]) : undefined;
     },
     async save(classInstance) {

@@ -1,65 +1,64 @@
 import { Router } from "express";
-import { requireAuth, requireRole, type AuthRequest } from "@express/src/auth/middleware";
-import { AdminRole } from "@domain/admin/admin.enums";
+import { authed, getAuthFlags } from "@express/src/auth/middleware";
 import { studentUseCases } from "@express/src/container";
+import { send, respond } from "@express/src/http/responses";
 
 export const studentRouter = Router();
 
-studentRouter.get("/students", requireAuth, requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN), async (_req, res) => {
-    const result = await studentUseCases.list();
-    res.status(200).json(result.students);
-});
+studentRouter.get("/students", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await studentUseCases.list(auth);
+    respond(res, result, {
+        students_listed: (r) => ({ status: 200, body: r.students }),
+    });
+}));
 
-studentRouter.get("/students/me", requireAuth, async (req: AuthRequest, res) => {
-    if (!req.auth) return void res.status(401).json({ error: "Unauthorized" });
+studentRouter.get("/students/me", ...authed(async (req, res) => {
     const result = await studentUseCases.findByUserId(req.auth.userId);
-    if (result.kind === "not_found") return void res.status(404).json({ error: "Student profile not found" });
-    res.status(200).json(result.student);
-});
+    respond(res, result, {
+        not_found: { status: 404, error: "Student profile not found" },
+        student_found: (r) => ({ status: 200, body: r.student }),
+    });
+}));
 
-studentRouter.get(
-    "/students/:id",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN),
-    async (req, res) => {
-        const result = await studentUseCases.findById(String(req.params.id));
-        if (result.kind === "not_found") return void res.status(404).json({ error: "Student not found" });
-        res.status(200).json(result.student);
-    },
-);
+studentRouter.get("/students/:id", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await studentUseCases.findById(String(req.params.id), auth);
+    respond(res, result, {
+        not_found: { status: 404, error: "Student not found" },
+        student_found: (r) => ({ status: 200, body: r.student }),
+    });
+}));
 
-studentRouter.post(
-    "/students",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN),
-    async (req, res) => {
-        const result = await studentUseCases.create(req.body);
-        if (result.kind === "missing_fields")
-            return void res.status(400).json({ error: "userId and programId are required" });
-        if (result.kind === "user_already_student")
-            return void res.status(409).json({ error: "This user is already a student" });
-        res.status(201).json(result.student);
-    },
-);
+studentRouter.post("/students", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await studentUseCases.create(req.body, auth);
+    respond(res, result, {
+        missing_fields: { status: 400, error: "userId and programId are required" },
+        user_already_student: { blocked: { type: "Creation", reason: "This user is already a student" } },
+        student_created: (r) => ({ status: 201, body: r.student }),
+    });
+}));
 
-studentRouter.patch(
-    "/students/:id",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN),
-    async (req, res) => {
-        const result = await studentUseCases.update(String(req.params.id), req.body);
-        if (result.kind === "not_found") return void res.status(404).json({ error: "Student not found" });
-        res.status(200).json(result.student);
-    },
-);
+studentRouter.patch("/students/:id", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await studentUseCases.update(String(req.params.id), req.body, auth);
+    respond(res, result, {
+        not_found: { status: 404, error: "Student not found" },
+        student_updated: (r) => ({ status: 200, body: r.student }),
+    });
+}));
 
-studentRouter.delete(
-    "/students/:id",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN),
-    async (req, res) => {
-        const result = await studentUseCases.delete(String(req.params.id));
-        if (result.kind === "not_found") return void res.status(404).json({ error: "Student not found" });
-        res.status(200).json({ message: "Student deleted" });
-    },
-);
+studentRouter.delete("/students/:id", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await studentUseCases.delete(String(req.params.id), auth);
+    respond(res, result, {
+        not_found: { status: 404, error: "Student not found" },
+        student_in_groups: { blocked: { type: "Deletion", reason: "Student has groups" } },
+        student_has_absences: { blocked: { type: "Deletion", reason: "Student has absences" } },
+        student_has_session_exams: { blocked: { type: "Deletion", reason: "Student has session exam registrations" } },
+        student_in_assessment_groups: { blocked: { type: "Deletion", reason: "Student belongs to assessment groups" } },
+        student_has_documents: { blocked: { type: "Deletion", reason: "Student has documents" } },
+        student_deleted: { status: 200, body: { message: "Student deleted" } },
+    });
+}));

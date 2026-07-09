@@ -1,159 +1,142 @@
 import { Router } from "express";
-import { requireAuth, requireRole } from "@express/src/auth/middleware";
-import { AdminRole } from "@domain/admin/admin.enums";
+import { authed, getAuthFlags } from "@express/src/auth/middleware";
 import { documentUseCases } from "@express/src/container";
+import { respond } from "@express/src/http/responses";
+import { storageCleanupWarning } from "@express/src/storage/storage-warning";
 
 export const documentRouter = Router();
 
-// document-administrative routes
-documentRouter.get(
-    "/document-administratives",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN),
-    async (_req, res) => {
-        const result = await documentUseCases.listAdministratives();
-        res.status(200).json(result.documents);
-    },
-);
 
-documentRouter.get(
-    "/document-administratives/file-document/:fileDocumentId",
-    requireAuth,
-    async (req, res) => {
-        const result = await documentUseCases.findAdministrativeByFileDocument(
-            String(req.params.fileDocumentId),
-        );
-        if (result.kind === "not_found")
-            return void res.status(404).json({ error: "Document administrative not found" });
-        res.status(200).json(result.document);
-    },
-);
+documentRouter.get("/document-administratives", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await documentUseCases.listAdministratives(auth);
+    respond(res, result, {
+        document_administratives_listed: (r) => ({ status: 200, body: r.documents }),
+    });
+}));
 
-documentRouter.get("/document-administratives/:id", requireAuth, async (req, res) => {
-    const result = await documentUseCases.findAdministrativeById(String(req.params.id));
-    if (result.kind === "not_found")
-        return void res.status(404).json({ error: "Document administrative not found" });
-    res.status(200).json(result.document);
-});
+documentRouter.get("/document-administratives/file-document/:fileDocumentId", ...authed(async (req, res) => {
+    const result = await documentUseCases.findAdministrativeByFileDocument(String(req.params.fileDocumentId), getAuthFlags(req.auth));
+    respond(res, result, {
+        not_found: { status: 404, error: "Document administrative not found" },
+        document_administrative_found: (r) => ({ status: 200, body: r.document }),
+    });
+}));
 
-documentRouter.post(
-    "/document-administratives",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN),
-    async (req, res) => {
-        const result = await documentUseCases.createAdministrative(req.body);
-        if (result.kind === "missing_fields")
-            return void res.status(400).json({ error: "fileDocumentId and type are required" });
-        res.status(201).json(result.document);
-    },
-);
+documentRouter.get("/document-administratives/mine", ...authed(async (req, res) => {
+    const result = await documentUseCases.listMineAdministrative(getAuthFlags(req.auth));
+    respond(res, result, {
+        not_found: { status: 404, error: "Student profile not found" },
+        document_administratives_listed: (r) => ({ status: 200, body: r.documents }),
+    });
+}));
 
-documentRouter.patch(
-    "/document-administratives/:id",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN),
-    async (req, res) => {
-        const result = await documentUseCases.updateAdministrative(String(req.params.id), req.body);
-        if (result.kind === "not_found")
-            return void res.status(404).json({ error: "Document administrative not found" });
-        res.status(200).json(result.document);
-    },
-);
+documentRouter.get("/document-administratives/:id", ...authed(async (req, res) => {
+    const result = await documentUseCases.findAdministrativeById(String(req.params.id), getAuthFlags(req.auth));
+    respond(res, result, {
+        not_found: { status: 404, error: "Document administrative not found" },
+        document_administrative_found: (r) => ({ status: 200, body: r.document }),
+    });
+}));
 
-documentRouter.delete(
-    "/document-administratives/:id",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN),
-    async (req, res) => {
-        const result = await documentUseCases.deleteAdministrative(String(req.params.id));
-        if (result.kind === "not_found")
-            return void res.status(404).json({ error: "Document administrative not found" });
-        res.status(200).json({ message: "Document administrative deleted" });
-    },
-);
+documentRouter.post("/document-administratives", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await documentUseCases.createAdministrative(req.body, auth);
+    respond(res, result, {
+        missing_fields: { status: 400, error: "fileDocumentId and type are required" },
+        file_document_type_conflict: { blocked: { type: "Operation", reason: "File document is already linked to another document type" } },
+        document_administrative_created: (r) => ({ status: 201, body: r.document }),
+    });
+}));
 
-// document-apprenticeship-contract routes
-documentRouter.get(
-    "/document-apprenticeship-contracts",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN),
-    async (_req, res) => {
-        const result = await documentUseCases.listApprenticeshipContracts();
-        res.status(200).json(result.contracts);
-    },
-);
+documentRouter.patch("/document-administratives/:id", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await documentUseCases.updateAdministrative(String(req.params.id), req.body, auth);
+    respond(res, result, {
+        not_found: { status: 404, error: "Document administrative not found" },
+        document_administrative_updated: (r) => ({ status: 200, body: r.document }),
+    });
+}));
 
-documentRouter.get(
-    "/document-apprenticeship-contracts/company/:companyId",
-    requireAuth,
-    async (req, res) => {
-        const result = await documentUseCases.listApprenticeshipContractsByCompany(
-            String(req.params.companyId),
-        );
-        res.status(200).json(result.contracts);
-    },
-);
+documentRouter.delete("/document-administratives/:id", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await documentUseCases.deleteAdministrative(String(req.params.id), auth);
+    respond(res, result, {
+        not_found: { status: 404, error: "Document administrative not found" },
+        file_document_is_valid: { blocked: { type: "Operation", reason: "Associated file document is validated" } },
+        document_administrative_deleted_with_warnings: (r) => storageCleanupWarning("Document administrative deleted", r.failedPaths),
+        document_administrative_deleted: { status: 200, body: { message: "Document administrative deleted" } },
+    });
+}));
 
-documentRouter.get(
-    "/document-apprenticeship-contracts/file-document/:fileDocumentId",
-    requireAuth,
-    async (req, res) => {
-        const result = await documentUseCases.findApprenticeshipContractByFileDocument(
-            String(req.params.fileDocumentId),
-        );
-        if (result.kind === "not_found")
-            return void res.status(404).json({ error: "Apprenticeship contract not found" });
-        res.status(200).json(result.contract);
-    },
-);
 
-documentRouter.get(
-    "/document-apprenticeship-contracts/:id",
-    requireAuth,
-    async (req, res) => {
-        const result = await documentUseCases.findApprenticeshipContractById(String(req.params.id));
-        if (result.kind === "not_found")
-            return void res.status(404).json({ error: "Apprenticeship contract not found" });
-        res.status(200).json(result.contract);
-    },
-);
+documentRouter.get("/document-apprenticeship-contracts", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await documentUseCases.listApprenticeshipContracts(auth);
+    respond(res, result, {
+        document_apprenticeship_contracts_listed: (r) => ({ status: 200, body: r.contracts }),
+    });
+}));
 
-documentRouter.post(
-    "/document-apprenticeship-contracts",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN),
-    async (req, res) => {
-        const result = await documentUseCases.createApprenticeshipContract(req.body);
-        if (result.kind === "missing_fields")
-            return void res
-                .status(400)
-                .json({ error: "fileDocumentId, companyId, type, startDate and endDate are required" });
-        if (result.kind === "contract_already_exists")
-            return void res.status(409).json({ error: "An apprenticeship contract already exists for this file document" });
-        res.status(201).json(result.contract);
-    },
-);
+documentRouter.get("/document-apprenticeship-contracts/company/:companyId", ...authed(async (req, res) => {
+    const result = await documentUseCases.listApprenticeshipContractsByCompany(String(req.params.companyId), getAuthFlags(req.auth));
+    respond(res, result, {
+        not_found: { status: 404, error: "Apprenticeship contracts not found" },
+        document_apprenticeship_contracts_listed: (r) => ({ status: 200, body: r.contracts }),
+    });
+}));
 
-documentRouter.patch(
-    "/document-apprenticeship-contracts/:id",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN),
-    async (req, res) => {
-        const result = await documentUseCases.updateApprenticeshipContract(String(req.params.id), req.body);
-        if (result.kind === "not_found")
-            return void res.status(404).json({ error: "Apprenticeship contract not found" });
-        res.status(200).json(result.contract);
-    },
-);
+documentRouter.get("/document-apprenticeship-contracts/file-document/:fileDocumentId", ...authed(async (req, res) => {
+    const result = await documentUseCases.findApprenticeshipContractByFileDocument(String(req.params.fileDocumentId), getAuthFlags(req.auth));
+    respond(res, result, {
+        not_found: { status: 404, error: "Apprenticeship contract not found" },
+        document_apprenticeship_contract_found: (r) => ({ status: 200, body: r.contract }),
+    });
+}));
 
-documentRouter.delete(
-    "/document-apprenticeship-contracts/:id",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN),
-    async (req, res) => {
-        const result = await documentUseCases.deleteApprenticeshipContract(String(req.params.id));
-        if (result.kind === "not_found")
-            return void res.status(404).json({ error: "Apprenticeship contract not found" });
-        res.status(200).json({ message: "Apprenticeship contract deleted" });
-    },
-);
+documentRouter.get("/document-apprenticeship-contracts/mine", ...authed(async (req, res) => {
+    const result = await documentUseCases.listMineApprenticeshipContracts(getAuthFlags(req.auth));
+    respond(res, result, {
+        not_found: { status: 404, error: "Student profile not found" },
+        document_apprenticeship_contracts_listed: (r) => ({ status: 200, body: r.contracts }),
+    });
+}));
+
+documentRouter.get("/document-apprenticeship-contracts/:id", ...authed(async (req, res) => {
+    const result = await documentUseCases.findApprenticeshipContractById(String(req.params.id), getAuthFlags(req.auth));
+    respond(res, result, {
+        not_found: { status: 404, error: "Apprenticeship contract not found" },
+        document_apprenticeship_contract_found: (r) => ({ status: 200, body: r.contract }),
+    });
+}));
+
+documentRouter.post("/document-apprenticeship-contracts", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await documentUseCases.createApprenticeshipContract(req.body, auth);
+    respond(res, result, {
+        missing_fields: { status: 400, error: "fileDocumentId, type, startDate and endDate are required" },
+        contract_already_exists: { blocked: { type: "Creation", reason: "An apprenticeship contract already exists for this file document" } },
+        file_document_type_conflict: { blocked: { type: "Operation", reason: "File document is already linked to another document type" } },
+        document_apprenticeship_contract_created: (r) => ({ status: 201, body: r.contract }),
+    });
+}));
+
+documentRouter.patch("/document-apprenticeship-contracts/:id", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await documentUseCases.updateApprenticeshipContract(String(req.params.id), req.body, auth);
+    respond(res, result, {
+        not_found: { status: 404, error: "Apprenticeship contract not found" },
+        document_apprenticeship_contract_updated: (r) => ({ status: 200, body: r.contract }),
+    });
+}));
+
+documentRouter.delete("/document-apprenticeship-contracts/:id", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await documentUseCases.deleteApprenticeshipContract(String(req.params.id), auth);
+    respond(res, result, {
+        not_found: { status: 404, error: "Apprenticeship contract not found" },
+        file_document_is_valid: { blocked: { type: "Operation", reason: "Associated file document is validated" } },
+        document_apprenticeship_contract_deleted_with_warnings: (r) => storageCleanupWarning("Apprenticeship contract deleted", r.failedPaths),
+        document_apprenticeship_contract_deleted: { status: 200, body: { message: "Apprenticeship contract deleted" } },
+    });
+}));

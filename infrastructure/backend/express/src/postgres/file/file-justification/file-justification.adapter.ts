@@ -5,6 +5,7 @@ import { type FileJustificationRepository } from "@application/file/file-justifi
 import { type FileJustification } from "@domain/file/file-justification/file-justification.entity";
 import { db } from "@express/src/postgres/db";
 import { fileJustification as fileJustificationTable } from "@express/src/postgres/schema/file";
+import { absence as absenceTable } from "@express/src/postgres/schema/absence";
 
 function rowToFileJustification(row: typeof fileJustificationTable.$inferSelect): FileJustification {
     return {
@@ -28,6 +29,14 @@ export const fileJustificationRepository: FileJustificationRepository = {
             .where(eq(fileJustificationTable.absenceId, absenceId));
         return result.map(rowToFileJustification);
     },
+    async findByStudentId(studentId) {
+        const rows = await db
+            .select({ justification: fileJustificationTable })
+            .from(fileJustificationTable)
+            .innerJoin(absenceTable, eq(fileJustificationTable.absenceId, absenceTable.id))
+            .where(eq(absenceTable.studentId, studentId));
+        return rows.map((row) => rowToFileJustification(row.justification));
+    },
     async findByFileId(fileId) {
         const result = await db
             .select()
@@ -35,6 +44,13 @@ export const fileJustificationRepository: FileJustificationRepository = {
             .where(eq(fileJustificationTable.fileId, fileId))
             .limit(1);
         return result[0] ? rowToFileJustification(result[0]) : undefined;
+    },
+    async findByProcessedBy(adminId) {
+        const result = await db
+            .select()
+            .from(fileJustificationTable)
+            .where(eq(fileJustificationTable.processedBy, adminId));
+        return result.map(rowToFileJustification);
     },
     async findByAbsenceAndFile(absenceId, fileId) {
         const result = await db

@@ -1,73 +1,64 @@
 import { Router } from "express";
-import { requireAuth, requireRole } from "@express/src/auth/middleware";
-import { AdminRole } from "@domain/admin/admin.enums";
-import { Role } from "@domain/auth/user.enums";
+import { authed, getAuthFlags, sendForbidden } from "@express/src/auth/middleware";
 import { sessionUseCases } from "@express/src/container";
+import { send, respond } from "@express/src/http/responses";
 
 export const sessionRouter = Router();
 
-sessionRouter.get(
-    "/sessions",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN),
-    async (_req, res) => {
-        const result = await sessionUseCases.list();
-        res.status(200).json(result.sessions);
-    },
-);
+sessionRouter.get("/sessions", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    if (!auth.isAdmin) return void sendForbidden(res);
+    const result = await sessionUseCases.list();
+    send(res, { status: 200, body: result.sessions });
+}));
 
-sessionRouter.get("/sessions/:id", requireAuth, async (req, res) => {
+sessionRouter.get("/sessions/:id", ...authed(async (req, res) => {
     const result = await sessionUseCases.findById(String(req.params.id));
-    if (result.kind === "not_found") return void res.status(404).json({ error: "Session not found" });
-    res.status(200).json(result.session);
-});
+    respond(res, result, {
+        not_found: { status: 404, error: "Session not found" },
+        session_found: (r) => ({ status: 200, body: r.session }),
+    });
+}));
 
-sessionRouter.post(
-    "/sessions",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN, Role.INSTRUCTOR),
-    async (req, res) => {
-        const result = await sessionUseCases.create(req.body);
-        if (result.kind === "missing_fields")
-            return void res
-                .status(400)
-                .json({ error: "courseId, startTime, endTime, mode and classroomId are required" });
-        if (result.kind === "session_already_exists")
-            return void res.status(409).json({ error: "A session with this course, classroom and time slot already exists" });
-        res.status(201).json(result.session);
-    },
-);
+sessionRouter.post("/sessions", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await sessionUseCases.create(req.body, auth);
+    respond(res, result, {
+        missing_fields: { status: 400, error: "courseId, startTime, endTime and mode are required" },
+        classroom_required: { status: 400, error: "classroomId is required for an ON_SITE session" },
+        classroom_forbidden: { status: 400, error: "classroomId must be null for a REMOTE session" },
+        classroom_conflict: { blocked: { type: "Creation", reason: "A session with this course, classroom and time slot already exists" } },
+        session_created: (r) => ({ status: 201, body: r.session }),
+    });
+}));
 
-sessionRouter.patch(
-    "/sessions/:id",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN, Role.INSTRUCTOR),
-    async (req, res) => {
-        const result = await sessionUseCases.update(String(req.params.id), req.body);
-        if (result.kind === "not_found") return void res.status(404).json({ error: "Session not found" });
-        if (result.kind === "session_already_exists")
-            return void res.status(409).json({ error: "A session with this course, classroom and time slot already exists" });
-        res.status(200).json(result.session);
-    },
-);
+sessionRouter.patch("/sessions/:id", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await sessionUseCases.update(String(req.params.id), req.body, auth);
+    respond(res, result, {
+        not_found: { status: 404, error: "Session not found" },
+        classroom_conflict: { blocked: { type: "Creation", reason: "A session with this course, classroom and time slot already exists" } },
+        session_updated: (r) => ({ status: 200, body: r.session }),
+    });
+}));
 
-sessionRouter.delete(
-    "/sessions/:id",
-    requireAuth,
-    requireRole(AdminRole.ADMIN, AdminRole.SUPER_ADMIN, Role.INSTRUCTOR),
-    async (req, res) => {
-        const result = await sessionUseCases.delete(String(req.params.id));
-        if (result.kind === "not_found") return void res.status(404).json({ error: "Session not found" });
-        res.status(200).json({ message: "Session deleted" });
-    },
-);
+sessionRouter.delete("/sessions/:id", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await sessionUseCases.delete(String(req.params.id), auth);
+    respond(res, result, {
+        not_found: { status: 404, error: "Session not found" },
+        session_has_exams: { blocked: { type: "Deletion", reason: "Session has session exams" } },
+        session_has_absences: { blocked: { type: "Deletion", reason: "Session has absences" } },
+        session_deleted: { status: 200, body: { message: "Session deleted" } },
+    });
+}));
 
-sessionRouter.get("/courses/:courseId/sessions", requireAuth, async (req, res) => {
+sessionRouter.get("/courses/:courseId/sessions", ...authed(async (req, res) => {
     const result = await sessionUseCases.listByCourse(String(req.params.courseId));
-    res.status(200).json(result.sessions);
-});
+    send(res, { status: 200, body: result.sessions });
+}));
 
-sessionRouter.get("/classrooms/:classroomId/sessions", requireAuth, async (req, res) => {
+sessionRouter.get("/classrooms/:classroomId/sessions", ...authed(async (req, res) => {
     const result = await sessionUseCases.listByClassroom(String(req.params.classroomId));
-    res.status(200).json(result.sessions);
-});
+    send(res, { status: 200, body: result.sessions });
+}));
