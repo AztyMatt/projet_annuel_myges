@@ -43,9 +43,8 @@ function formatSize(bytes: number): string {
 }
 
 async function loadDocuments(): Promise<{ official: OfficialDoc[]; contracts: ContractDoc[]; personal: PersonalDoc[] }> {
-    const student = await api.get<{ id: string }>("/students/me");
     const fileDocuments = await api.get<{ id: string; fileId: string; status: FileDocumentStatus }[]>(
-        `/file-documents/student/${student.id}`,
+        "/file-documents/mine",
     );
 
     const official: OfficialDoc[] = [];
