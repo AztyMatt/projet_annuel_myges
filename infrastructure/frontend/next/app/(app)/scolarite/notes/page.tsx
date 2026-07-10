@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Lock, CheckCircle, TrendingUp } from "lucide-react";
+import { Lock, Unlock, CheckCircle, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api, ApiError } from "@/lib/api";
 
@@ -95,6 +95,7 @@ export default function NotesScolarite() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [lockingId, setLockingId] = useState<string | null>(null);
+    const [unlockingId, setUnlockingId] = useState<string | null>(null);
 
     useEffect(() => {
         api
@@ -136,6 +137,20 @@ export default function NotesScolarite() {
             setError(e instanceof ApiError ? e.message : "Le gel des notes a échoué.");
         } finally {
             setLockingId(null);
+        }
+    };
+
+    const handleUnfreezeModule = async (stat: ModuleStat) => {
+        setUnlockingId(stat.moduleId);
+        try {
+            await Promise.all(stat.gradeIds.map((id) => api.post(`/grades/${id}/unlock`)));
+            setStats((prev) =>
+                prev.map((m) => (m.moduleId === stat.moduleId ? { ...m, lockedCount: 0 } : m)),
+            );
+        } catch (e) {
+            setError(e instanceof ApiError ? e.message : "Le dégel des notes a échoué.");
+        } finally {
+            setUnlockingId(null);
         }
     };
 
@@ -232,6 +247,15 @@ export default function NotesScolarite() {
                                                         className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-purple-600 bg-purple-50 rounded-lg hover:bg-purple-100 border border-purple-200 disabled:opacity-50"
                                                     >
                                                         <Lock size={11} /> {lockingId === m.moduleId ? "Gel…" : "Geler"}
+                                                    </button>
+                                                )}
+                                                {frozen && (
+                                                    <button
+                                                        onClick={() => void handleUnfreezeModule(m)}
+                                                        disabled={unlockingId === m.moduleId}
+                                                        className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-orange-600 bg-orange-50 rounded-lg hover:bg-orange-100 border border-orange-200 disabled:opacity-50"
+                                                    >
+                                                        <Unlock size={11} /> {unlockingId === m.moduleId ? "Dégel…" : "Dégeler"}
                                                     </button>
                                                 )}
                                             </td>
