@@ -113,17 +113,15 @@ export default function DashboardEtudiant() {
     useEffect(() => {
         (async () => {
             try {
-                const [next, grades, absences, student] = await Promise.all([
+                const [next, grades, absences, fileDocuments] = await Promise.all([
                     loadNextCourse(),
                     loadRecentGrades(),
                     api.get<{ status: string }[]>("/absences/mine"),
-                    api.get<{ id: string }>("/students/me"),
+                    api.get<{ status: string }[]>("/file-documents/mine"),
                 ]);
                 setNextCourse(next);
                 setRecentGrades(grades);
                 setPendingAbsences(absences.filter((a) => a.status === "PENDING").length);
-
-                const fileDocuments = await api.get<{ status: string }[]>(`/file-documents/student/${student.id}`);
                 setDocumentIssues(fileDocuments.filter((d) => d.status !== "VALID").length);
             } catch (e) {
                 setError(e instanceof ApiError ? e.message : "Impossible de charger le tableau de bord.");

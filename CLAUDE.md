@@ -145,7 +145,7 @@ Ces gaps backend conditionnent des pages listées en section 11 — à traiter e
 
 - [x] Endpoint mot de passe oublié par email (token à usage unique)
 - [x] Endpoint d'activation de la 2FA sur un compte existant (`POST /auth/2fa/enable`)
-- [x] Endpoint de dégel des notes — `POST /grades/:id/unlock` existe désormais (`grade/routes.ts`) ; **reste à exposer côté front** sur `/scolarite/notes` → `NOTE-001`
+- [x] Endpoint de dégel des notes — `POST /grades/:id/unlock` exposé côté front sur `/scolarite/notes` (bouton "Dégeler") → `NOTE-001` fait
 - [ ] Rétablir l'auto-suppression de compte (`DELETE /users/me` ou équivalent, sans exiger `SUPER_ADMIN`) → `DEL-002/003`
 - [ ] **Écriture des journaux d'audit** — la table, l'API de lecture et les pages existent, mais aucun use case n'écrit jamais d'entrée : brancher un `audit-recorder` sur les actions sensibles (login, notes lock/unlock, absences validate/reject, documents, attributions de rôle) → `AUD-001…010`
 - [ ] Upload réel de fichiers (multipart + stockage disque/S3), au-delà de la simple création de métadonnées `POST /files` → `FILE-*`
@@ -216,8 +216,10 @@ Seulement 4 rôles (pas les 6-7 décrits dans `cahierDesCharges.md` §2, l'admin
 - [x] **`/messagerie`** — reconnectée
   - Liste des conversations reconstruite côté client (pas d'endpoint agrégé) : classe (étudiant → groupe → classe → `conversationId`), cours (groupe → cours → `conversationId`), privées (`conversation-private`)
   - Fil de messages, envoi (`POST /messages`), marquage lu best-effort (`POST /message-reads`)
+  - **Bug corrigé (smoke test du 2026-07-10)** : la page appelait `GET /conversation-privates/student/:studentId` et `GET /conversation-privates/admin/:adminId`, deux routes qui **n'existent pas** côté backend (seules `/conversation-privates/mine`, `/conversation/:id`, `/:id` existent) → chez tout étudiant, l'appel non catché plantait toute la messagerie ("Une erreur est survenue.", même les conversations de classe/cours disparaissaient). Corrigé en utilisant `GET /conversation-privates/mine` (self-service, filtre déjà par l'utilisateur authentifié) pour étudiants et admins — au passage, l'admin n'a plus besoin de connaître son `adminId` pour *voir* ses conversations privées (seule la *création* en a encore besoin, cf. limitation ci-dessous)
   - "Nouvelle conversation" (ADMIN/SUPER_ADMIN) fonctionnelle mais dégradée : pas de nom d'étudiant à afficher (gap section 10), sélection par ID tronqué
-  - **Limitation connue** : `ADMIN` (non `SUPER_ADMIN`) ne peut pas utiliser la messagerie ciblée — `GET /admins/user/:userId` est réservé à `SUPER_ADMIN`, un simple admin ne peut donc pas retrouver son propre `adminId`. Affiché comme "fonctionnalité limitée pour votre rôle" plutôt que planté
+  - **Limitation connue** : `ADMIN` (non `SUPER_ADMIN`) ne peut pas *démarrer* une messagerie ciblée — `GET /admins/user/:userId` est réservé à `SUPER_ADMIN`, un simple admin ne peut donc pas retrouver son propre `adminId`. Affiché comme "fonctionnalité limitée pour votre rôle" plutôt que planté (voir `API-002`)
+  - [ ] **Bug non corrigé découvert au passage** : la modal "Nouvelle conversation" envoie `POST /conversation-privates` avec `{ adminId, studentId, conversationId }`, mais le backend attend `{ userAId, userBId }` (`conversation/routes.ts`, message d'erreur `"userAId and userBId are required"`) — la création échoue donc systématiquement en 400, même quand `adminId` a pu être résolu. À corriger en envoyant l'userId de l'admin (déjà récupéré via `GET /users/me`) et l'userId de l'étudiant ciblé (`student.userId`, présent dans `GET /students`) plutôt que les IDs d'entité métier → `MSG-001`
 
 - [ ] Notifications temps réel (bandeau/cloche globale, pas une page à part) — dépend du WebSocket backend (section 10), requis par §3.1/§3.5
 
@@ -226,6 +228,7 @@ Seulement 4 rôles (pas les 6-7 décrits dans `cahierDesCharges.md` §2, l'admin
 - [x] **`/etudiant`** — dashboard reconnecté
   - Carte "Prochain cours" (calcul du plus proche créneau futur), carte "Absences en attente", carte "Documents à régulariser", carte "Nouvelles notes" · listes "Prochain cours" et "Dernières notes" détaillées
   - Pas d'ECTS/graphique de progression (aucune notion de validation d'ECTS dans le backend, aurait été inventé)
+  - **Bug corrigé (smoke test du 2026-07-10)** : la carte "Documents à régulariser" appelait `GET /file-documents/student/:studentId` (avec son propre `studentId`), un endpoint réservé aux admins côté backend (`if (!auth.isAdmin) return NotFound`) → tout étudiant se prenait un "File documents not found" affiché tel quel au lieu du dashboard. Corrigé en utilisant `GET /file-documents/mine` (self-service, déjà prévu pour ce cas)
 
 - [x] **`/etudiant/planning`** — emploi du temps §3.1, reconnecté
   - Chaîne réelle : `students/me` → `student-groups` → `groups/:id/courses` → `courses/:id/sessions`, grille semaine avec navigation
@@ -241,7 +244,7 @@ Seulement 4 rôles (pas les 6-7 décrits dans `cahierDesCharges.md` §2, l'admin
   - Dépôt de justificatif **désactivé avec message explicite** : dépend de l'upload réel de fichiers (section 2/10), pas encore implémenté
 
 - [x] **`/etudiant/documents`** — dossier centralisé §3.4, reconnecté
-  - `file-documents/student/:id` réparti en 3 sections via `document-administratives/file-document/:id` et `document-apprenticeship-contracts/file-document/:id` (déterminent si un `FileDocument` est un document officiel, un contrat, ou un document personnel)
+  - `file-documents/mine` (self-service ; corrigé le 2026-07-10, appelait auparavant `file-documents/student/:id` réservé admin, cf. bug ci-dessus sur `/etudiant`) réparti en 3 sections via `document-administratives/file-document/:id` et `document-apprenticeship-contracts/file-document/:id` (déterminent si un `FileDocument` est un document officiel, un contrat, ou un document personnel)
   - Dépôt/téléchargement **désactivés avec message explicite** : même gap upload/stockage réel
 
 - [x] **`/etudiant/cours`** — bibliothèque de supports §3.6, construite
@@ -300,8 +303,7 @@ Fusionne les responsabilités "Scolarité / Pédagogique / Relations Entreprises
 
 - [x] **`/scolarite/notes`** — supervision des notes, reconnectée
   - Sélecteur de filière (`GET /programs`), tableau par module (moyenne/min/max/notes saisies) construit en résolvant chaque `Grade` jusqu'à son module (même logique que `/etudiant/notes`, appliquée à `GET /grades` — toutes les notes du système)
-  - "Geler ce module" fonctionnel : appelle `POST /grades/:id/lock` sur chaque note du module (pas d'endpoint de gel en masse côté backend)
-  - [ ] "Dégeler" : l'endpoint `POST /grades/:id/unlock` **existe désormais côté backend** mais n'est pas exposé dans la page → `NOTE-001`
+  - "Geler ce module" / "Dégeler ce module" fonctionnels : appellent `POST /grades/:id/lock` / `POST /grades/:id/unlock` sur chaque note du module (pas d'endpoint de gel/dégel en masse côté backend) → `NOTE-001` fait
   - Section "Notations manuelles" pas encore ajoutée
 
 - [x] **`/scolarite/planning`** — gestion des sessions §3.1, §4, construite
