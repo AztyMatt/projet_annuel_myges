@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CheckCircle, XCircle, Clock, Paperclip } from "lucide-react";
+import { CheckCircle, XCircle, Clock, Paperclip, Trash2 } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import { StatusBadge, type StatusTone } from "@/components/ui/status-badge";
 import { useToast } from "@/components/ui/toast";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 type Status = "PENDING" | "VALIDATED" | "REJECTED";
 type Absence = { id: string; studentId: string; sessionId: string; reason: string; status: Status; declaredAt: string };
@@ -22,6 +23,8 @@ export default function AbsencesScolarite() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [processingId, setProcessingId] = useState<string | null>(null);
+    const [deleteTarget, setDeleteTarget] = useState<Row | null>(null);
+    const [deleting, setDeleting] = useState(false);
     const toast = useToast();
 
     const refresh = async () => {
@@ -58,6 +61,25 @@ export default function AbsencesScolarite() {
             setError(e instanceof ApiError ? e.message : "Action impossible.");
         } finally {
             setProcessingId(null);
+        }
+    };
+
+    const handleDelete = async () => {
+        if (!deleteTarget) return;
+        setDeleting(true);
+        try {
+            await api.delete(`/absences/${deleteTarget.id}`);
+            setRows((prev) => prev.filter((r) => r.id !== deleteTarget.id));
+            toast.success("Absence supprimée.");
+            setDeleteTarget(null);
+        } catch (e) {
+            toast.error(
+                e instanceof ApiError
+                    ? e.message
+                    : "Suppression impossible.",
+            );
+        } finally {
+            setDeleting(false);
         }
     };
 
@@ -114,16 +136,26 @@ export default function AbsencesScolarite() {
                                             <StatusBadge tone={s.tone} icon={SIcon}>{s.label}</StatusBadge>
                                         </td>
                                         <td className="px-5 py-3">
-                                            {r.status === "PENDING" && (
-                                                <div className="flex items-center gap-1.5">
-                                                    <button onClick={() => void handleDecision(r.id, "validate")} disabled={processingId === r.id} className="px-2.5 py-1 bg-green-600 text-white text-xs rounded-lg hover:bg-green-700 font-medium disabled:opacity-50">
-                                                        Valider
-                                                    </button>
-                                                    <button onClick={() => void handleDecision(r.id, "reject")} disabled={processingId === r.id} className="px-2.5 py-1 bg-red-50 text-red-600 text-xs rounded-lg hover:bg-red-100 border border-red-200 font-medium disabled:opacity-50">
-                                                        Rejeter
-                                                    </button>
-                                                </div>
-                                            )}
+                                            <div className="flex items-center gap-1.5">
+                                                {r.status === "PENDING" && (
+                                                    <>
+                                                        <button onClick={() => void handleDecision(r.id, "validate")} disabled={processingId === r.id} className="px-2.5 py-1 bg-green-600 text-white text-xs rounded-lg hover:bg-green-700 font-medium disabled:opacity-50">
+                                                            Valider
+                                                        </button>
+                                                        <button onClick={() => void handleDecision(r.id, "reject")} disabled={processingId === r.id} className="px-2.5 py-1 bg-red-50 text-red-600 text-xs rounded-lg hover:bg-red-100 border border-red-200 font-medium disabled:opacity-50">
+                                                            Rejeter
+                                                        </button>
+                                                    </>
+                                                )}
+                                                <button
+                                                    onClick={() => setDeleteTarget(r)}
+                                                    disabled={processingId === r.id}
+                                                    title="Supprimer"
+                                                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg disabled:opacity-50"
+                                                >
+                                                    <Trash2 size={14} />
+                                                </button>
+                                            </div>
                                         </td>
                                     </tr>
                                 );
@@ -135,6 +167,21 @@ export default function AbsencesScolarite() {
                     </table>
                 </div>
             )}
+
+            <ConfirmDialog
+                open={deleteTarget !== null}
+                title="Supprimer cette absence ?"
+                description={
+                    deleteTarget
+                        ? `L'absence de l'étudiant #${deleteTarget.studentId.slice(0, 8)} (${deleteTarget.reason}) sera définitivement supprimée, ainsi que son justificatif éventuel. Cette action est irréversible.`
+                        : ""
+                }
+                confirmLabel="Supprimer"
+                pendingLabel="Suppression…"
+                loading={deleting}
+                onConfirm={() => void handleDelete()}
+                onCancel={() => setDeleteTarget(null)}
+            />
         </div>
     );
 }
