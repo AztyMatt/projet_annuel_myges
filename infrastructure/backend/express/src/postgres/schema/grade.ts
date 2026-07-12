@@ -21,6 +21,7 @@ export const grade = pgTable("grade", {
         .notNull()
         .references(() => student.id, { onDelete: "cascade" }),
     value: real("value").notNull(),
+    isRetake: boolean("is_retake").notNull().default(false),
     isLocked: boolean("is_locked").notNull().default(false),
     enteredAt: timestamp("entered_at", { withTimezone: true }).notNull(),
     enteredBy: text("entered_by")
@@ -35,8 +36,13 @@ export const gradeAssessment = pgTable("grade_assessment", {
     assessmentId: text("assessment_id")
         .notNull()
         .references(() => assessment.id),
+    studentId: text("student_id")
+        .notNull()
+        .references(() => student.id, { onDelete: "cascade" }),
+    isRetake: boolean("is_retake").notNull().default(false),
 }, (table) => ({
     linkUnique: unique().on(table.gradeId, table.assessmentId),
+    studentRetakeUnique: unique().on(table.assessmentId, table.studentId, table.isRetake),
 }));
 
 export const gradeManualNotation = pgTable("grade_manual_notation", {

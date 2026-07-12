@@ -1,7 +1,12 @@
 import { Router } from "express";
+import { z } from "zod";
 import { authed, getAuthFlags } from "@express/src/auth/middleware";
 import { blocUseCases } from "@express/src/container";
 import { respond } from "@express/src/http/responses";
+import { patchBody } from "@express/src/http/zod-schemas";
+
+const createBlocSchema = z.object({ name: z.string().min(1), programId: z.string().min(1) });
+const updateBlocSchema = patchBody({ name: z.string().min(1).optional(), programId: z.string().min(1).optional() });
 
 export const blocRouter = Router();
 
@@ -24,20 +29,22 @@ blocRouter.post("/blocs", ...authed(async (req, res) => {
     const auth = getAuthFlags(req.auth);
     const result = await blocUseCases.create(req.body, auth);
     respond(res, result, {
-        missing_fields: { status: 400, error: "name and programId are required" },
+        program_not_found: { status: 404, error: "Program not found" },
         bloc_already_exists: { blocked: { type: "Creation", reason: "A bloc with this name already exists in this program" } },
         bloc_created: (r) => ({ status: 201, body: r.bloc }),
     });
-}));
+}, createBlocSchema));
 
 blocRouter.patch("/blocs/:id", ...authed(async (req, res) => {
     const auth = getAuthFlags(req.auth);
     const result = await blocUseCases.update(String(req.params.id), req.body, auth);
     respond(res, result, {
         not_found: { status: 404, error: "Bloc not found" },
+        program_not_found: { status: 404, error: "Program not found" },
+        bloc_already_exists: { blocked: { type: "Operation", reason: "A bloc with this name already exists in this program" } },
         bloc_updated: (r) => ({ status: 200, body: r.bloc }),
     });
-}));
+}, updateBlocSchema));
 
 blocRouter.delete("/blocs/:id", ...authed(async (req, res) => {
     const auth = getAuthFlags(req.auth);

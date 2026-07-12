@@ -4,6 +4,7 @@ import { type FileCourse } from "@domain/file/file-course/file-course.entity";
 import { type FileDocument } from "@domain/file/file-document/file-document.entity";
 import { DocumentStatus } from "@domain/file/file-document/file-document.enums";
 import { type FileJustification } from "@domain/file/file-justification/file-justification.entity";
+import { type Absence } from "@domain/absence/absence.entity";
 import { BasicStatus } from "@domain/absence/absence.enums";
 import { type FileAssessment } from "@domain/file/file-assessment/file-assessment.entity";
 import { type FileAssessmentInstruction } from "@domain/file/file-assessment-instruction/file-assessment-instruction.entity";
@@ -14,15 +15,23 @@ import { type FileJustificationRepository } from "@application/file/file-justifi
 import { type FileAssessmentRepository } from "@application/file/file-assessment/file-assessment.repository";
 import { type FileAssessmentInstructionRepository } from "@application/file/file-assessment-instruction/file-assessment-instruction.repository";
 import { type AssessmentRepository } from "@application/assessment/assessment.repository";
+import { type AssessmentGroupRepository } from "@application/assessment/assessment-group/assessment-group.repository";
 import { type AssessmentGroupMemberRepository } from "@application/assessment/assessment-group-member/assessment-group-member.repository";
+import { type AbsenceRepository } from "@application/absence/absence.repository";
+import { type SessionRepository } from "@application/session/session.repository";
 import { type StudentRepository } from "@application/student/student.repository";
 import { type DocumentAdministrativeRepository } from "@application/document/document-administrative/document-administrative.repository";
 import { type DocumentApprenticeshipContractRepository } from "@application/document/document-apprenticeship-contract/document-apprenticeship-contract.repository";
 import { type StorageService } from "@application/file/storage.service";
 import { type UnitOfWork } from "@application/types/unit-of-work";
-import { NotFound, MissingFields, Forbidden } from "@application/types/results";
+import { type CourseRepository } from "@application/course/course.repository";
+import { type InstructorRepository } from "@application/instructor/instructor.repository";
+import { NotFound, Forbidden, ForbiddenOwnership } from "@application/types/results";
 import { type AuthContext } from "@application/types/auth-context";
 import { isFileOwner } from "@application/file/file-access";
+import { isCourseInstructor } from "@application/course/course-access";
+import { canReadAbsence } from "@application/absence/absence-access";
+import { MAX_FILE_SIZE_BYTES, isAllowedMimeType, checkAgainstPolicy, CONTEXT_POLICIES } from "@domain/file/file.policy";
 
 export type FileView = {
     id: string;
@@ -65,7 +74,9 @@ export type FileAssessmentView = {
 };
 
 export type CreateFileResult =
-    | MissingFields
+    | { kind: "invalid_size" }
+    | { kind: "file_too_large" }
+    | { kind: "mime_type_not_allowed" }
     | { kind: "file_created"; file: FileView };
 
 export type DeleteFileResult =
@@ -80,8 +91,10 @@ export type GetFileResult = NotFound | { kind: "file_found"; file: FileView };
 export type ListFilesResult = Forbidden | { kind: "files_listed"; files: FileView[] };
 
 export type AttachFileCourseResult =
-    | MissingFields
+    | NotFound
     | Forbidden
+    | { kind: "file_too_large" }
+    | { kind: "mime_type_not_allowed" }
     | { kind: "file_course_already_exists" }
     | { kind: "file_already_linked" }
     | { kind: "file_course_attached"; fileCourse: FileCourseView };
@@ -100,7 +113,8 @@ export type GetFileCourseResult =
 export type ListFileCoursesResult = { kind: "file_courses_listed"; fileCourses: FileCourseView[] };
 
 export type AttachFileDocumentResult =
-    | MissingFields
+    | NotFound
+    | Forbidden
     | { kind: "file_document_already_exists" }
     | { kind: "file_already_linked" }
     | { kind: "file_document_attached"; fileDocument: FileDocumentView };
@@ -109,13 +123,17 @@ export type ValidateFileDocumentResult =
     | NotFound
     | Forbidden
     | { kind: "file_document_has_no_doc_type" }
+    | { kind: "file_document_expired" }
+    | { kind: "document_already_expired" }
+    | { kind: "document_already_valid" }
+    | { kind: "valid_document_of_type_exists" }
     | { kind: "file_document_validated"; fileDocument: FileDocumentView };
 
 export type ExpireFileDocumentResult =
     | NotFound
     | Forbidden
+    | { kind: "document_already_expired" }
     | { kind: "file_document_expired"; fileDocument: FileDocumentView };
-
 
 export type DeleteFileDocumentResult =
     | NotFound
@@ -136,17 +154,24 @@ export type ListFileDocumentsResult = Forbidden | {
 };
 
 export type AttachFileJustificationResult =
-    | MissingFields
+    | NotFound
+    | Forbidden
+    | { kind: "absence_not_found" }
+    | { kind: "absence_already_processed" }
+    | { kind: "file_too_large" }
+    | { kind: "mime_type_not_allowed" }
     | { kind: "file_justification_already_exists" }
     | { kind: "file_already_linked" }
     | { kind: "file_justification_attached"; fileJustification: FileJustificationView };
 
 export type ValidateFileJustificationResult =
     | NotFound
+    | Forbidden
     | { kind: "file_justification_validated"; fileJustification: FileJustificationView };
 
 export type RejectFileJustificationResult =
     | NotFound
+    | Forbidden
     | { kind: "file_justification_rejected"; fileJustification: FileJustificationView };
 
 export type DeleteFileJustificationResult =
@@ -167,7 +192,15 @@ export type ListFileJustificationsResult = {
 };
 
 export type SubmitFileAssessmentResult =
-    | MissingFields
+    | NotFound
+    | Forbidden
+    | { kind: "assessment_group_missing" }
+    | { kind: "assessment_missing" }
+    | { kind: "assessment_not_published" }
+    | { kind: "assessment_past_due_date" }
+    | { kind: "submission_limit_reached" }
+    | { kind: "file_too_large" }
+    | { kind: "mime_type_not_allowed" }
     | { kind: "file_assessment_already_exists" }
     | { kind: "file_already_linked" }
     | { kind: "file_assessment_submitted"; fileAssessment: FileAssessmentView };
@@ -198,8 +231,10 @@ export type FileAssessmentInstructionView = {
 };
 
 export type UploadAssessmentInstructionResult =
-    | MissingFields
+    | NotFound
     | Forbidden
+    | { kind: "file_too_large" }
+    | { kind: "mime_type_not_allowed" }
     | { kind: "file_assessment_instruction_already_exists" }
     | { kind: "file_already_linked" }
     | { kind: "instruction_uploaded"; instruction: FileAssessmentInstructionView };
@@ -281,19 +316,34 @@ export class FileUseCases {
         private readonly storage: StorageService,
         private readonly assessmentGroupMembers: AssessmentGroupMemberRepository,
         private readonly students: StudentRepository,
+        private readonly assessmentGroups: AssessmentGroupRepository,
+        private readonly absences: AbsenceRepository,
         private readonly unitOfWork: UnitOfWork,
+        private readonly courses: CourseRepository,
+        private readonly instructors: InstructorRepository,
+        private readonly sessions: SessionRepository,
     ) {}
 
+    private canReadAbsence(absence: Absence, auth: AuthContext): Promise<boolean> {
+        return canReadAbsence(
+            { students: this.students, sessions: this.sessions, courses: this.courses, instructors: this.instructors },
+            absence,
+            auth,
+        );
+    }
+
     async create(input: {
-        name?: string;
-        originalName?: string;
-        mimeType?: string;
-        sizeBytes?: number;
-        uploadedBy?: string;
+        name: string;
+        originalName: string;
+        mimeType: string;
+        sizeBytes: number;
+        uploadedBy: string;
     }): Promise<CreateFileResult> {
         const { name, originalName, mimeType, sizeBytes, uploadedBy } = input;
-        if (!name || !originalName || !mimeType || sizeBytes === undefined || !uploadedBy)
-            return MissingFields;
+
+        if (!Number.isFinite(sizeBytes) || sizeBytes <= 0) return { kind: "invalid_size" };
+        if (sizeBytes > MAX_FILE_SIZE_BYTES) return { kind: "file_too_large" };
+        if (!isAllowedMimeType(mimeType)) return { kind: "mime_type_not_allowed" };
         const id = randomUUID();
         const storagePath = `files/${id}`;
         const file: File = {
@@ -363,7 +413,7 @@ export class FileUseCases {
         file: File | undefined,
         auth: AuthContext,
     ): { kind: "ok" } | Forbidden | { kind: "orphan_super_admin_only" } {
-        if (!auth.isAdmin && !isFileOwner(file, auth)) return Forbidden;
+        if (!auth.isAdmin && !isFileOwner(file, auth)) return ForbiddenOwnership;
         if (!file && !auth.isSuperAdmin) return { kind: "orphan_super_admin_only" };
         return { kind: "ok" };
     }
@@ -383,16 +433,24 @@ export class FileUseCases {
     }
 
     async attachToCourse(input: {
-        name?: string;
-        fileId?: string;
-        courseId?: string;
+        name: string;
+        fileId: string;
+        courseId: string;
     }, auth: AuthContext): Promise<AttachFileCourseResult> {
         const { name, fileId, courseId } = input;
-        if (!name || !fileId || !courseId) return MissingFields;
+
+        const file = await this.files.findById(fileId);
+        if (!file) return NotFound;
+        const course = await this.courses.findById(courseId);
+        if (!course) return NotFound;
+
         if (!auth.isAdmin) {
-            const file = await this.files.findById(fileId);
-            if (!isFileOwner(file, auth)) return Forbidden;
+            const instructor = await this.instructors.findByUserId(auth.requesterId);
+            if (!instructor || course.instructorId !== instructor.id || !isFileOwner(file, auth)) return ForbiddenOwnership;
         }
+
+        const policyError = checkAgainstPolicy(CONTEXT_POLICIES.FILE_COURSE, file.mimeType, file.sizeBytes);
+        if (policyError) return { kind: policyError };
         if (await this.fileCourses.findByFileAndCourse(fileId, courseId)) return { kind: "file_course_already_exists" };
         if (await this.isFileLinked(fileId)) return { kind: "file_already_linked" };
         const entry: FileCourse = { id: randomUUID(), name, fileId, courseId };
@@ -429,15 +487,23 @@ export class FileUseCases {
     }
 
     async attachAsDocument(input: {
-        fileId?: string;
-        studentId?: string;
-        status?: DocumentStatus;
-    }): Promise<AttachFileDocumentResult> {
-        const { fileId, studentId, status } = input;
-        if (!fileId || !studentId || !status) return MissingFields;
+        fileId: string;
+        studentId: string;
+    }, auth: AuthContext): Promise<AttachFileDocumentResult> {
+        const { fileId, studentId } = input;
+        const file = await this.files.findById(fileId);
+        if (!file) return NotFound;
+
+        if (!(await this.students.findById(studentId))) return NotFound;
+
+        if (!auth.isAdmin) {
+            const requester = await this.students.findByUserId(auth.requesterId);
+            if (!isFileOwner(file, auth) || !requester || requester.id !== studentId) return ForbiddenOwnership;
+        }
+
         if (await this.fileDocuments.findByFileAndStudent(fileId, studentId)) return { kind: "file_document_already_exists" };
         if (await this.isFileLinked(fileId)) return { kind: "file_already_linked" };
-        const entry: FileDocument = { id: randomUUID(), fileId, studentId, status };
+        const entry: FileDocument = { id: randomUUID(), fileId, studentId, status: DocumentStatus.PENDING };
         await this.fileDocuments.save(entry);
         return { kind: "file_document_attached", fileDocument: toFileDocumentView(entry) };
     }
@@ -446,11 +512,31 @@ export class FileUseCases {
         if (!auth.isAdmin) return Forbidden;
         const entry = await this.fileDocuments.findById(id);
         if (!entry) return NotFound;
+
+        if (entry.status === DocumentStatus.VALID) return { kind: "document_already_valid" };
+
+        if (entry.status === DocumentStatus.EXPIRED) return { kind: "file_document_expired" };
         const [administrative, contract] = await Promise.all([
             this.documentAdministratives.findByFileDocumentId(id),
             this.documentApprenticeshipContracts.findByFileDocumentId(id),
         ]);
         if (!administrative && !contract) return { kind: "file_document_has_no_doc_type" };
+
+        const now = new Date();
+        if ((administrative?.expiration && administrative.expiration <= now) || (contract && contract.endDate <= now))
+            return { kind: "document_already_expired" };
+
+        const currentKey = administrative ? `admin:${administrative.type}` : `contract:${contract!.type}`;
+        const siblings = await this.fileDocuments.findByStudentId(entry.studentId);
+        for (const other of siblings) {
+            if (other.id === entry.id || other.status !== DocumentStatus.VALID) continue;
+            const [otherAdmin, otherContract] = await Promise.all([
+                this.documentAdministratives.findByFileDocumentId(other.id),
+                this.documentApprenticeshipContracts.findByFileDocumentId(other.id),
+            ]);
+            const otherKey = otherAdmin ? `admin:${otherAdmin.type}` : otherContract ? `contract:${otherContract.type}` : null;
+            if (otherKey === currentKey) return { kind: "valid_document_of_type_exists" };
+        }
         entry.status = DocumentStatus.VALID;
         await this.fileDocuments.save(entry);
         return { kind: "file_document_validated", fileDocument: toFileDocumentView(entry) };
@@ -460,6 +546,8 @@ export class FileUseCases {
         if (!auth.isAdmin) return Forbidden;
         const entry = await this.fileDocuments.findById(id);
         if (!entry) return NotFound;
+
+        if (entry.status === DocumentStatus.EXPIRED) return { kind: "document_already_expired" };
         entry.status = DocumentStatus.EXPIRED;
         await this.fileDocuments.save(entry);
         return { kind: "file_document_expired", fileDocument: toFileDocumentView(entry) };
@@ -470,6 +558,8 @@ export class FileUseCases {
         if (!entry) return NotFound;
         const file = await this.files.findById(entry.fileId);
         const authResult = this.authorizeFileDetach(file, auth);
+
+        if (authResult.kind === "forbidden") return NotFound;
         if (authResult.kind !== "ok") return authResult;
         if (await this.documentAdministratives.findByFileDocumentId(id)) return { kind: "file_document_has_doc_type" };
         if (await this.documentApprenticeshipContracts.findByFileDocumentId(id)) return { kind: "file_document_has_doc_type" };
@@ -481,9 +571,13 @@ export class FileUseCases {
     }
 
     async findFileDocumentById(id: string, auth: AuthContext): Promise<GetFileDocumentResult> {
-        if (!auth.isAdmin) return NotFound;
         const entry = await this.fileDocuments.findById(id);
         if (!entry) return NotFound;
+
+        if (!auth.isAdmin) {
+            const student = await this.students.findByUserId(auth.requesterId);
+            if (!student || student.id !== entry.studentId) return NotFound;
+        }
         return { kind: "file_document_found", fileDocument: toFileDocumentView(entry) };
     }
 
@@ -507,11 +601,27 @@ export class FileUseCases {
     }
 
     async attachAsJustification(input: {
-        absenceId?: string;
-        fileId?: string;
-    }): Promise<AttachFileJustificationResult> {
+        absenceId: string;
+        fileId: string;
+    }, auth: AuthContext): Promise<AttachFileJustificationResult> {
         const { absenceId, fileId } = input;
-        if (!absenceId || !fileId) return MissingFields;
+
+        const absence = await this.absences.findById(absenceId);
+        if (!absence) return { kind: "absence_not_found" };
+
+        const file = await this.files.findById(fileId);
+        if (!file) return NotFound;
+
+        if (!auth.isAdmin) {
+            const requester = await this.students.findByUserId(auth.requesterId);
+
+            if (!requester || absence.studentId !== requester.id) return { kind: "absence_not_found" };
+            if (!isFileOwner(file, auth)) return ForbiddenOwnership;
+        }
+        if (absence.status !== BasicStatus.PENDING) return { kind: "absence_already_processed" };
+
+        const policyError = checkAgainstPolicy(CONTEXT_POLICIES.FILE_JUSTIFICATION, file.mimeType, file.sizeBytes);
+        if (policyError) return { kind: policyError };
         if (await this.fileJustifications.findByAbsenceAndFile(absenceId, fileId)) return { kind: "file_justification_already_exists" };
         if (await this.isFileLinked(fileId)) return { kind: "file_already_linked" };
         const entry: FileJustification = {
@@ -525,7 +635,8 @@ export class FileUseCases {
         return { kind: "file_justification_attached", fileJustification: toFileJustificationView(entry) };
     }
 
-    async validateJustification(id: string, adminId: string): Promise<ValidateFileJustificationResult> {
+    async validateJustification(id: string, auth: AuthContext, adminId: string): Promise<ValidateFileJustificationResult> {
+        if (!auth.isAdmin) return Forbidden;
         const entry = await this.fileJustifications.findById(id);
         if (!entry) return NotFound;
         entry.validationStatus = BasicStatus.VALIDATED;
@@ -534,7 +645,8 @@ export class FileUseCases {
         return { kind: "file_justification_validated", fileJustification: toFileJustificationView(entry) };
     }
 
-    async rejectJustification(id: string, adminId: string): Promise<RejectFileJustificationResult> {
+    async rejectJustification(id: string, auth: AuthContext, adminId: string): Promise<RejectFileJustificationResult> {
+        if (!auth.isAdmin) return Forbidden;
         const entry = await this.fileJustifications.findById(id);
         if (!entry) return NotFound;
         entry.validationStatus = BasicStatus.REJECTED;
@@ -548,6 +660,8 @@ export class FileUseCases {
         if (!entry) return NotFound;
         const file = await this.files.findById(entry.fileId);
         const authResult = this.authorizeFileDetach(file, auth);
+
+        if (authResult.kind === "forbidden") return NotFound;
         if (authResult.kind !== "ok") return authResult;
         if (entry.validationStatus === BasicStatus.VALIDATED) return { kind: "justification_already_validated" };
         const outcome = await this.cascadeDeleteLinkAndFile(file, () => this.fileJustifications.deleteById(id));
@@ -557,14 +671,17 @@ export class FileUseCases {
     }
 
     async findJustificationById(id: string, auth: AuthContext): Promise<GetFileJustificationResult> {
-        if (!auth.isAdmin) return NotFound;
         const entry = await this.fileJustifications.findById(id);
         if (!entry) return NotFound;
+
+        const absence = await this.absences.findById(entry.absenceId);
+        if (!absence || !(await this.canReadAbsence(absence, auth))) return NotFound;
         return { kind: "file_justification_found", fileJustification: toFileJustificationView(entry) };
     }
 
     async listJustificationsByAbsence(absenceId: string, auth: AuthContext): Promise<NotFound | { kind: "file_justifications_listed"; fileJustifications: FileJustificationView[] }> {
-        if (!auth.isAdmin) return NotFound;
+        const absence = await this.absences.findById(absenceId);
+        if (!absence || !(await this.canReadAbsence(absence, auth))) return NotFound;
         const entries = await this.fileJustifications.findByAbsenceId(absenceId);
         return { kind: "file_justifications_listed", fileJustifications: entries.map(toFileJustificationView) };
     }
@@ -577,12 +694,34 @@ export class FileUseCases {
     }
 
     async submitForAssessment(input: {
-        assessmentId?: string;
-        assessmentGroupId?: string;
-        fileId?: string;
-    }): Promise<SubmitFileAssessmentResult> {
+        assessmentId: string;
+        assessmentGroupId: string;
+        fileId: string;
+    }, auth: AuthContext): Promise<SubmitFileAssessmentResult> {
         const { assessmentId, assessmentGroupId, fileId } = input;
-        if (!assessmentId || !assessmentGroupId || !fileId) return MissingFields;
+        const group = await this.assessmentGroups.findById(assessmentGroupId);
+        if (!group || group.assessmentId !== assessmentId) return { kind: "assessment_group_missing" };
+        const assessment = await this.assessments.findById(assessmentId);
+        if (!assessment) return { kind: "assessment_missing" };
+        if (!auth.isSuperAdmin) {
+            const student = await this.students.findByUserId(auth.requesterId);
+            const membership = student && (await this.assessmentGroupMembers.findByGroupAndStudent(assessmentGroupId, student.id));
+            if (!membership) return ForbiddenOwnership;
+        }
+
+        if (!assessment.isPublished) return { kind: "assessment_not_published" };
+
+        const file = await this.files.findById(fileId);
+        if (!file) return NotFound;
+
+        if (!auth.isSuperAdmin && !isFileOwner(file, auth)) return ForbiddenOwnership;
+
+        if (new Date() > assessment.dueDate) return { kind: "assessment_past_due_date" };
+
+        const policyError = checkAgainstPolicy(CONTEXT_POLICIES.FILE_ASSESSMENT, file.mimeType, file.sizeBytes);
+        if (policyError) return { kind: policyError };
+        const existing = await this.fileAssessments.findByAssessmentGroupId(assessmentGroupId);
+        if (existing.length >= 5) return { kind: "submission_limit_reached" };
         if (await this.fileAssessments.findByGroupAndFile(assessmentGroupId, fileId)) return { kind: "file_assessment_already_exists" };
         if (await this.isFileLinked(fileId)) return { kind: "file_already_linked" };
         const entry: FileAssessment = {
@@ -600,9 +739,9 @@ export class FileUseCases {
         if (!entry) return NotFound;
         if (!auth.isSuperAdmin) {
             const student = await this.students.findByUserId(auth.requesterId);
-            if (!student) return Forbidden;
+            if (!student) return ForbiddenOwnership;
             const membership = await this.assessmentGroupMembers.findByGroupAndStudent(entry.assessmentGroupId, student.id);
-            if (!membership) return Forbidden;
+            if (!membership) return ForbiddenOwnership;
         }
         const assessment = await this.assessments.findById(entry.assessmentId);
         if (!assessment) {
@@ -639,15 +778,28 @@ export class FileUseCases {
     }
 
     async uploadInstruction(input: {
-        assessmentId?: string;
-        fileId?: string;
+        assessmentId: string;
+        fileId: string;
     }, auth: AuthContext): Promise<UploadAssessmentInstructionResult> {
         const { assessmentId, fileId } = input;
-        if (!assessmentId || !fileId) return MissingFields;
+        const assessment = await this.assessments.findById(assessmentId);
+        if (!assessment) return NotFound;
+        const file = await this.files.findById(fileId);
         if (!auth.isAdmin) {
-            const file = await this.files.findById(fileId);
-            if (!isFileOwner(file, auth)) return Forbidden;
+            const responsible = await isCourseInstructor(
+                { courses: this.courses, instructors: this.instructors },
+                assessment.courseId,
+                auth.requesterId,
+            );
+            if (!responsible) return ForbiddenOwnership;
+            if (!isFileOwner(file, auth)) return ForbiddenOwnership;
+        } else if (!file) {
+            return NotFound;
         }
+
+        if (!file) return NotFound;
+        const policyError = checkAgainstPolicy(CONTEXT_POLICIES.FILE_ASSESSMENT_INSTRUCTION, file.mimeType, file.sizeBytes);
+        if (policyError) return { kind: policyError };
         if (await this.fileAssessmentInstructions.findByAssessmentAndFile(assessmentId, fileId)) return { kind: "file_assessment_instruction_already_exists" };
         if (await this.isFileLinked(fileId)) return { kind: "file_already_linked" };
         const entry: FileAssessmentInstruction = {

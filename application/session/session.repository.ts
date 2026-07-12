@@ -6,7 +6,8 @@ export interface SessionRepository {
     existsByCourseId(courseId: string): Promise<boolean>;
     findByClassroomId(classroomId: string): Promise<Session[]>;
     existsByClassroomId(classroomId: string): Promise<boolean>;
-    findBySlot(courseId: string, classroomId: string | null, startTime: Date, endTime: Date): Promise<Session | undefined>;
+    findClassroomOverlap(classroomId: string, startTime: Date, endTime: Date, excludeId?: string): Promise<Session | undefined>;
+    findInstructorOverlap(instructorId: string, startTime: Date, endTime: Date, excludeId?: string): Promise<Session | undefined>;
     save(session: Session): Promise<void>;
     deleteById(id: string): Promise<void>;
     list(): Promise<Session[]>;

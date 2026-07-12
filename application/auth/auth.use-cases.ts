@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 import {
-    emailIsValid,
     isLocked,
     isStrongPassword,
     LOCK_DURATION_MS,
@@ -48,8 +47,6 @@ type AuthenticatedResult = {
 };
 
 export type SignupResult =
-    | { kind: "missing_credentials" }
-    | { kind: "invalid_email" }
     | { kind: "missing_gdpr_consent" }
     | { kind: "weak_password" }
     | { kind: "user_already_exists" }
@@ -63,7 +60,6 @@ export type SignupResult =
       };
 
 export type LoginResult =
-    | { kind: "missing_credentials" }
     | { kind: "invalid_credentials" }
     | { kind: "pending_role_assignment" }
     | { kind: "account_locked"; lockedUntil: Date | null }
@@ -73,13 +69,11 @@ export type LoginResult =
     | AuthenticatedResult;
 
 export type Verify2faResult =
-    | { kind: "missing_2fa_payload" }
     | { kind: "invalid_2fa_session" }
     | { kind: "invalid_totp_code" }
     | AuthenticatedResult;
 
 export type ResetPasswordResult =
-    | { kind: "missing_reset_payload" }
     | { kind: "weak_password" }
     | { kind: "user_not_found" }
     | { kind: "invalid_old_password" }
@@ -138,7 +132,6 @@ export type Enable2faResult =
     | { kind: "unauthorized" }
     | { kind: "invalid_session" }
     | { kind: "already_enabled" }
-    | { kind: "missing_code" }
     | { kind: "invalid_totp_code" }
     | { kind: "setup_initiated"; totpSecret: string; totpProvisioningUri: string }
     | { kind: "two_factor_enabled" };
@@ -173,16 +166,14 @@ export class AuthUseCases {
     }
 
     async signup(input: {
-        firstname?: string;
-        lastname?: string;
-        email?: string;
-        password?: string;
+        firstname: string;
+        lastname: string;
+        email: string;
+        password: string;
         enable2FA?: boolean;
         gdprConsent?: boolean;
     }): Promise<SignupResult> {
         const { firstname, lastname, email, password, enable2FA = false, gdprConsent = false } = input;
-        if (!firstname || !lastname || !email || !password) return { kind: "missing_credentials" };
-        if (!emailIsValid(email)) return { kind: "invalid_email" };
         if (!gdprConsent) return { kind: "missing_gdpr_consent" };
         if (!isStrongPassword(password)) return { kind: "weak_password" };
         if (await this.users.findByEmail(email.toLowerCase())) return { kind: "user_already_exists" };
@@ -197,7 +188,8 @@ export class AuthUseCases {
             failedAttempts: 0,
             lockedUntil: null,
             passwordUpdatedAt: new Date(),
-            twoFactorEnabled: Boolean(enable2FA),
+
+            twoFactorEnabled: false,
             twoFactorSecret,
             gdprConsentAt: new Date(),
             createdAt: new Date(),
@@ -209,7 +201,7 @@ export class AuthUseCases {
             kind: "user_created",
             user: { id: user.id, email: user.email },
         };
-        if (user.twoFactorEnabled && user.twoFactorSecret) {
+        if (user.twoFactorSecret) {
             result.twoFactor = {
                 secret: user.twoFactorSecret,
                 provisioningUri: this.totp.buildProvisioningUri(user.email, user.twoFactorSecret),
@@ -218,9 +210,8 @@ export class AuthUseCases {
         return result;
     }
 
-    async login(input: { email?: string; password?: string }): Promise<LoginResult> {
+    async login(input: { email: string; password: string }): Promise<LoginResult> {
         const { email, password } = input;
-        if (!email || !password) return { kind: "missing_credentials" };
         const user = await this.users.findByEmail(email.toLowerCase());
         if (!user) return { kind: "invalid_credentials" };
         if (isLocked(user)) return { kind: "account_locked", lockedUntil: user.lockedUntil };
@@ -263,9 +254,8 @@ export class AuthUseCases {
         return this.authenticated(user, role);
     }
 
-    async verify2fa(input: { tempSessionToken?: string; code?: string }): Promise<Verify2faResult> {
+    async verify2fa(input: { tempSessionToken: string; code: string }): Promise<Verify2faResult> {
         const { tempSessionToken, code } = input;
-        if (!tempSessionToken || !code) return { kind: "missing_2fa_payload" };
         const notBefore = new Date(Date.now() - TWO_FACTOR_SESSION_EXPIRY_MS);
         const session = await this.twoFactorSessions.find(tempSessionToken, notBefore);
         if (!session) return { kind: "invalid_2fa_session" };
@@ -288,12 +278,11 @@ export class AuthUseCases {
     }
 
     async resetWithCredentials(input: {
-        email?: string;
-        oldPassword?: string;
-        newPassword?: string;
+        email: string;
+        oldPassword: string;
+        newPassword: string;
     }): Promise<ResetPasswordResult> {
         const { email, oldPassword, newPassword } = input;
-        if (!email || !oldPassword || !newPassword) return { kind: "missing_reset_payload" };
         if (!isStrongPassword(newPassword)) return { kind: "weak_password" };
         const user = await this.users.findByEmail(email.toLowerCase());
         if (!user) return { kind: "user_not_found" };
@@ -368,11 +357,10 @@ export class AuthUseCases {
 
     async resetAuthenticatedPassword(input: {
         userId: string;
-        oldPassword?: string;
-        newPassword?: string;
+        oldPassword: string;
+        newPassword: string;
     }): Promise<ResetPasswordResult> {
         const { userId, oldPassword, newPassword } = input;
-        if (!oldPassword || !newPassword) return { kind: "missing_reset_payload" };
         if (!isStrongPassword(newPassword)) return { kind: "weak_password" };
         const user = await this.users.findById(userId);
         if (!user) return { kind: "user_not_found" };
@@ -428,8 +416,10 @@ export class AuthUseCases {
         if (user.twoFactorEnabled) return { kind: "already_enabled" };
 
         if (!input.code) {
-            user.twoFactorSecret = this.totp.generateSecret(user.email);
-            await this.users.save(user);
+            if (!user.twoFactorSecret) {
+                user.twoFactorSecret = this.totp.generateSecret(user.email);
+                await this.users.save(user);
+            }
             return {
                 kind: "setup_initiated",
                 totpSecret: user.twoFactorSecret,

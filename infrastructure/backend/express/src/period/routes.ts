@@ -1,7 +1,22 @@
 import { Router } from "express";
+import { z } from "zod";
 import { authed, getAuthFlags } from "@express/src/auth/middleware";
 import { periodUseCases } from "@express/src/container";
 import { respond, send } from "@express/src/http/responses";
+import { patchBody, zDateString } from "@express/src/http/zod-schemas";
+
+const createPeriodSchema = z.object({
+    order: z.number().int(),
+    startDate: zDateString,
+    endDate: zDateString,
+    academicYearId: z.string().min(1),
+});
+const updatePeriodSchema = patchBody({
+    order: z.number().int().optional(),
+    startDate: zDateString.optional(),
+    endDate: zDateString.optional(),
+    academicYearId: z.string().min(1).optional(),
+});
 
 export const periodRouter = Router();
 
@@ -22,20 +37,28 @@ periodRouter.post("/periods", ...authed(async (req, res) => {
     const auth = getAuthFlags(req.auth);
     const result = await periodUseCases.create(req.body, auth);
     respond(res, result, {
-        missing_fields: { status: 400, error: "order, startDate, endDate and academicYearId are required" },
+        academic_year_not_found: { status: 404, error: "Academic year not found" },
+        invalid_date_range: { status: 400, error: "startDate must be before endDate" },
+        period_out_of_academic_year: { blocked: { type: "Creation", reason: "Period dates must fall within the academic year" } },
+        period_overlap: { blocked: { type: "Creation", reason: "Period overlaps another period of this academic year" } },
         period_order_already_exists: { blocked: { type: "Creation", reason: "A period with this order already exists for this academic year" } },
         period_created: (r) => ({ status: 201, body: r.period }),
     });
-}));
+}, createPeriodSchema));
 
 periodRouter.patch("/periods/:id", ...authed(async (req, res) => {
     const auth = getAuthFlags(req.auth);
     const result = await periodUseCases.update(String(req.params.id), req.body, auth);
     respond(res, result, {
         not_found: { status: 404, error: "Period not found" },
+        academic_year_not_found: { status: 404, error: "Academic year not found" },
+        invalid_date_range: { status: 400, error: "startDate must be before endDate" },
+        period_out_of_academic_year: { blocked: { type: "Operation", reason: "Period dates must fall within the academic year" } },
+        period_overlap: { blocked: { type: "Operation", reason: "Period overlaps another period of this academic year" } },
+        period_order_already_exists: { blocked: { type: "Operation", reason: "A period with this order already exists for this academic year" } },
         period_updated: (r) => ({ status: 200, body: r.period }),
     });
-}));
+}, updatePeriodSchema));
 
 periodRouter.delete("/periods/:id", ...authed(async (req, res) => {
     const auth = getAuthFlags(req.auth);

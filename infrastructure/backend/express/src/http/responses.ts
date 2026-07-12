@@ -13,6 +13,7 @@ export type SendOptions = { status?: HttpStatus } & ExactlyOne<{
 }>;
 
 export const FORBIDDEN_MESSAGE = "Forbidden: insufficient role";
+export const FORBIDDEN_OWNERSHIP_MESSAGE = "Forbidden: you do not own this resource";
 export const UNAUTHORIZED_MESSAGE = "Unauthorized";
 
 export const send = (res: Response, opts: SendOptions): void => {
@@ -33,7 +34,11 @@ export const respond = <Result extends { kind: string }>(
     result: Result,
     handlers: ResultHandlers<Result>,
 ): void => {
-    if (result.kind === "forbidden") return void send(res, { status: 403, error: FORBIDDEN_MESSAGE });
+    if (result.kind === "forbidden") {
+        const reason = (result as { reason?: string }).reason;
+        const error = reason === "ownership" ? FORBIDDEN_OWNERSHIP_MESSAGE : FORBIDDEN_MESSAGE;
+        return void send(res, { status: 403, error });
+    }
     const handler = (handlers as Record<string, SendOptionsFor<Result> | undefined>)[result.kind];
     if (handler === undefined) return void send(res, { status: 500, error: "Unexpected result" });
     send(res, typeof handler === "function" ? handler(result) : handler);

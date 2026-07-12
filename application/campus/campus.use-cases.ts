@@ -3,12 +3,11 @@ import { type Campus } from "@domain/campus/campus.entity";
 import { type CampusRepository } from "@application/campus/campus.repository";
 import { type ClassroomRepository } from "@application/classroom/classroom.repository";
 import { type AuthContext } from "@application/types/auth-context";
-import { NotFound, MissingFields, Forbidden } from "@application/types/results";
+import { NotFound, Forbidden } from "@application/types/results";
 
 export type CampusView = { id: string; name: string; address: string };
 
 export type CreateCampusResult =
-    | MissingFields
     | Forbidden
     | { kind: "campus_already_exists" }
     | { kind: "campus_created"; campus: CampusView };
@@ -16,6 +15,7 @@ export type CreateCampusResult =
 export type UpdateCampusResult =
     | NotFound
     | Forbidden
+    | { kind: "campus_already_exists" }
     | { kind: "campus_updated"; campus: CampusView };
 
 export type DeleteCampusResult =
@@ -36,10 +36,9 @@ export class CampusUseCases {
         private readonly classrooms: ClassroomRepository,
     ) {}
 
-    async create(input: { name?: string; address?: string }, auth: AuthContext): Promise<CreateCampusResult> {
+    async create(input: { name: string; address: string }, auth: AuthContext): Promise<CreateCampusResult> {
         if (!auth.isAdmin) return Forbidden;
         const { name, address } = input;
-        if (!name || !address) return MissingFields;
         if (await this.campuses.findByName(name)) return { kind: "campus_already_exists" };
         const campus: Campus = { id: randomUUID(), name, address };
         await this.campuses.save(campus);
@@ -50,6 +49,11 @@ export class CampusUseCases {
         if (!auth.isAdmin) return Forbidden;
         const campus = await this.campuses.findById(id);
         if (!campus) return NotFound;
+
+        if (input.name !== undefined && input.name !== campus.name) {
+            const duplicate = await this.campuses.findByName(input.name);
+            if (duplicate && duplicate.id !== id) return { kind: "campus_already_exists" };
+        }
         if (input.name !== undefined) campus.name = input.name;
         if (input.address !== undefined) campus.address = input.address;
         await this.campuses.save(campus);

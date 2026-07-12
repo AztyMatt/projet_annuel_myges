@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { type Assessment } from "@domain/assessment/assessment.entity";
-import { type AssessmentType } from "@domain/assessment/assessment.enums";
+import { AssessmentType } from "@domain/assessment/assessment.enums";
 import { type AssessmentGroup } from "@domain/assessment/assessment-group/assessment-group.entity";
 import { type AssessmentGroupMember } from "@domain/assessment/assessment-group-member/assessment-group-member.entity";
 import { type AssessmentRepository } from "@application/assessment/assessment.repository";
@@ -14,10 +14,12 @@ import { type GradeAssessmentRepository } from "@application/grade/grade-assessm
 import { type CourseRepository } from "@application/course/course.repository";
 import { type InstructorRepository } from "@application/instructor/instructor.repository";
 import { type StudentRepository } from "@application/student/student.repository";
+import { type StudentGroupRepository } from "@application/group/student-group/student-group.repository";
+import { type SessionRepository } from "@application/session/session.repository";
 import { type SessionExamRepository } from "@application/session/session-exam/session-exam.repository";
 import { type UnitOfWork } from "@application/types/unit-of-work";
 import { type AuthContext } from "@application/types/auth-context";
-import { NotFound, MissingFields, Forbidden } from "@application/types/results";
+import { NotFound, Forbidden, ForbiddenOwnership } from "@application/types/results";
 import { isCourseInstructor as resolveCourseInstructor } from "@application/course/course-access";
 
 export type AssessmentView = {
@@ -42,14 +44,16 @@ export type AssessmentGroupMemberView = {
 };
 
 export type CreateAssessmentResult =
-    | MissingFields
     | Forbidden
+    | { kind: "course_not_found" }
+    | { kind: "course_finished" }
     | { kind: "assessment_already_exists" }
     | { kind: "assessment_created"; assessment: AssessmentView };
 
 export type UpdateAssessmentResult =
     | NotFound
     | Forbidden
+    | { kind: "assessment_locked" }
     | { kind: "assessment_updated"; assessment: AssessmentView };
 
 export type DeleteAssessmentResult =
@@ -73,8 +77,14 @@ export type PublishAssessmentResult =
     | { kind: "assessment_published"; assessment: AssessmentView };
 
 export type CreateAssessmentGroupResult =
-    | MissingFields
+    | Forbidden
     | { kind: "members_required" }
+    | { kind: "assessment_not_found" }
+    | { kind: "assessment_not_published" }
+    | { kind: "past_due_date" }
+    | { kind: "group_full" }
+    | { kind: "student_not_in_course_group" }
+    | { kind: "student_already_in_group" }
     | { kind: "assessment_group_created"; assessmentGroup: AssessmentGroupView };
 
 export type DeleteAssessmentGroupResult =
@@ -94,7 +104,14 @@ export type ListAssessmentGroupsResult = {
 };
 
 export type AddAssessmentGroupMemberResult =
-    | MissingFields
+    | Forbidden
+    | { kind: "assessment_group_missing" }
+    | { kind: "assessment_not_found" }
+    | { kind: "assessment_not_published" }
+    | { kind: "past_due_date" }
+    | { kind: "group_full" }
+    | { kind: "student_not_in_course_group" }
+    | { kind: "student_already_in_group" }
     | { kind: "member_already_exists" }
     | { kind: "assessment_group_member_added"; member: AssessmentGroupMemberView };
 
@@ -150,8 +167,30 @@ export class AssessmentUseCases {
         private readonly storage: StorageService,
         private readonly sessionExams: SessionExamRepository,
         private readonly instructors: InstructorRepository,
+        private readonly studentGroups: StudentGroupRepository,
+        private readonly sessions: SessionRepository,
         private readonly unitOfWork: UnitOfWork,
     ) {}
+
+    private async isCourseFinished(courseId: string): Promise<boolean> {
+        const sessions = await this.sessions.findByCourseId(courseId);
+        const now = new Date();
+        return sessions.length > 0 && sessions.every((s) => s.endTime < now);
+    }
+
+    private async studentInAssessmentGroup(assessmentId: string, studentId: string): Promise<boolean> {
+        const memberships = await this.assessmentGroupMembers.findByStudentId(studentId);
+        if (memberships.length === 0) return false;
+        const groups = await this.assessmentGroups.findByAssessmentId(assessmentId);
+        const groupIds = new Set(groups.map((g) => g.id));
+        return memberships.some((m) => groupIds.has(m.assessmentGroupId));
+    }
+
+    private async studentInCourseGroup(courseId: string, studentId: string): Promise<boolean> {
+        const course = await this.courses.findById(courseId);
+        if (!course) return false;
+        return !!(await this.studentGroups.findByStudentAndGroup(studentId, course.groupId));
+    }
 
     private isCourseInstructor(courseId: string, requesterId: string): Promise<boolean> {
         return resolveCourseInstructor({ courses: this.courses, instructors: this.instructors }, courseId, requesterId);
@@ -165,19 +204,30 @@ export class AssessmentUseCases {
         dueDate?: string;
         maxGroupSize?: number;
     }, auth: AuthContext): Promise<CreateAssessmentResult> {
-        const { courseId, title, type, isPublished = false, dueDate, maxGroupSize } = input;
-        if (!courseId || !title || !type || !dueDate || maxGroupSize === undefined)
-            return MissingFields;
+        const { courseId, title, type, isPublished = false, dueDate, maxGroupSize } = input as {
+            courseId: string;
+            title: string;
+            type: AssessmentType;
+            isPublished?: boolean;
+            dueDate: string;
+            maxGroupSize: number;
+        };
+
+        if (!auth.isStaff) return Forbidden;
+        if (!(await this.courses.findById(courseId))) return { kind: "course_not_found" };
         if (!auth.isAdmin && !(await this.isCourseInstructor(courseId, auth.requesterId)))
-            return Forbidden;
-        if (await this.assessments.findByCourseAndTitle(courseId, title, new Date(dueDate))) return { kind: "assessment_already_exists" };
+            return ForbiddenOwnership;
+
+        const parsedDueDate = new Date(dueDate);
+        if (await this.isCourseFinished(courseId)) return { kind: "course_finished" };
+        if (await this.assessments.findByCourseAndTitle(courseId, title, parsedDueDate)) return { kind: "assessment_already_exists" };
         const assessment: Assessment = {
             id: randomUUID(),
             courseId,
             title,
             type,
             isPublished,
-            dueDate: new Date(dueDate),
+            dueDate: parsedDueDate,
             maxGroupSize,
         };
         await this.assessments.save(assessment);
@@ -187,7 +237,6 @@ export class AssessmentUseCases {
     async update(
         id: string,
         input: {
-            courseId?: string;
             title?: string;
             type?: AssessmentType;
             isPublished?: boolean;
@@ -196,35 +245,46 @@ export class AssessmentUseCases {
         },
         auth: AuthContext,
     ): Promise<UpdateAssessmentResult> {
+        if (!auth.isStaff) return Forbidden;
         const assessment = await this.assessments.findById(id);
         if (!assessment) return NotFound;
         if (!auth.isAdmin && !(await this.isCourseInstructor(assessment.courseId, auth.requesterId)))
-            return Forbidden;
-        if (input.courseId !== undefined) assessment.courseId = input.courseId;
+            return ForbiddenOwnership;
+
+        if (assessment.isPublished) {
+            if (
+                (input.type !== undefined && input.type !== assessment.type) ||
+                (input.maxGroupSize !== undefined && input.maxGroupSize !== assessment.maxGroupSize) ||
+                input.isPublished === false
+            )
+                return { kind: "assessment_locked" };
+        }
+        if (input.dueDate !== undefined) assessment.dueDate = new Date(input.dueDate);
         if (input.title !== undefined) assessment.title = input.title;
         if (input.type !== undefined) assessment.type = input.type;
         if (input.isPublished !== undefined) assessment.isPublished = input.isPublished;
-        if (input.dueDate !== undefined) assessment.dueDate = new Date(input.dueDate);
         if (input.maxGroupSize !== undefined) assessment.maxGroupSize = input.maxGroupSize;
         await this.assessments.save(assessment);
         return { kind: "assessment_updated", assessment: toAssessmentView(assessment) };
     }
 
     async publish(id: string, auth: AuthContext): Promise<PublishAssessmentResult> {
+        if (!auth.isStaff) return Forbidden;
         const assessment = await this.assessments.findById(id);
         if (!assessment) return NotFound;
         if (!auth.isAdmin && !(await this.isCourseInstructor(assessment.courseId, auth.requesterId)))
-            return Forbidden;
+            return ForbiddenOwnership;
         assessment.isPublished = true;
         await this.assessments.save(assessment);
         return { kind: "assessment_published", assessment: toAssessmentView(assessment) };
     }
 
     async delete(id: string, auth: AuthContext): Promise<DeleteAssessmentResult> {
+        if (!auth.isStaff) return Forbidden;
         const assessment = await this.assessments.findById(id);
         if (!assessment) return NotFound;
         if (!auth.isAdmin && !(await this.isCourseInstructor(assessment.courseId, auth.requesterId)))
-            return Forbidden;
+            return ForbiddenOwnership;
         if (await this.gradeAssessments.existsByAssessmentId(id)) return { kind: "assessment_has_grades" };
         if (await this.fileAssessments.existsByAssessmentId(id)) return { kind: "assessment_has_submissions" };
         if (await this.sessionExams.existsByAssessmentId(id)) return { kind: "assessment_linked_to_session_exam" };
@@ -260,13 +320,27 @@ export class AssessmentUseCases {
     }
 
     async createGroup(input: { assessmentId?: string; studentIds?: string[] }, auth: AuthContext): Promise<CreateAssessmentGroupResult> {
-        const { assessmentId } = input;
-        if (!assessmentId) return MissingFields;
+        const { assessmentId } = input as { assessmentId: string; studentIds?: string[] };
+        const assessment = await this.assessments.findById(assessmentId);
+        if (!assessment) return { kind: "assessment_not_found" };
+
         const student = await this.students.findByUserId(auth.requesterId);
-        const memberIds = student
-            ? [student.id]
-            : [...new Set((input.studentIds ?? []).filter((id) => id.length > 0))];
+        let memberIds: string[];
+        if (student) {
+            memberIds = [student.id];
+        } else {
+            if (!auth.isAdmin && !(await this.isCourseInstructor(assessment.courseId, auth.requesterId))) return ForbiddenOwnership;
+            memberIds = [...new Set(input.studentIds ?? [])];
+        }
+
+        if (!assessment.isPublished) return { kind: "assessment_not_published" };
         if (memberIds.length === 0) return { kind: "members_required" };
+        if (new Date() > assessment.dueDate) return { kind: "past_due_date" };
+        if (memberIds.length > assessment.maxGroupSize) return { kind: "group_full" };
+        for (const studentId of memberIds) {
+            if (!(await this.studentInCourseGroup(assessment.courseId, studentId))) return { kind: "student_not_in_course_group" };
+            if (await this.studentInAssessmentGroup(assessmentId, studentId)) return { kind: "student_already_in_group" };
+        }
         const group: AssessmentGroup = { id: randomUUID(), assessmentId };
         await this.unitOfWork.run(async () => {
             await this.assessmentGroups.save(group);
@@ -284,7 +358,7 @@ export class AssessmentUseCases {
         if (!auth.isAdmin) {
             const assessment = await this.assessments.findById(group.assessmentId);
             if (!assessment || !(await this.isCourseInstructor(assessment.courseId, auth.requesterId)))
-                return Forbidden;
+                return ForbiddenOwnership;
         }
         if (await this.fileAssessments.existsByAssessmentGroupId(id)) return { kind: "assessment_group_has_submissions" };
         const members = await this.assessmentGroupMembers.findByAssessmentGroupId(id);
@@ -309,10 +383,25 @@ export class AssessmentUseCases {
     async addGroupMember(input: {
         assessmentGroupId?: string;
         studentId?: string;
-    }): Promise<AddAssessmentGroupMemberResult> {
-        const { assessmentGroupId, studentId } = input;
-        if (!assessmentGroupId || !studentId) return MissingFields;
+    }, auth: AuthContext): Promise<AddAssessmentGroupMemberResult> {
+        const { assessmentGroupId, studentId } = input as { assessmentGroupId: string; studentId: string };
+        const group = await this.assessmentGroups.findById(assessmentGroupId);
+        if (!group) return { kind: "assessment_group_missing" };
+        const assessment = await this.assessments.findById(group.assessmentId);
+        if (!assessment) return { kind: "assessment_not_found" };
+
+        if (!auth.isAdmin && !(await this.isCourseInstructor(assessment.courseId, auth.requesterId))) {
+            const requester = await this.students.findByUserId(auth.requesterId);
+            if (!requester || requester.id !== studentId) return ForbiddenOwnership;
+        }
+
+        if (!assessment.isPublished) return { kind: "assessment_not_published" };
+        if (new Date() > assessment.dueDate) return { kind: "past_due_date" };
         if (await this.assessmentGroupMembers.findByGroupAndStudent(assessmentGroupId, studentId)) return { kind: "member_already_exists" };
+        if (await this.studentInAssessmentGroup(assessment.id, studentId)) return { kind: "student_already_in_group" };
+        if (!(await this.studentInCourseGroup(assessment.courseId, studentId))) return { kind: "student_not_in_course_group" };
+        const current = await this.assessmentGroupMembers.findByAssessmentGroupId(assessmentGroupId);
+        if (current.length + 1 > assessment.maxGroupSize) return { kind: "group_full" };
         const member: AssessmentGroupMember = { id: randomUUID(), assessmentGroupId, studentId };
         await this.assessmentGroupMembers.save(member);
         return {
@@ -330,7 +419,7 @@ export class AssessmentUseCases {
             const isSelf = !!student && student.id === member.studentId;
             const assessment = group ? await this.assessments.findById(group.assessmentId) : null;
             const isInstructor = !!assessment && (await this.isCourseInstructor(assessment.courseId, auth.requesterId));
-            if (!isSelf && !isInstructor) return Forbidden;
+            if (!isSelf && !isInstructor) return ForbiddenOwnership;
         }
         if (!group) {
             if (!auth.isSuperAdmin) return { kind: "assessment_group_missing" };

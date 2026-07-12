@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, ne } from "drizzle-orm";
 import { type AcademicYearRepository } from "@application/academic-year/academic-year.repository";
 import { type AcademicYear } from "@domain/academic-year/academic-year.entity";
 import { db } from "@express/src/postgres/db";
@@ -29,6 +29,12 @@ export const academicYearRepository: AcademicYearRepository = {
             .where(and(eq(academicYearTable.startDate, startDate), eq(academicYearTable.endDate, endDate)))
             .limit(1);
         return result[0] ? rowToAcademicYear(result[0]) : undefined;
+    },
+    async clearCurrent(exceptId) {
+        await db
+            .update(academicYearTable)
+            .set({ isCurrent: false })
+            .where(exceptId ? and(eq(academicYearTable.isCurrent, true), ne(academicYearTable.id, exceptId)) : eq(academicYearTable.isCurrent, true));
     },
     async save(academicYear) {
         await db

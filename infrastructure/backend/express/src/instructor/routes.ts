@@ -1,7 +1,20 @@
 import { Router } from "express";
-import { authed, getAuthFlags, sendForbidden } from "@express/src/auth/middleware";
+import { z } from "zod";
+import { authed, getAuthFlags } from "@express/src/auth/middleware";
+import { InstructorContractType } from "@domain/instructor/instructor.enums";
 import { instructorUseCases } from "@express/src/container";
 import { respond, send } from "@express/src/http/responses";
+import { patchBody } from "@express/src/http/zod-schemas";
+
+const createInstructorSchema = z.object({
+    userId: z.string().min(1),
+    contractType: z.enum(Object.values(InstructorContractType) as [string, ...string[]]),
+    specialties: z.array(z.string()).optional(),
+});
+const updateInstructorSchema = patchBody({
+    contractType: z.enum(Object.values(InstructorContractType) as [string, ...string[]]).optional(),
+    specialties: z.array(z.string()).optional(),
+});
 
 export const instructorRouter = Router();
 
@@ -34,11 +47,11 @@ instructorRouter.post("/instructors", ...authed(async (req, res) => {
     const auth = getAuthFlags(req.auth);
     const result = await instructorUseCases.create(req.body, auth);
     respond(res, result, {
-        missing_fields: { status: 400, error: "userId and contractType are required" },
+        user_not_found: { status: 404, error: "User not found" },
         user_already_instructor: { blocked: { type: "Creation", reason: "This user is already an instructor" } },
         instructor_created: (r) => ({ status: 201, body: r.instructor }),
     });
-}));
+}, createInstructorSchema));
 
 instructorRouter.patch("/instructors/:id", ...authed(async (req, res) => {
     const auth = getAuthFlags(req.auth);
@@ -47,7 +60,7 @@ instructorRouter.patch("/instructors/:id", ...authed(async (req, res) => {
         not_found: { status: 404, error: "Instructor not found" },
         instructor_updated: (r) => ({ status: 200, body: r.instructor }),
     });
-}));
+}, updateInstructorSchema));
 
 instructorRouter.delete("/instructors/:id", ...authed(async (req, res) => {
     const auth = getAuthFlags(req.auth);
@@ -62,9 +75,8 @@ instructorRouter.delete("/instructors/:id", ...authed(async (req, res) => {
 
 instructorRouter.get("/instructors/:id/courses", ...authed(async (req, res) => {
     const auth = getAuthFlags(req.auth);
-    if (!auth.isAdmin) return void sendForbidden(res);
     const { courseUseCases } = await import("@express/src/container");
-    const result = await courseUseCases.listByInstructor(String(req.params.id));
+    const result = await courseUseCases.listByInstructor(String(req.params.id), auth);
     respond(res, result, {
         courses_listed: (r) => ({ status: 200, body: r.courses }),
     });

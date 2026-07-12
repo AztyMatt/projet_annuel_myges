@@ -1,10 +1,45 @@
 import { Router } from "express";
+import { z } from "zod";
 import { authed, getAuthFlags, sendForbidden } from "@express/src/auth/middleware";
 import { adminUseCases, fileUseCases } from "@express/src/container";
 import { respond, send } from "@express/src/http/responses";
 import { storageCleanupWarning } from "@express/src/storage/storage-warning";
 
 export const fileRouter = Router();
+
+const createFileSchema = z.object({
+    name: z.string().min(1),
+    originalName: z.string().min(1),
+    mimeType: z.string().min(1),
+    sizeBytes: z.number().int().positive(),
+});
+
+const attachFileCourseSchema = z.object({
+    name: z.string().min(1),
+    fileId: z.string().min(1),
+    courseId: z.string().min(1),
+});
+
+const attachFileDocumentSchema = z.object({
+    fileId: z.string().min(1),
+    studentId: z.string().min(1),
+});
+
+const attachFileJustificationSchema = z.object({
+    absenceId: z.string().min(1),
+    fileId: z.string().min(1),
+});
+
+const submitFileAssessmentSchema = z.object({
+    assessmentId: z.string().min(1),
+    assessmentGroupId: z.string().min(1),
+    fileId: z.string().min(1),
+});
+
+const uploadInstructionSchema = z.object({
+    assessmentId: z.string().min(1),
+    fileId: z.string().min(1),
+});
 
 fileRouter.get("/files", ...authed(async (req, res) => {
     const auth = getAuthFlags(req.auth);
@@ -40,10 +75,12 @@ fileRouter.get("/files/:id", ...authed(async (req, res) => {
 fileRouter.post("/files", ...authed(async (req, res) => {
     const result = await fileUseCases.create({ ...req.body, uploadedBy: req.auth.userId });
     respond(res, result, {
-        missing_fields: { status: 400, error: "name, originalName, mimeType and sizeBytes are required" },
+        invalid_size: { status: 400, error: "sizeBytes must be a positive integer" },
+        file_too_large: { status: 400, error: "File exceeds the maximum allowed size" },
+        mime_type_not_allowed: { status: 400, error: "This file type is not allowed" },
         file_created: (r) => ({ status: 201, body: r.file }),
     });
-}));
+}, createFileSchema));
 
 fileRouter.delete("/files/:id", ...authed(async (req, res) => {
     const auth = getAuthFlags(req.auth);
@@ -55,7 +92,6 @@ fileRouter.delete("/files/:id", ...authed(async (req, res) => {
         file_deleted: { status: 200, body: { message: "File deleted" } },
     });
 }));
-
 
 fileRouter.get("/file-courses/course/:courseId", ...authed(async (req, res) => {
     const result = await fileUseCases.listFileCoursesByCourse(String(req.params.courseId));
@@ -79,12 +115,14 @@ fileRouter.post("/file-courses", ...authed(async (req, res) => {
     const auth = getAuthFlags(req.auth);
     const result = await fileUseCases.attachToCourse(req.body, auth);
     respond(res, result, {
-        missing_fields: { status: 400, error: "name, fileId and courseId are required" },
+        not_found: { status: 404, error: "File or course not found" },
+        file_too_large: { status: 400, error: "File exceeds the maximum allowed size for a course support" },
+        mime_type_not_allowed: { status: 400, error: "This file type is not allowed for a course support" },
         file_course_already_exists: { blocked: { type: "Creation", reason: "This file is already attached to this course" } },
-        file_already_linked: { blocked: { type: "Operation", reason: "File is already linked to another context" } },
+        file_already_linked: { blocked: { type: "Creation", reason: "File is already linked to another context" } },
         file_course_attached: (r) => ({ status: 201, body: r.fileCourse }),
     });
-}));
+}, attachFileCourseSchema));
 
 fileRouter.delete("/file-courses/:id", ...authed(async (req, res) => {
     const auth = getAuthFlags(req.auth);
@@ -96,7 +134,6 @@ fileRouter.delete("/file-courses/:id", ...authed(async (req, res) => {
         file_course_deleted: { status: 200, body: { message: "File course deleted" } },
     });
 }));
-
 
 fileRouter.get("/file-documents", ...authed(async (req, res) => {
     const auth = getAuthFlags(req.auth);
@@ -131,14 +168,14 @@ fileRouter.get("/file-documents/:id", ...authed(async (req, res) => {
 }));
 
 fileRouter.post("/file-documents", ...authed(async (req, res) => {
-    const result = await fileUseCases.attachAsDocument(req.body);
+    const result = await fileUseCases.attachAsDocument(req.body, getAuthFlags(req.auth));
     respond(res, result, {
-        missing_fields: { status: 400, error: "fileId, studentId and status are required" },
+        not_found: { status: 404, error: "File or student not found" },
         file_document_already_exists: { blocked: { type: "Creation", reason: "This file is already linked as a document for this student" } },
-        file_already_linked: { blocked: { type: "Operation", reason: "File is already linked to another context" } },
+        file_already_linked: { blocked: { type: "Creation", reason: "File is already linked to another context" } },
         file_document_attached: (r) => ({ status: 201, body: r.fileDocument }),
     });
-}));
+}, attachFileDocumentSchema));
 
 fileRouter.post("/file-documents/:id/validate", ...authed(async (req, res) => {
     const auth = getAuthFlags(req.auth);
@@ -146,6 +183,10 @@ fileRouter.post("/file-documents/:id/validate", ...authed(async (req, res) => {
     respond(res, result, {
         not_found: { status: 404, error: "File document not found" },
         file_document_has_no_doc_type: { blocked: { type: "Operation", reason: "File document has no associated document type" } },
+        document_already_valid: { blocked: { type: "Operation", reason: "This document is already valid" } },
+        file_document_expired: { blocked: { type: "Operation", reason: "An expired document cannot be validated again" } },
+        document_already_expired: { blocked: { type: "Operation", reason: "This document's expiration date has already passed and cannot be validated" } },
+        valid_document_of_type_exists: { blocked: { type: "Operation", reason: "This student already has a valid document of this type" } },
         file_document_validated: (r) => ({ status: 200, body: r.fileDocument }),
     });
 }));
@@ -155,6 +196,7 @@ fileRouter.post("/file-documents/:id/expire", ...authed(async (req, res) => {
     const result = await fileUseCases.expireDocument(String(req.params.id), auth);
     respond(res, result, {
         not_found: { status: 404, error: "File document not found" },
+        document_already_expired: { blocked: { type: "Operation", reason: "This document is already expired" } },
         file_document_expired: (r) => ({ status: 200, body: r.fileDocument }),
     });
 }));
@@ -171,7 +213,6 @@ fileRouter.delete("/file-documents/:id", ...authed(async (req, res) => {
         file_document_deleted: { status: 200, body: { message: "File document deleted" } },
     });
 }));
-
 
 fileRouter.get("/file-justifications/absence/:absenceId", ...authed(async (req, res) => {
     const result = await fileUseCases.listJustificationsByAbsence(String(req.params.absenceId), getAuthFlags(req.auth));
@@ -198,19 +239,24 @@ fileRouter.get("/file-justifications/:id", ...authed(async (req, res) => {
 }));
 
 fileRouter.post("/file-justifications", ...authed(async (req, res) => {
-    const result = await fileUseCases.attachAsJustification(req.body);
+    const result = await fileUseCases.attachAsJustification(req.body, getAuthFlags(req.auth));
     respond(res, result, {
-        missing_fields: { status: 400, error: "absenceId and fileId are required" },
+        not_found: { status: 404, error: "File not found" },
+        absence_not_found: { status: 404, error: "Absence not found" },
+        absence_already_processed: { blocked: { type: "Creation", reason: "A validated or rejected absence can no longer receive a justification" } },
+        file_too_large: { status: 400, error: "File exceeds the maximum allowed size for a justification" },
+        mime_type_not_allowed: { status: 400, error: "This file type is not allowed for a justification" },
         file_justification_already_exists: { blocked: { type: "Creation", reason: "This file is already attached as a justification for this absence" } },
-        file_already_linked: { blocked: { type: "Operation", reason: "File is already linked to another context" } },
+        file_already_linked: { blocked: { type: "Creation", reason: "File is already linked to another context" } },
         file_justification_attached: (r) => ({ status: 201, body: r.fileJustification }),
     });
-}));
+}, attachFileJustificationSchema));
 
 fileRouter.post("/file-justifications/:id/validate", ...authed(async (req, res) => {
-    const admin = await adminUseCases.resolveOwnAdmin(getAuthFlags(req.auth));
+    const auth = getAuthFlags(req.auth);
+    const admin = await adminUseCases.resolveOwnAdmin(auth);
     if (admin.kind === "not_found") return void sendForbidden(res);
-    const result = await fileUseCases.validateJustification(String(req.params.id), admin.admin.id);
+    const result = await fileUseCases.validateJustification(String(req.params.id), auth, admin.admin.id);
     respond(res, result, {
         not_found: { status: 404, error: "File justification not found" },
         file_justification_validated: (r) => ({ status: 200, body: r.fileJustification }),
@@ -218,9 +264,10 @@ fileRouter.post("/file-justifications/:id/validate", ...authed(async (req, res) 
 }));
 
 fileRouter.post("/file-justifications/:id/reject", ...authed(async (req, res) => {
-    const admin = await adminUseCases.resolveOwnAdmin(getAuthFlags(req.auth));
+    const auth = getAuthFlags(req.auth);
+    const admin = await adminUseCases.resolveOwnAdmin(auth);
     if (admin.kind === "not_found") return void sendForbidden(res);
-    const result = await fileUseCases.rejectJustification(String(req.params.id), admin.admin.id);
+    const result = await fileUseCases.rejectJustification(String(req.params.id), auth, admin.admin.id);
     respond(res, result, {
         not_found: { status: 404, error: "File justification not found" },
         file_justification_rejected: (r) => ({ status: 200, body: r.fileJustification }),
@@ -238,7 +285,6 @@ fileRouter.delete("/file-justifications/:id", ...authed(async (req, res) => {
         file_justification_deleted: { status: 200, body: { message: "File justification deleted" } },
     });
 }));
-
 
 fileRouter.get("/file-assessments/assessment/:assessmentId", ...authed(async (req, res) => {
     const result = await fileUseCases.listAssessmentFilesByAssessment(String(req.params.assessmentId));
@@ -259,14 +305,22 @@ fileRouter.get("/file-assessments/:id", ...authed(async (req, res) => {
 }));
 
 fileRouter.post("/file-assessments", ...authed(async (req, res) => {
-    const result = await fileUseCases.submitForAssessment(req.body);
+    const auth = getAuthFlags(req.auth);
+    const result = await fileUseCases.submitForAssessment(req.body, auth);
     respond(res, result, {
-        missing_fields: { status: 400, error: "assessmentId, assessmentGroupId and fileId are required" },
+        not_found: { status: 404, error: "File not found" },
+        assessment_group_missing: { status: 404, error: "Assessment group not found for this assessment" },
+        assessment_missing: { status: 404, error: "Assessment not found" },
+        assessment_not_published: { blocked: { type: "Creation", reason: "The assessment is not published yet" } },
+        assessment_past_due_date: { blocked: { type: "Creation", reason: "Assessment due date has passed" } },
+        submission_limit_reached: { blocked: { type: "Creation", reason: "An assessment group cannot submit more than 5 files" } },
+        file_too_large: { status: 400, error: "File exceeds the maximum allowed size for a submission" },
+        mime_type_not_allowed: { status: 400, error: "This file type is not allowed for a submission" },
         file_assessment_already_exists: { blocked: { type: "Creation", reason: "This file has already been submitted for this assessment group" } },
-        file_already_linked: { blocked: { type: "Operation", reason: "File is already linked to another context" } },
+        file_already_linked: { blocked: { type: "Creation", reason: "File is already linked to another context" } },
         file_assessment_submitted: (r) => ({ status: 201, body: r.fileAssessment }),
     });
-}));
+}, submitFileAssessmentSchema));
 
 fileRouter.delete("/file-assessments/:id", ...authed(async (req, res) => {
     const auth = getAuthFlags(req.auth);
@@ -280,7 +334,6 @@ fileRouter.delete("/file-assessments/:id", ...authed(async (req, res) => {
         file_assessment_deleted: { status: 200, body: { message: "File assessment deleted" } },
     });
 }));
-
 
 fileRouter.get("/file-assessment-instructions/assessment/:assessmentId", ...authed(async (req, res) => {
     const result = await fileUseCases.listInstructionsByAssessment(String(req.params.assessmentId));
@@ -299,12 +352,14 @@ fileRouter.post("/file-assessment-instructions", ...authed(async (req, res) => {
     const auth = getAuthFlags(req.auth);
     const result = await fileUseCases.uploadInstruction(req.body, auth);
     respond(res, result, {
-        missing_fields: { status: 400, error: "assessmentId and fileId are required" },
+        not_found: { status: 404, error: "Assessment or file not found" },
+        file_too_large: { status: 400, error: "File exceeds the maximum allowed size for an instruction" },
+        mime_type_not_allowed: { status: 400, error: "This file type is not allowed for an instruction" },
         file_assessment_instruction_already_exists: { blocked: { type: "Creation", reason: "This file is already attached as an instruction for this assessment" } },
-        file_already_linked: { blocked: { type: "Operation", reason: "File is already linked to another context" } },
+        file_already_linked: { blocked: { type: "Creation", reason: "File is already linked to another context" } },
         instruction_uploaded: (r) => ({ status: 201, body: r.instruction }),
     });
-}));
+}, uploadInstructionSchema));
 
 fileRouter.delete("/file-assessment-instructions/:id", ...authed(async (req, res) => {
     const auth = getAuthFlags(req.auth);

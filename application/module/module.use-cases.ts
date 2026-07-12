@@ -5,7 +5,7 @@ import { type ProgramModuleRepository } from "@application/program/program-modul
 import { type CourseRepository } from "@application/course/course.repository";
 import { type ManualNotationRepository } from "@application/grade/grade-manual-notation/manual-notation/manual-notation.repository";
 import { type AuthContext } from "@application/types/auth-context";
-import { NotFound, MissingFields, Forbidden } from "@application/types/results";
+import { NotFound, Forbidden } from "@application/types/results";
 
 export type ModuleView = {
     id: string;
@@ -14,15 +14,16 @@ export type ModuleView = {
 };
 
 export type CreateModuleResult =
-    | MissingFields
     | Forbidden
     | { kind: "module_already_exists" }
+    | { kind: "module_code_exists" }
     | { kind: "module_created"; module: ModuleView };
 
 export type UpdateModuleResult =
     | NotFound
     | Forbidden
     | { kind: "module_already_exists" }
+    | { kind: "module_code_exists" }
     | { kind: "module_updated"; module: ModuleView };
 
 export type DeleteModuleResult =
@@ -51,12 +52,13 @@ export class ModuleUseCases {
         private readonly manualNotations: ManualNotationRepository,
     ) {}
 
-    async create(input: { name?: string; code?: string }, auth: AuthContext): Promise<CreateModuleResult> {
+    async create(input: { name: string; code?: string }, auth: AuthContext): Promise<CreateModuleResult> {
         if (!auth.isAdmin) return Forbidden;
         const { name, code } = input;
-        if (!name) return MissingFields;
         const resolvedCode = code ?? "";
         if (await this.modules.findByNameAndCode(name, resolvedCode)) return { kind: "module_already_exists" };
+
+        if (resolvedCode !== "" && (await this.modules.findByCode(resolvedCode))) return { kind: "module_code_exists" };
         const module: Module = { id: randomUUID(), name, code: resolvedCode };
         await this.modules.save(module);
         return { kind: "module_created", module: toView(module) };
@@ -70,6 +72,10 @@ export class ModuleUseCases {
         const newCode = input.code !== undefined ? input.code : module.code;
         const existing = await this.modules.findByNameAndCode(newName, newCode);
         if (existing && existing.id !== id) return { kind: "module_already_exists" };
+        if (newCode !== "") {
+            const codeOwner = await this.modules.findByCode(newCode);
+            if (codeOwner && codeOwner.id !== id) return { kind: "module_code_exists" };
+        }
         module.name = newName;
         module.code = newCode;
         await this.modules.save(module);

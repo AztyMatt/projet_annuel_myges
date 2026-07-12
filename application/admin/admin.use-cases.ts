@@ -1,9 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { type Admin } from "@domain/admin/admin.entity";
-import { type AdminRole } from "@domain/admin/admin.enums";
+import { AdminRole } from "@domain/admin/admin.enums";
 import { type AdminRepository } from "@application/admin/admin.repository";
+import { type UserRepository } from "@application/auth/user.repository";
 import { type AuthContext } from "@application/types/auth-context";
-import { NotFound, MissingFields, Forbidden } from "@application/types/results";
+import { NotFound, Forbidden } from "@application/types/results";
 
 export type AdminView = {
     id: string;
@@ -12,8 +13,8 @@ export type AdminView = {
 };
 
 export type CreateAdminResult =
-    | MissingFields
     | Forbidden
+    | { kind: "user_not_found" }
     | { kind: "user_already_admin" }
     | { kind: "admin_created"; admin: AdminView };
 
@@ -37,12 +38,13 @@ const toView = (a: Admin): AdminView => ({
 export class AdminUseCases {
     constructor(
         private readonly admins: AdminRepository,
+        private readonly users: UserRepository,
     ) {}
 
     async create(input: { userId?: string; role?: AdminRole }, auth: AuthContext): Promise<CreateAdminResult> {
         if (!auth.isSuperAdmin) return Forbidden;
-        const { userId, role } = input;
-        if (!userId || !role) return MissingFields;
+        const { userId, role } = input as { userId: string; role: AdminRole };
+        if (!(await this.users.findById(userId))) return { kind: "user_not_found" };
         if (await this.admins.findByUserId(userId)) return { kind: "user_already_admin" };
         const admin: Admin = { id: randomUUID(), userId, role };
         await this.admins.save(admin);

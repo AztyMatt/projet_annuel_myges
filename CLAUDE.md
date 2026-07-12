@@ -239,8 +239,8 @@ Seulement 4 rôles (pas les 6-7 décrits dans `cahierDesCharges.md` §2, l'admin
   - Badge "Gelée" (`isLocked`), moyenne pondérée par coefficient (`program-modules`)
   - Distinction notes académiques/entreprise **retirée** : aucun champ de ce type n'existe sur `Grade`/`Assessment`, l'inventer aurait été trompeur
 
-- [x] **`/etudiant/absences`** — déclaration + suivi §3.3, reconnecté
-  - Déclaration (session + motif) fonctionnelle → `POST /absences` · historique avec statut réel
+- [x] **`/etudiant/absences`** — suivi §3.3, reconnecté
+  - **Décision métier : la déclaration d'absence (`POST /absences`) est réservée à l'INSTRUCTEUR du cours ou à un ADMIN/SUPER_ADMIN, pas à l'étudiant lui-même.** Côté `/etudiant`, la page est donc en **consultation seule** (historique avec statut réel) ; la déclaration se fait côté `/intervenant`/`/scolarite`. Le backend vérifie en plus que le `studentId` visé appartient bien au groupe du cours de la session (sinon 404 `student_not_in_course`).
   - Dépôt de justificatif **désactivé avec message explicite** : dépend de l'upload réel de fichiers (section 2/10), pas encore implémenté
 
 - [x] **`/etudiant/documents`** — dossier centralisé §3.4, reconnecté
@@ -323,6 +323,7 @@ Fusionne les responsabilités "Scolarité / Pédagogique / Relations Entreprises
 
 - [x] **`/scolarite/cours`** — affectation intervenant/module/groupe §3.7, construite
   - Création/édition avec sélection module + groupe + bloc + intervenant ; spécialités de l'intervenant affichées comme aide à la décision, pas de suggestion automatique
+  - ⚠️ **Changement de contrat `POST /courses`** : le body attend désormais `classId` (**obligatoire**) et `groupId` (**optionnel**). Si `groupId` est fourni, le backend vérifie qu'il appartient à la classe (409 `group_not_in_class` sinon) ; s'il est omis, le cours est rattaché automatiquement au groupe **General** de la classe (regles.txt l.139). Côté front, remplacer la sélection « groupe seul » par « classe (obligatoire) + groupe optionnel » ; ne plus envoyer un `groupId` sans `classId`. `PATCH /courses/:id` reste inchangé (toujours par `groupId`).
 
 - [x] **`/scolarite/intervenants`** — construite, en lecture/édition seule
   - Liste + modification (type de contrat, spécialités) + nombre de cours affectés

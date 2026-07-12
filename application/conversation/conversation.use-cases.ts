@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { type Conversation } from "@domain/conversation/conversation.entity";
+import { GENERAL_GROUP_NAME } from "@domain/group/group.entity";
 import { type ConversationPrivate } from "@domain/conversation/conversation-private/conversation-private.entity";
 import { type ConversationRepository } from "@application/conversation/conversation.repository";
 import { type ConversationPrivateRepository } from "@application/conversation/conversation-private/conversation-private.repository";
@@ -8,8 +9,9 @@ import { type ClassRepository } from "@application/class/class.repository";
 import { type InstructorRepository } from "@application/instructor/instructor.repository";
 import { type StudentRepository } from "@application/student/student.repository";
 import { type GroupRepository } from "@application/group/group.repository";
+import { type UserRepository } from "@application/auth/user.repository";
 import { type UnitOfWork } from "@application/types/unit-of-work";
-import { NotFound, MissingFields, Forbidden } from "@application/types/results";
+import { NotFound, Forbidden, ForbiddenOwnership } from "@application/types/results";
 import { type AuthContext } from "@application/types/auth-context";
 
 export type ConversationView = { id: string; createdAt: string };
@@ -21,9 +23,7 @@ export type ConversationPrivateView = {
     conversationId: string;
 };
 
-export type CreateConversationResult = Forbidden | { kind: "conversation_created"; conversation: ConversationView };
-
-export type DeleteConversationResult = NotFound | Forbidden | { kind: "conversation_in_use" } | { kind: "conversation_deleted" };
+export type DeleteConversationResult = NotFound | Forbidden | { kind: "conversation_is_private" } | { kind: "conversation_in_use" } | { kind: "conversation_deleted" };
 
 export type ConversationDetailView = { id: string; createdAt: string; participants: string[] };
 
@@ -34,7 +34,8 @@ export type GetConversationResult =
 export type ListConversationsResult = Forbidden | { kind: "conversations_listed"; conversations: ConversationView[] };
 
 export type CreateConversationPrivateResult =
-    | MissingFields
+    | { kind: "same_user" }
+    | NotFound
     | Forbidden
     | { kind: "conversation_already_exists" }
     | { kind: "conversation_private_created"; conversationPrivate: ConversationPrivateView };
@@ -75,6 +76,7 @@ export class ConversationUseCases {
         private readonly instructors: InstructorRepository,
         private readonly students: StudentRepository,
         private readonly groups: GroupRepository,
+        private readonly users: UserRepository,
     ) {}
 
     private async resolveParticipants(conversationId: string): Promise<string[]> {
@@ -90,26 +92,20 @@ export class ConversationUseCases {
 
         const klass = await this.classes.findByConversationId(conversationId);
         if (klass) {
-            const groups = await this.groups.findByClassId(klass.id);
-            return this.students.findUserIdsByGroupIds(groups.map((g) => g.id));
+            const general = await this.groups.findByClassAndName(klass.id, GENERAL_GROUP_NAME);
+            return general ? this.students.findUserIdsByGroupIds([general.id]) : [];
         }
 
         return [];
-    }
-
-    async create(auth: AuthContext): Promise<CreateConversationResult> {
-        if (!auth.isAdmin) return Forbidden;
-        const conversation: Conversation = { id: randomUUID(), createdAt: new Date() };
-        await this.conversations.save(conversation);
-        return { kind: "conversation_created", conversation: toConversationView(conversation) };
     }
 
     async delete(id: string, auth: AuthContext): Promise<DeleteConversationResult> {
         if (!auth.isAdmin) return Forbidden;
         const conversation = await this.conversations.findById(id);
         if (!conversation) return NotFound;
+
         const privateConversation = await this.conversationPrivates.findByConversationId(id);
-        if (privateConversation && !auth.isSuperAdmin) return Forbidden;
+        if (privateConversation && !auth.isSuperAdmin) return { kind: "conversation_is_private" };
         const [linkedCourse, linkedClass] = await Promise.all([
             this.courses.findByConversationId(id),
             this.classes.findByConversationId(id),
@@ -126,10 +122,11 @@ export class ConversationUseCases {
     }
 
     async findById(id: string, auth: AuthContext): Promise<GetConversationResult> {
-        if (!auth.isSuperAdmin) return NotFound;
         const conversation = await this.conversations.findById(id);
         if (!conversation) return NotFound;
+
         const participants = await this.resolveParticipants(id);
+        if (!auth.isAdmin && !participants.includes(auth.requesterId)) return NotFound;
         return {
             kind: "conversation_found",
             conversation: { id: conversation.id, createdAt: conversation.createdAt.toISOString(), participants },
@@ -140,9 +137,13 @@ export class ConversationUseCases {
         userAId?: string;
         userBId?: string;
     }, auth: AuthContext): Promise<CreateConversationPrivateResult> {
-        const { userAId, userBId } = input;
-        if (!userAId || !userBId || userAId === userBId) return MissingFields;
-        if (auth.requesterId !== userAId && auth.requesterId !== userBId) return Forbidden;
+        const { userAId, userBId } = input as { userAId: string; userBId: string };
+
+        if (userAId === userBId) return { kind: "same_user" };
+        if (auth.requesterId !== userAId && auth.requesterId !== userBId) return ForbiddenOwnership;
+
+        const otherId = auth.requesterId === userAId ? userBId : userAId;
+        if (!(await this.users.findById(otherId))) return NotFound;
         const [first, second] = [userAId, userBId].sort();
         if (await this.conversationPrivates.findByUsers(first, second)) return { kind: "conversation_already_exists" };
         const conversation: Conversation = { id: randomUUID(), createdAt: new Date() };

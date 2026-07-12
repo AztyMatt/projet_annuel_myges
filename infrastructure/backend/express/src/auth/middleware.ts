@@ -1,9 +1,11 @@
 import { type NextFunction, type Request, type RequestHandler, type Response } from "express";
+import { type ZodType } from "zod";
 import { tokenProvider } from "@express/src/auth/token-provider.adapter";
 import { Role } from "@domain/auth/user.enums";
 import { capabilitiesForRole } from "@domain/auth/authorization-policy";
 import { type AuthContext } from "@application/types/auth-context";
 import { send, FORBIDDEN_MESSAGE, UNAUTHORIZED_MESSAGE } from "@express/src/http/responses";
+import { validateBody } from "@express/src/http/validate";
 
 export type AuthRequest = Request & {
     auth?: { userId: string; role: Role; email: string };
@@ -40,11 +42,18 @@ export const requireAuth = (request: AuthRequest, response: Response, nextFuncti
     }
 };
 
-export const authed = (handler: (req: AuthedRequest, res: Response) => unknown): RequestHandler[] => [
+export const authed = (
+    handler: (req: AuthedRequest, res: Response) => unknown,
+    bodySchema?: ZodType,
+): RequestHandler[] => [
     requireAuth,
-    (req: AuthRequest, res) => {
+
+    ...(bodySchema ? [validateBody(bodySchema)] : []),
+    (req: AuthRequest, res, next) => {
         if (!req.auth) return void sendUnauthorized(res);
-        void handler(req as AuthedRequest, res);
+        Promise.resolve()
+            .then(() => handler(req as AuthedRequest, res))
+            .catch(next);
     },
 ];
 
