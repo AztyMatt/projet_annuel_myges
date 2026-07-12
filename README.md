@@ -24,17 +24,21 @@
 │   └── nginx/nginx.conf            # Reverse proxy config
 ├── k8s/
 │   ├── namespaces.yml              # Namespaces: frontend, backend, postgres
+│   ├── cert-manager/
+│   │   └── cluster-issuer.yml      # cert-manager ClusterIssuer (Let's Encrypt, HTTP-01 via Traefik)
 │   ├── backend/
 │   │   ├── deployment.yml          # Deployment (2 replicas)
 │   │   ├── service.yml             # Service (port 3001)
 │   │   ├── infisical-secret.yml    # InfisicalSecret CRD → backend-generated-secrets
 │   │   ├── ingressRoute.yml        # Traefik IngressRoute backend HTTPS + HTTP(redirect to HTTPS)
+│   │   ├── certificate.yml         # cert-manager Certificate → myges-tls Secret (backend)
 │   │   └── middleware.yml          # Traefik Middleware (redirectScheme https)
 │   ├── frontend/
 │   │   ├── deployment.yml          # Deployment (3 replicas)
 │   │   ├── service.yml             # Service (port 3000)
 │   │   ├── infisical-secret.yml    # InfisicalSecret CRD → frontend-generated-secrets
 │   │   ├── ingressRoute.yml        # Traefik IngressRoute frontend HTTPS + HTTP(redirect to HTTPS)
+│   │   ├── certificate.yml         # cert-manager Certificate → myges-tls Secret (frontend)
 │   │   └── middleware.yml          # Traefik Middleware (redirectScheme https)
 │   └── postgres/
 │       ├── deployment.yml          # Deployment (1 replica)
@@ -222,6 +226,22 @@ Traefik ingress
                            ↓
                         postgres (namespace: postgres, 1 replica + 5Gi PVC)
 ```
+
+### TLS / HTTPS
+
+TLS certificates are issued by Let's Encrypt and managed by cert-manager — the Kubernetes-native equivalent of certbot: same ACME protocol, but certificates are stored in Kubernetes `Secret`s and renewed automatically (no cron, no `.pem` files to wire in).
+
+| Manifest | Role |
+|----------|------|
+| `k8s/cert-manager/cluster-issuer.yml` | `ClusterIssuer` `letsencrypt-prod` — ACME account (LE production endpoint + contact email) and HTTP-01 solver served through Traefik. Cluster-scoped so it can be used from every namespace. |
+| `k8s/frontend/certificate.yml` | `Certificate` producing the `myges-tls` Secret in the `frontend` namespace |
+| `k8s/backend/certificate.yml` | `Certificate` producing the `myges-tls` Secret in the `backend` namespace |
+
+A TLS Secret is namespace-scoped, hence one `Certificate` per namespace, each writing the `myges-tls` Secret referenced by that namespace's IngressRoute.
+
+Issuance flow: cert-manager requests a certificate for the domains → Let's Encrypt challenges domain ownership → cert-manager serves the challenge token at `http://<host>/.well-known/acme-challenge/...` via Traefik → once validated, the signed certificate is written to `myges-tls` → Traefik serves HTTPS. Renewal happens automatically before expiry.
+
+These manifests live under `k8s/` and are applied by the CD pipeline like the rest. They require [cert-manager](https://cert-manager.io/) to be present in the cluster (it provides the `ClusterIssuer` / `Certificate` kinds) — cert-manager is a cluster-level component, installed independently of this repository.
 
 ### CI/CD pipeline
 
