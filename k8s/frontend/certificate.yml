@@ -1,0 +1,13 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: myges-tls
+  namespace: frontend
+spec:
+  secretName: myges-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+    - __FRONTEND_HOST__
+    - www.__FRONTEND_HOST__
