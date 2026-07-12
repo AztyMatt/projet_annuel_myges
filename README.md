@@ -164,6 +164,23 @@ If `SEED_ON_START=true` and `SEED_PASSWORD` passes the strong password policy, t
 
 Password for both accounts: value of `SEED_PASSWORD` in `.env`.
 
+### Dev fixtures
+
+`fixtures/dev-fixtures.sql` seeds the database with a realistic dataset (students, instructors, classes, courses, sessions, grades, absences, exams, companies...) so every page has data to render without manual setup. Truncates all business tables and reloads them — safe to re-run at any time.
+
+```bash
+docker compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" < fixtures/dev-fixtures.sql
+```
+
+All fixture accounts share the password `MotDePasse1234$`:
+
+| Email | Role | Notes |
+|-------|------|-------|
+| `superadmin.seed@myges.fr` | Super admin | 2FA required — TOTP secret in the file header |
+| `admin.seed@myges.fr` | Admin | |
+| e.g. `julien.girard@myges.fr` | Instructor | 4 instructors, see `users` table (`*@myges.fr`) |
+| e.g. `lucas.martin@myges-etu.fr` | Student | 16 students, see `users` table (`*@myges-etu.fr`) |
+
 ### Adding a dependency
 
 The project mounts the root directory into containers (`.:/app`), but `node_modules` lives in a **named Docker volume** (`node_modules_backend`, `node_modules_frontend`). That volume takes precedence over the host's `node_modules` — the two are fully independent.
