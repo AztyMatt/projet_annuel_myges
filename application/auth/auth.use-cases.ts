@@ -92,6 +92,10 @@ export type GetMeResult =
           };
       };
 
+export type GetPublicProfileResult =
+    | { kind: "user_not_found" }
+    | { kind: "user_found"; user: { id: string; firstname: string; lastname: string } };
+
 export type ListUsersResult =
     | Forbidden
     | {
@@ -345,6 +349,17 @@ export class AuthUseCases {
                 twoFactorEnabled: user.twoFactorEnabled,
             },
         };
+    }
+
+    /**
+     * Profil public minimal (nom/prénom uniquement, aucune donnée sensible) — accessible à tout
+     * utilisateur authentifié, pour résoudre l'affichage "qui est-ce" (ex: liste d'étudiants,
+     * messagerie) sans exposer email/rôle/mot de passe. Voir CLAUDE.md section 10.
+     */
+    async findPublicProfile(id: string): Promise<GetPublicProfileResult> {
+        const user = await this.users.findById(id);
+        if (!user) return { kind: "user_not_found" };
+        return { kind: "user_found", user: { id: user.id, firstname: user.firstname, lastname: user.lastname } };
     }
 
     async resetAuthenticatedPassword(input: {
