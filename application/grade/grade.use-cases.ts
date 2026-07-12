@@ -624,8 +624,18 @@ export class GradeUseCases {
     async findManualNotationById(id: string, auth: AuthContext): Promise<GetManualNotationResult> {
         const entry = await this.manualNotations.findById(id);
         if (!entry) return NotFound;
-        if (!(await this.canManageModuleNotations(entry.moduleId, auth))) return ForbiddenOwnership;
-        return { kind: "manual_notation_found", manualNotation: toManualNotationView(entry) };
+        if (await this.canManageModuleNotations(entry.moduleId, auth)) {
+            return { kind: "manual_notation_found", manualNotation: toManualNotationView(entry) };
+        }
+
+        const links = await this.gradeManualNotations.findByGradeManualId(id);
+        for (const link of links) {
+            const grade = await this.grades.findById(link.gradeId);
+            if (grade && (await this.canReadGrade(grade, auth))) {
+                return { kind: "manual_notation_found", manualNotation: toManualNotationView(entry) };
+            }
+        }
+        return ForbiddenOwnership;
     }
 
     async listManualNotations(auth: AuthContext): Promise<ListManualNotationsResult> {
