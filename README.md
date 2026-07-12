@@ -32,7 +32,8 @@
 │   │   ├── infisical-secret.yml    # InfisicalSecret CRD → backend-generated-secrets
 │   │   ├── ingressRoute.yml        # Traefik IngressRoute backend HTTPS + HTTP(redirect to HTTPS)
 │   │   ├── certificate.yml         # cert-manager Certificate → myges-tls Secret (backend)
-│   │   └── middleware.yml          # Traefik Middleware (redirectScheme https)
+│   │   ├── middleware.yml          # Traefik Middleware (redirectScheme https)
+│   │   └── pvc.yml                 # PersistentVolumeClaim for uploads, mounted at UPLOADS_DIR
 │   ├── frontend/
 │   │   ├── deployment.yml          # Deployment (3 replicas)
 │   │   ├── service.yml             # Service (port 3000)
@@ -242,6 +243,17 @@ A TLS Secret is namespace-scoped, hence one `Certificate` per namespace, each wr
 Issuance flow: cert-manager requests a certificate for the domains → Let's Encrypt challenges domain ownership → cert-manager serves the challenge token at `http://<host>/.well-known/acme-challenge/...` via Traefik → once validated, the signed certificate is written to `myges-tls` → Traefik serves HTTPS. Renewal happens automatically before expiry.
 
 These manifests live under `k8s/` and are applied by the CD pipeline like the rest. They require [cert-manager](https://cert-manager.io/) to be present in the cluster (it provides the `ClusterIssuer` / `Certificate` kinds) — cert-manager is a cluster-level component, installed independently of this repository.
+
+### File storage (uploads)
+
+User-uploaded files are handled by the backend: `POST /files/upload` receives the multipart file and `storageService` writes it to disk under the directory given by the `UPLOADS_DIR` environment variable; `GET /files/:id/download` reads the file back and returns it.
+
+The upload directory should be backed by a **persistent volume** so files aren't lost when a pod restarts:
+
+- `k8s/backend/pvc.yml` — a `PersistentVolumeClaim` named `backend-uploads`.
+- The backend `Deployment` mounts it at `/data/uploads` and sets `UPLOADS_DIR=/data/uploads`.
+
+The provided claim uses the `local-path` StorageClass with `ReadWriteOnce`. With this access mode, several backend replicas can share the same files only if they run on the same node; spreading them across nodes instead requires a `ReadWriteMany` StorageClass (e.g. NFS or Longhorn).
 
 ### CI/CD pipeline
 
