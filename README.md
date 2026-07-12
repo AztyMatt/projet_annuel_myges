@@ -254,6 +254,21 @@ pull_request               │
 Docker images are built for `linux/amd64`.
 ARM-based environments (Apple Silicon, AWS Graviton etc.) must enable QEMU binfmt support or equivalent (e.g. Rosetta 2 on macOS) to run these images.
 
+### Path alias resolution (backend)
+
+The backend uses TypeScript path aliases (`@express/*`, `@application/*`, `@domain/*` — see the `paths` in `tsconfig.json`). `tsc` type-checks against them but does **not** rewrite them in the emitted JavaScript, so the compiled `dist/` still contains `require("@express/...")` that Node cannot resolve on its own.
+
+- **Dev** — `tsx` resolves the aliases natively from `tsconfig.json`, nothing to configure.
+- **Prod** — the compiled app is started through [`module-alias`](https://www.npmjs.com/package/module-alias). The prod `CMD` is `node -r module-alias/register .../server.js`, and the aliases are mapped to their runtime locations in the `_moduleAliases` block of the **root** `package.json`:
+
+  | Alias | Runtime path (in the image) |
+  |-------|-----------------------------|
+  | `@express` | `infrastructure/backend/express/dist` |
+  | `@application` | `infrastructure/application` |
+  | `@domain` | `infrastructure/domain` |
+
+  These paths match where the backend Dockerfile copies each compiled project (`application/dist` → `infrastructure/application`, `domain/dist` → `infrastructure/domain`). `module-alias` is a **runtime** dependency (not `devDependencies`), so it survives `npm ci --omit=dev` in the prod stage.
+
 ### Docker layer cache
 
 GHA layer cache (`cache-from/cache-to: type=gha`) persists Docker build layers between CI runs so unchanged layers are reused instead of rebuilt. To make it effective on this project:

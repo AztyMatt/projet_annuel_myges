@@ -3,6 +3,11 @@
     "version": "1.0.0",
     "description": "",
     "private": true,
+    "_moduleAliases": {
+        "@express": "infrastructure/backend/express/dist",
+        "@application": "infrastructure/application",
+        "@domain": "infrastructure/domain"
+    },
     "workspaces": [
         "domain",
         "application",
