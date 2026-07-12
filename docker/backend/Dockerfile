@@ -26,6 +26,7 @@ COPY package*.json ./
 COPY infrastructure/backend/express/package*.json ./infrastructure/backend/express/
 RUN npm ci --omit=dev --workspace=@myges/express
 COPY --from=builder /app/infrastructure/backend/express/dist ./infrastructure/backend/express/dist
+COPY --from=builder /app/infrastructure/backend/express/drizzle ./infrastructure/backend/express/dist/drizzle
 COPY --from=builder /app/application/dist ./infrastructure/application
 COPY --from=builder /app/domain/dist ./infrastructure/domain
 CMD ["node", "-r", "module-alias/register", "infrastructure/backend/express/dist/server.js"]
