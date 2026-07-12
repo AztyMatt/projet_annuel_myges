@@ -64,7 +64,7 @@ sessionExamRouter.get("/session-exams/mine", ...authed(async (req, res) => {
     const auth = getAuthFlags(req.auth);
     const result = await sessionExamUseCases.listMine(auth);
     respond(res, result, {
-        not_found: { status: 404, error: "No student or instructor profile for this account" },
+        not_found: { status: 404, error: "Aucun profil étudiant ou intervenant pour ce compte" },
         session_exams_listed: (r) => ({ status: 200, body: r.sessionExams }),
     });
 }));
@@ -73,7 +73,7 @@ sessionExamRouter.get("/session-exams/:id", ...authed(async (req, res) => {
     const auth = getAuthFlags(req.auth);
     const result = await sessionExamUseCases.findById(String(req.params.id), auth);
     respond(res, result, {
-        not_found: { status: 404, error: "Session exam not found" },
+        not_found: { status: 404, error: "Session d'examen introuvable" },
         session_exam_found: (r) => ({ status: 200, body: r.sessionExam }),
     });
 }));
@@ -82,9 +82,9 @@ sessionExamRouter.post("/session-exams", ...authed(async (req, res) => {
     const auth = getAuthFlags(req.auth);
     const result = await sessionExamUseCases.create(req.body, auth);
     respond(res, result, {
-        not_found: { status: 404, error: "Session or linked assessment not found" },
-        session_exam_already_started: { blocked: { type: "Creation", reason: "Session exam has started" } },
-        assessment_course_mismatch: { blocked: { type: "Creation", reason: "The linked assessment does not belong to this session's course" } },
+        not_found: { status: 404, error: "Session ou évaluation liée introuvable" },
+        session_exam_already_started: { blocked: { type: "Creation", reason: "La session d'examen a déjà commencé" } },
+        assessment_course_mismatch: { blocked: { type: "Creation", reason: "L'évaluation liée n'appartient pas au cours de cette session" } },
         session_exam_created: (r) => ({ status: 201, body: r.sessionExam }),
     });
 }, createSessionExamSchema));
@@ -93,9 +93,9 @@ sessionExamRouter.patch("/session-exams/:id", ...authed(async (req, res) => {
     const auth = getAuthFlags(req.auth);
     const result = await sessionExamUseCases.update(String(req.params.id), req.body, auth);
     respond(res, result, {
-        not_found: { status: 404, error: "Session exam or linked assessment not found" },
-        session_exam_already_started: { blocked: { type: "Operation", reason: "Session exam has started" } },
-        assessment_course_mismatch: { blocked: { type: "Operation", reason: "The linked assessment does not belong to this session's course" } },
+        not_found: { status: 404, error: "Session d'examen ou évaluation liée introuvable" },
+        session_exam_already_started: { blocked: { type: "Operation", reason: "La session d'examen a déjà commencé" } },
+        assessment_course_mismatch: { blocked: { type: "Operation", reason: "L'évaluation liée n'appartient pas au cours de cette session" } },
         session_exam_updated: (r) => ({ status: 200, body: r.sessionExam }),
     });
 }, updateSessionExamSchema));
@@ -104,10 +104,10 @@ sessionExamRouter.delete("/session-exams/:id", ...authed(async (req, res) => {
     const auth = getAuthFlags(req.auth);
     const result = await sessionExamUseCases.delete(String(req.params.id), auth);
     respond(res, result, {
-        not_found: { status: 404, error: "Session exam not found" },
-        session_exam_already_started: { blocked: { type: "Operation", reason: "Session exam has started" } },
-        session_exam_has_grades: { blocked: { type: "Deletion", reason: "Session exam has grades" } },
-        session_exam_deleted: { status: 200, body: { message: "Session exam deleted" } },
+        not_found: { status: 404, error: "Session d'examen introuvable" },
+        session_exam_already_started: { blocked: { type: "Operation", reason: "La session d'examen a déjà commencé" } },
+        session_exam_has_grades: { blocked: { type: "Deletion", reason: "La session d'examen a des notes" } },
+        session_exam_deleted: { status: 200, body: { message: "Session d'examen supprimée" } },
     });
 }));
 
@@ -131,7 +131,7 @@ sessionExamRouter.get("/session-exam-students/:id", ...authed(async (req, res) =
     const auth = getAuthFlags(req.auth);
     const result = await sessionExamUseCases.findStudentById(String(req.params.id), auth);
     respond(res, result, {
-        not_found: { status: 404, error: "Session exam student not found" },
+        not_found: { status: 404, error: "Étudiant de session d'examen introuvable" },
         session_exam_student_found: (r) => ({ status: 200, body: r.sessionExamStudent }),
     });
 }));
@@ -140,9 +140,9 @@ sessionExamRouter.post("/session-exam-students", ...authed(async (req, res) => {
     const auth = getAuthFlags(req.auth);
     const result = await sessionExamUseCases.addStudent(req.body, auth);
     respond(res, result, {
-        not_found: { status: 404, error: "Session exam or student not found" },
-        session_exam_already_started: { blocked: { type: "Creation", reason: "Session exam has started" } },
-        student_already_registered: { blocked: { type: "Creation", reason: "This student is already registered for this session exam" } },
+        not_found: { status: 404, error: "Session d'examen ou étudiant introuvable" },
+        session_exam_already_started: { blocked: { type: "Creation", reason: "La session d'examen a déjà commencé" } },
+        student_already_registered: { blocked: { type: "Creation", reason: "Cet étudiant est déjà inscrit à cette session d'examen" } },
         session_exam_student_added: (r) => ({ status: 201, body: r.sessionExamStudent }),
     });
 }, addSessionExamStudentSchema));
@@ -151,10 +151,10 @@ sessionExamRouter.delete("/session-exam-students/:id", ...authed(async (req, res
     const auth = getAuthFlags(req.auth);
     const result = await sessionExamUseCases.removeStudent(String(req.params.id), auth);
     respond(res, result, {
-        not_found: { status: 404, error: "Session exam student not found" },
-        session_exam_already_started: { blocked: { type: "Operation", reason: "Session exam has started" } },
-        session_exam_has_grades: { blocked: { type: "Operation", reason: "This student already has a grade for this exam" } },
-        session_exam_student_deleted: { status: 200, body: { message: "Session exam student deleted" } },
+        not_found: { status: 404, error: "Étudiant de session d'examen introuvable" },
+        session_exam_already_started: { blocked: { type: "Operation", reason: "La session d'examen a déjà commencé" } },
+        session_exam_has_grades: { blocked: { type: "Operation", reason: "Cet étudiant a déjà une note pour cet examen" } },
+        session_exam_student_deleted: { status: 200, body: { message: "Étudiant de session d'examen supprimé" } },
     });
 }));
 
@@ -178,7 +178,7 @@ sessionExamRouter.get("/session-exam-instructors/:id", ...authed(async (req, res
     const auth = getAuthFlags(req.auth);
     const result = await sessionExamUseCases.findInstructorById(String(req.params.id), auth);
     respond(res, result, {
-        not_found: { status: 404, error: "Session exam instructor not found" },
+        not_found: { status: 404, error: "Intervenant de session d'examen introuvable" },
         session_exam_instructor_found: (r) => ({ status: 200, body: r.sessionExamInstructor }),
     });
 }));
@@ -187,9 +187,9 @@ sessionExamRouter.post("/session-exam-instructors", ...authed(async (req, res) =
     const auth = getAuthFlags(req.auth);
     const result = await sessionExamUseCases.addInstructor(req.body, auth);
     respond(res, result, {
-        not_found: { status: 404, error: "Session exam or instructor not found" },
-        session_exam_already_started: { blocked: { type: "Creation", reason: "Session exam has started" } },
-        instructor_already_in_jury: { blocked: { type: "Creation", reason: "This instructor is already in the jury for this session exam" } },
+        not_found: { status: 404, error: "Session d'examen ou intervenant introuvable" },
+        session_exam_already_started: { blocked: { type: "Creation", reason: "La session d'examen a déjà commencé" } },
+        instructor_already_in_jury: { blocked: { type: "Creation", reason: "Cet intervenant est déjà membre du jury de cette session d'examen" } },
         session_exam_instructor_added: (r) => ({ status: 201, body: r.sessionExamInstructor }),
     });
 }, addSessionExamInstructorSchema));
@@ -198,9 +198,9 @@ sessionExamRouter.delete("/session-exam-instructors/:id", ...authed(async (req, 
     const auth = getAuthFlags(req.auth);
     const result = await sessionExamUseCases.removeInstructor(String(req.params.id), auth);
     respond(res, result, {
-        not_found: { status: 404, error: "Session exam instructor not found" },
-        session_exam_already_started: { blocked: { type: "Operation", reason: "Session exam has started" } },
-        session_exam_instructor_deleted: { status: 200, body: { message: "Session exam instructor deleted" } },
+        not_found: { status: 404, error: "Intervenant de session d'examen introuvable" },
+        session_exam_already_started: { blocked: { type: "Operation", reason: "La session d'examen a déjà commencé" } },
+        session_exam_instructor_deleted: { status: 200, body: { message: "Intervenant de session d'examen supprimé" } },
     });
 }));
 
@@ -224,7 +224,7 @@ sessionExamRouter.get("/session-exam-externals/:id", ...authed(async (req, res) 
     const auth = getAuthFlags(req.auth);
     const result = await sessionExamUseCases.findExternalById(String(req.params.id), auth);
     respond(res, result, {
-        not_found: { status: 404, error: "Session exam external not found" },
+        not_found: { status: 404, error: "Externe de session d'examen introuvable" },
         session_exam_external_found: (r) => ({ status: 200, body: r.sessionExamExternal }),
     });
 }));
@@ -233,9 +233,9 @@ sessionExamRouter.post("/session-exam-externals", ...authed(async (req, res) => 
     const auth = getAuthFlags(req.auth);
     const result = await sessionExamUseCases.addExternal(req.body, auth);
     respond(res, result, {
-        not_found: { status: 404, error: "Session exam or external not found" },
-        session_exam_already_started: { blocked: { type: "Creation", reason: "Session exam has started" } },
-        external_already_in_jury: { blocked: { type: "Creation", reason: "This external is already in the jury for this session exam" } },
+        not_found: { status: 404, error: "Session d'examen ou externe introuvable" },
+        session_exam_already_started: { blocked: { type: "Creation", reason: "La session d'examen a déjà commencé" } },
+        external_already_in_jury: { blocked: { type: "Creation", reason: "Cet externe est déjà membre du jury de cette session d'examen" } },
         session_exam_external_added: (r) => ({ status: 201, body: r.sessionExamExternal }),
     });
 }, addSessionExamExternalSchema));
@@ -244,8 +244,8 @@ sessionExamRouter.delete("/session-exam-externals/:id", ...authed(async (req, re
     const auth = getAuthFlags(req.auth);
     const result = await sessionExamUseCases.removeExternal(String(req.params.id), auth);
     respond(res, result, {
-        not_found: { status: 404, error: "Session exam external not found" },
-        session_exam_already_started: { blocked: { type: "Operation", reason: "Session exam has started" } },
-        session_exam_external_deleted: { status: 200, body: { message: "Session exam external deleted" } },
+        not_found: { status: 404, error: "Externe de session d'examen introuvable" },
+        session_exam_already_started: { blocked: { type: "Operation", reason: "La session d'examen a déjà commencé" } },
+        session_exam_external_deleted: { status: 200, body: { message: "Externe de session d'examen supprimé" } },
     });
 }));

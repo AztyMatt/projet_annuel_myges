@@ -18,7 +18,7 @@ campusRouter.get("/campuses", ...authed(async (_req, res) => {
 campusRouter.get("/campuses/:id", ...authed(async (req, res) => {
     const result = await campusUseCases.findById(String(req.params.id));
     respond(res, result, {
-        not_found: { status: 404, error: "Campus not found" },
+        not_found: { status: 404, error: "Campus introuvable" },
         campus_found: (r) => ({ status: 200, body: r.campus }),
     });
 }));
@@ -27,7 +27,7 @@ campusRouter.post("/campuses", ...authed(async (req, res) => {
     const auth = getAuthFlags(req.auth);
     const result = await campusUseCases.create(req.body, auth);
     respond(res, result, {
-        campus_already_exists: { blocked: { type: "Creation", reason: "A campus with this name already exists" } },
+        campus_already_exists: { blocked: { type: "Creation", reason: "Un campus avec ce nom existe déjà" } },
         campus_created: (r) => ({ status: 201, body: r.campus }),
     });
 }, createCampusSchema));
@@ -36,8 +36,8 @@ campusRouter.patch("/campuses/:id", ...authed(async (req, res) => {
     const auth = getAuthFlags(req.auth);
     const result = await campusUseCases.update(String(req.params.id), req.body, auth);
     respond(res, result, {
-        not_found: { status: 404, error: "Campus not found" },
-        campus_already_exists: { blocked: { type: "Operation", reason: "A campus with this name already exists" } },
+        not_found: { status: 404, error: "Campus introuvable" },
+        campus_already_exists: { blocked: { type: "Operation", reason: "Un campus avec ce nom existe déjà" } },
         campus_updated: (r) => ({ status: 200, body: r.campus }),
     });
 }, updateCampusSchema));
@@ -46,9 +46,9 @@ campusRouter.delete("/campuses/:id", ...authed(async (req, res) => {
     const auth = getAuthFlags(req.auth);
     const result = await campusUseCases.delete(String(req.params.id), auth);
     respond(res, result, {
-        not_found: { status: 404, error: "Campus not found" },
-        campus_has_classrooms: { blocked: { type: "Deletion", reason: "Campus has classrooms" } },
-        campus_deleted: { status: 200, body: { message: "Campus deleted" } },
+        not_found: { status: 404, error: "Campus introuvable" },
+        campus_has_classrooms: { blocked: { type: "Deletion", reason: "Le campus a des salles de classe" } },
+        campus_deleted: { status: 200, body: { message: "Campus supprimé" } },
     });
 }));
 

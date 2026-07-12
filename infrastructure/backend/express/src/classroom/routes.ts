@@ -26,7 +26,7 @@ classroomRouter.get("/classrooms", ...authed(async (_req, res) => {
 classroomRouter.get("/classrooms/:id", ...authed(async (req, res) => {
     const result = await classroomUseCases.findById(String(req.params.id));
     respond(res, result, {
-        not_found: { status: 404, error: "Classroom not found" },
+        not_found: { status: 404, error: "Salle introuvable" },
         classroom_found: (r) => ({ status: 200, body: r.classroom }),
     });
 }));
@@ -35,8 +35,8 @@ classroomRouter.post("/classrooms", ...authed(async (req, res) => {
     const auth = getAuthFlags(req.auth);
     const result = await classroomUseCases.create(req.body, auth);
     respond(res, result, {
-        campus_not_found: { status: 404, error: "Campus not found" },
-        classroom_already_exists: { blocked: { type: "Creation", reason: "A classroom with this name already exists in this campus" } },
+        campus_not_found: { status: 404, error: "Campus introuvable" },
+        classroom_already_exists: { blocked: { type: "Creation", reason: "Une salle avec ce nom existe déjà dans ce campus" } },
         classroom_created: (r) => ({ status: 201, body: r.classroom }),
     });
 }, createClassroomSchema));
@@ -45,9 +45,9 @@ classroomRouter.patch("/classrooms/:id", ...authed(async (req, res) => {
     const auth = getAuthFlags(req.auth);
     const result = await classroomUseCases.update(String(req.params.id), req.body, auth);
     respond(res, result, {
-        not_found: { status: 404, error: "Classroom not found" },
-        campus_not_found: { status: 404, error: "Campus not found" },
-        classroom_already_exists: { blocked: { type: "Operation", reason: "A classroom with this name already exists in this campus" } },
+        not_found: { status: 404, error: "Salle introuvable" },
+        campus_not_found: { status: 404, error: "Campus introuvable" },
+        classroom_already_exists: { blocked: { type: "Operation", reason: "Une salle avec ce nom existe déjà dans ce campus" } },
         classroom_updated: (r) => ({ status: 200, body: r.classroom }),
     });
 }, updateClassroomSchema));
@@ -56,8 +56,8 @@ classroomRouter.delete("/classrooms/:id", ...authed(async (req, res) => {
     const auth = getAuthFlags(req.auth);
     const result = await classroomUseCases.delete(String(req.params.id), auth);
     respond(res, result, {
-        not_found: { status: 404, error: "Classroom not found" },
-        classroom_has_sessions: { blocked: { type: "Deletion", reason: "Classroom has sessions" } },
-        classroom_deleted: { status: 200, body: { message: "Classroom deleted" } },
+        not_found: { status: 404, error: "Salle introuvable" },
+        classroom_has_sessions: { blocked: { type: "Deletion", reason: "La salle a des sessions" } },
+        classroom_deleted: { status: 200, body: { message: "Salle supprimée" } },
     });
 }));

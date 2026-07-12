@@ -86,17 +86,17 @@ type GetMeResponseBody =
 const loginResponse = (result: LoginResult): { status: HttpStatus; body: LoginResponseBody } => {
     switch (result.kind) {
         case "invalid_credentials":
-            return { status: 401, body: { error: "Invalid credentials" } };
+            return { status: 401, body: { error: "Identifiants invalides" } };
         case "pending_role_assignment":
             return {
                 status: 403,
-                body: { error: "Your account is pending role assignment. An administrator will process your request." },
+                body: { error: "Votre compte est en attente d'attribution de rôle. Un administrateur traitera votre demande." },
             };
         case "account_locked":
             return {
                 status: 423,
                 body: {
-                    error: "Account locked due to failed attempts",
+                    error: "Compte verrouillé suite à des tentatives infructueuses",
                     lockedUntil: result.lockedUntil?.toISOString(),
                 },
             };
@@ -104,7 +104,7 @@ const loginResponse = (result: LoginResult): { status: HttpStatus; body: LoginRe
             return {
                 status: 403,
                 body: {
-                    error: "Password expired. Reset required every 60 days.",
+                    error: "Mot de passe expiré. Réinitialisation requise tous les 60 jours.",
                     passwordResetRequired: result.passwordResetRequired,
                 },
             };
@@ -112,7 +112,7 @@ const loginResponse = (result: LoginResult): { status: HttpStatus; body: LoginRe
             return {
                 status: 403,
                 body: {
-                    error: "Super admin must enable TOTP 2FA.",
+                    error: "Le super administrateur doit activer la 2FA TOTP.",
                     setup2FARequired: result.setup2FARequired,
                     setupSessionToken: result.setupSessionToken,
                 },
@@ -127,9 +127,9 @@ const loginResponse = (result: LoginResult): { status: HttpStatus; body: LoginRe
 const verify2faResponse = (result: Verify2faResult): { status: HttpStatus; body: Verify2faResponseBody } => {
     switch (result.kind) {
         case "invalid_2fa_session":
-            return { status: 401, body: { error: "Invalid 2FA session" } };
+            return { status: 401, body: { error: "Session 2FA invalide" } };
         case "invalid_totp_code":
-            return { status: 401, body: { error: "Invalid TOTP code" } };
+            return { status: 401, body: { error: "Code TOTP invalide" } };
         case "authenticated":
             return { status: 200, body: { token: result.token, user: result.user } };
     }
@@ -140,16 +140,16 @@ const resetPasswordResponse = (result: ResetPasswordResult): { status: HttpStatu
         case "weak_password":
             return {
                 status: 400,
-                body: { error: "Weak password. Minimum 12 chars with uppercase, lowercase, number and symbol." },
+                body: { error: "Mot de passe trop faible. Minimum 12 caractères avec majuscule, minuscule, chiffre et symbole." },
             };
         case "user_not_found":
-            return { status: 404, body: { error: "User not found" } };
+            return { status: 404, body: { error: "Utilisateur introuvable" } };
         case "invalid_old_password":
-            return { status: 401, body: { error: "Invalid old password" } };
+            return { status: 401, body: { error: "Ancien mot de passe invalide" } };
         case "invalid_or_expired_token":
-            return { status: 401, body: { error: "Invalid or expired reset token" } };
+            return { status: 401, body: { error: "Jeton de réinitialisation invalide ou expiré" } };
         case "password_updated":
-            return { status: 200, body: { message: "Password updated" } };
+            return { status: 200, body: { message: "Mot de passe mis à jour" } };
     }
 };
 
@@ -162,7 +162,7 @@ const requestPasswordResetResponse = (
                 status: 200,
                 body: {
                     message:
-                        "If an account exists for this email, a password reset link has been sent.",
+                        "Si un compte existe pour cet email, un lien de réinitialisation du mot de passe a été envoyé.",
                 },
             };
     }
@@ -171,7 +171,7 @@ const requestPasswordResetResponse = (
 const getMeResponse = (result: GetMeResult): { status: HttpStatus; body: GetMeResponseBody } => {
     switch (result.kind) {
         case "user_not_found":
-            return { status: 404, body: { error: "User not found" } };
+            return { status: 404, body: { error: "Utilisateur introuvable" } };
         case "user_found":
             return {
                 status: 200,
@@ -183,33 +183,33 @@ const getMeResponse = (result: GetMeResult): { status: HttpStatus; body: GetMeRe
 const enable2faResponse = (result: Exclude<Enable2faResult, { kind: "already_enabled" }>): { status: number; body: Enable2faResponseBody } => {
     switch (result.kind) {
         case "unauthorized":
-            return { status: 401, body: { error: "Unauthorized" } };
+            return { status: 401, body: { error: "Non autorisé" } };
         case "invalid_session":
-            return { status: 401, body: { error: "Invalid or expired setup session" } };
+            return { status: 401, body: { error: "Session de configuration invalide ou expirée" } };
         case "invalid_totp_code":
-            return { status: 401, body: { error: "Invalid TOTP code" } };
+            return { status: 401, body: { error: "Code TOTP invalide" } };
         case "setup_initiated":
             return {
                 status: 200,
                 body: { totpSecret: result.totpSecret, totpProvisioningUri: result.totpProvisioningUri },
             };
         case "two_factor_enabled":
-            return { status: 200, body: { message: "Two-factor authentication enabled" } };
+            return { status: 200, body: { message: "Authentification à deux facteurs activée" } };
     }
 };
 
 authRouter.post("/auth/signup", validateBody(signupSchema), async (request, response) => {
     const result = await authUseCases.signup(request.body);
     respond(response, result, {
-        missing_gdpr_consent: { status: 400, error: "GDPR consent is required" },
-        weak_password: { status: 400, error: "Weak password. Minimum 12 chars with uppercase, lowercase, number and symbol." },
-        user_already_exists: { blocked: { type: "Creation", reason: "A user with this email already exists" } },
+        missing_gdpr_consent: { status: 400, error: "Le consentement RGPD est requis" },
+        weak_password: { status: 400, error: "Mot de passe trop faible. Minimum 12 caractères avec majuscule, minuscule, chiffre et symbole." },
+        user_already_exists: { blocked: { type: "Creation", reason: "Un utilisateur avec cet email existe déjà" } },
         user_created: (r) => ({
             status: 201,
             body: {
                 userId: r.user.id,
                 email: r.user.email,
-                message: "User created",
+                message: "Utilisateur créé",
                 totpSecret: r.twoFactor?.secret,
                 totpProvisioningUri: r.twoFactor?.provisioningUri,
             },
@@ -242,7 +242,7 @@ authRouter.post("/auth/2fa/enable", validateBody(enable2faSchema), async (reques
     const result = await authUseCases.enable2fa({ userId, setupSessionToken, code });
 
     if (result.kind === "already_enabled") {
-        return void send(response, { blocked: { type: "Operation", reason: "Two-factor authentication is already enabled" } });
+        return void send(response, { blocked: { type: "Operation", reason: "L'authentification à deux facteurs est déjà activée" } });
     }
     const httpResponse = enable2faResponse(result);
     response.status(httpResponse.status).json(httpResponse.body);
@@ -292,7 +292,7 @@ authRouter.get("/admin/security/users", ...authed(async (request, response) => {
 authRouter.get("/gdpr/export", ...authed(async (request, response) => {
     const result = await authUseCases.exportGdprData(request.auth.userId);
     respond(response, result, {
-        user_not_found: { status: 404, error: "User not found" },
+        user_not_found: { status: 404, error: "Utilisateur introuvable" },
         data_exported: (r) => ({ status: 200, body: {
             data: {
                 ...r.data,
@@ -306,20 +306,20 @@ authRouter.get("/gdpr/export", ...authed(async (request, response) => {
 
 authRouter.post("/admin/auth/cleanup-sessions", requireCronSecret, async (_request, response) => {
     await authUseCases.cleanupExpiredSessions();
-    send(response, { status: 200, body: { message: "Expired 2FA sessions deleted" } });
+    send(response, { status: 200, body: { message: "Sessions 2FA expirées supprimées" } });
 });
 
 type DeleteAccountResult = Awaited<ReturnType<typeof authUseCases.deleteAccount>>;
 
 const sendDeleteAccountResult = (result: DeleteAccountResult, response: Response): void => {
     respond(response, result, {
-        user_not_found: { status: 404, error: "User not found" },
-        user_has_active_role: { blocked: { type: "Deletion", reason: "User still has an active role (remove the role first)" } },
-        user_has_files: { blocked: { type: "Deletion", reason: "Account has uploaded files" } },
-        user_has_messages: { blocked: { type: "Deletion", reason: "Account has sent messages" } },
-        user_has_message_reads: { blocked: { type: "Deletion", reason: "Account has message read records" } },
-        user_has_audit_logs: { blocked: { type: "Deletion", reason: "Account has audit log entries" } },
-        account_deleted: { status: 200, body: { message: "Account deleted" } },
+        user_not_found: { status: 404, error: "Utilisateur introuvable" },
+        user_has_active_role: { blocked: { type: "Deletion", reason: "L'utilisateur a encore un rôle actif (retirez le rôle d'abord)" } },
+        user_has_files: { blocked: { type: "Deletion", reason: "Le compte a des fichiers téléversés" } },
+        user_has_messages: { blocked: { type: "Deletion", reason: "Le compte a envoyé des messages" } },
+        user_has_message_reads: { blocked: { type: "Deletion", reason: "Le compte a des enregistrements de lecture de messages" } },
+        user_has_audit_logs: { blocked: { type: "Deletion", reason: "Le compte a des entrées de journal d'audit" } },
+        account_deleted: { status: 200, body: { message: "Compte supprimé" } },
     });
 };
 

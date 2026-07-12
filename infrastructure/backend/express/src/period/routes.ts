@@ -28,7 +28,7 @@ periodRouter.get("/periods", ...authed(async (_req, res) => {
 periodRouter.get("/periods/:id", ...authed(async (req, res) => {
     const result = await periodUseCases.findById(String(req.params.id));
     respond(res, result, {
-        not_found: { status: 404, error: "Period not found" },
+        not_found: { status: 404, error: "Période introuvable" },
         period_found: (r) => ({ status: 200, body: r.period }),
     });
 }));
@@ -37,11 +37,11 @@ periodRouter.post("/periods", ...authed(async (req, res) => {
     const auth = getAuthFlags(req.auth);
     const result = await periodUseCases.create(req.body, auth);
     respond(res, result, {
-        academic_year_not_found: { status: 404, error: "Academic year not found" },
-        invalid_date_range: { status: 400, error: "startDate must be before endDate" },
-        period_out_of_academic_year: { blocked: { type: "Creation", reason: "Period dates must fall within the academic year" } },
-        period_overlap: { blocked: { type: "Creation", reason: "Period overlaps another period of this academic year" } },
-        period_order_already_exists: { blocked: { type: "Creation", reason: "A period with this order already exists for this academic year" } },
+        academic_year_not_found: { status: 404, error: "Année académique introuvable" },
+        invalid_date_range: { status: 400, error: "startDate doit être antérieure à endDate" },
+        period_out_of_academic_year: { blocked: { type: "Creation", reason: "Les dates de la période doivent être comprises dans l'année académique" } },
+        period_overlap: { blocked: { type: "Creation", reason: "La période chevauche une autre période de cette année académique" } },
+        period_order_already_exists: { blocked: { type: "Creation", reason: "Une période avec cet ordre existe déjà pour cette année académique" } },
         period_created: (r) => ({ status: 201, body: r.period }),
     });
 }, createPeriodSchema));
@@ -50,12 +50,12 @@ periodRouter.patch("/periods/:id", ...authed(async (req, res) => {
     const auth = getAuthFlags(req.auth);
     const result = await periodUseCases.update(String(req.params.id), req.body, auth);
     respond(res, result, {
-        not_found: { status: 404, error: "Period not found" },
-        academic_year_not_found: { status: 404, error: "Academic year not found" },
-        invalid_date_range: { status: 400, error: "startDate must be before endDate" },
-        period_out_of_academic_year: { blocked: { type: "Operation", reason: "Period dates must fall within the academic year" } },
-        period_overlap: { blocked: { type: "Operation", reason: "Period overlaps another period of this academic year" } },
-        period_order_already_exists: { blocked: { type: "Operation", reason: "A period with this order already exists for this academic year" } },
+        not_found: { status: 404, error: "Période introuvable" },
+        academic_year_not_found: { status: 404, error: "Année académique introuvable" },
+        invalid_date_range: { status: 400, error: "startDate doit être antérieure à endDate" },
+        period_out_of_academic_year: { blocked: { type: "Operation", reason: "Les dates de la période doivent être comprises dans l'année académique" } },
+        period_overlap: { blocked: { type: "Operation", reason: "La période chevauche une autre période de cette année académique" } },
+        period_order_already_exists: { blocked: { type: "Operation", reason: "Une période avec cet ordre existe déjà pour cette année académique" } },
         period_updated: (r) => ({ status: 200, body: r.period }),
     });
 }, updatePeriodSchema));
@@ -64,9 +64,9 @@ periodRouter.delete("/periods/:id", ...authed(async (req, res) => {
     const auth = getAuthFlags(req.auth);
     const result = await periodUseCases.delete(String(req.params.id), auth);
     respond(res, result, {
-        not_found: { status: 404, error: "Period not found" },
-        period_has_programs: { blocked: { type: "Deletion", reason: "Period has programs" } },
-        period_deleted: { status: 200, body: { message: "Period deleted" } },
+        not_found: { status: 404, error: "Période introuvable" },
+        period_has_programs: { blocked: { type: "Deletion", reason: "La période a des filières" } },
+        period_deleted: { status: 200, body: { message: "Période supprimée" } },
     });
 }));
 

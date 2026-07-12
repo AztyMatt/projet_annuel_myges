@@ -33,7 +33,7 @@ companyRouter.get("/companies", ...authed(async (_req, res) => {
 companyRouter.get("/companies/:id", ...authed(async (req, res) => {
     const result = await companyUseCases.findById(String(req.params.id));
     respond(res, result, {
-        not_found: { status: 404, error: "Company not found" },
+        not_found: { status: 404, error: "Entreprise introuvable" },
         company_found: (r) => ({ status: 200, body: r.company }),
     });
 }));
@@ -42,7 +42,7 @@ companyRouter.post("/companies", ...authed(async (req, res) => {
     const auth = getAuthFlags(req.auth);
     const result = await companyUseCases.create(req.body, auth);
     respond(res, result, {
-        siret_already_exists: { blocked: { type: "Creation", reason: "A company with this SIRET already exists" } },
+        siret_already_exists: { blocked: { type: "Creation", reason: "Une entreprise avec ce SIRET existe déjà" } },
         company_created: (r) => ({ status: 201, body: r.company }),
     });
 }, createCompanySchema));
@@ -51,8 +51,8 @@ companyRouter.patch("/companies/:id", ...authed(async (req, res) => {
     const auth = getAuthFlags(req.auth);
     const result = await companyUseCases.update(String(req.params.id), req.body, auth);
     respond(res, result, {
-        not_found: { status: 404, error: "Company not found" },
-        siret_already_exists: { blocked: { type: "Operation", reason: "A company with this SIRET already exists" } },
+        not_found: { status: 404, error: "Entreprise introuvable" },
+        siret_already_exists: { blocked: { type: "Operation", reason: "Une entreprise avec ce SIRET existe déjà" } },
         company_updated: (r) => ({ status: 200, body: r.company }),
     });
 }, updateCompanySchema));
@@ -61,8 +61,8 @@ companyRouter.delete("/companies/:id", ...authed(async (req, res) => {
     const auth = getAuthFlags(req.auth);
     const result = await companyUseCases.delete(String(req.params.id), auth);
     respond(res, result, {
-        not_found: { status: 404, error: "Company not found" },
-        company_has_contracts: { blocked: { type: "Deletion", reason: "Company has apprenticeship contracts" } },
-        company_deleted: { status: 200, body: { message: "Company deleted" } },
+        not_found: { status: 404, error: "Entreprise introuvable" },
+        company_has_contracts: { blocked: { type: "Deletion", reason: "L'entreprise a des contrats d'apprentissage" } },
+        company_deleted: { status: 200, body: { message: "Entreprise supprimée" } },
     });
 }));
