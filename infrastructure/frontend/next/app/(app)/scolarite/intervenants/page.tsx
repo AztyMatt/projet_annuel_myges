@@ -16,6 +16,7 @@ const contractLabels: Record<string, string> = {
 export default function IntervenantsPage() {
     const [instructors, setInstructors] = useState<Instructor[]>([]);
     const [courseCounts, setCourseCounts] = useState<Record<string, number>>({});
+    const [names, setNames] = useState<Record<string, string>>({});
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [editing, setEditing] = useState<Instructor | null>(null);
@@ -30,6 +31,16 @@ export default function IntervenantsPage() {
                 list.map(async (i) => [i.id, (await api.get<unknown[]>(`/instructors/${i.id}/courses`)).length] as const),
             );
             setCourseCounts(Object.fromEntries(counts));
+            const resolvedNames = await Promise.all(
+                list.map(async (i) => {
+                    const name = await api
+                        .get<{ firstname: string; lastname: string }>(`/users/${i.userId}`)
+                        .then((u) => `${u.firstname} ${u.lastname}`)
+                        .catch(() => `Intervenant #${i.id.slice(0, 8)}`);
+                    return [i.id, name] as const;
+                }),
+            );
+            setNames(Object.fromEntries(resolvedNames));
         } catch (e) {
             setError(e instanceof ApiError ? e.message : "Impossible de charger les intervenants.");
         } finally {
@@ -67,7 +78,7 @@ export default function IntervenantsPage() {
                         <tbody className="divide-y divide-gray-50">
                             {instructors.map((i) => (
                                 <tr key={i.id} className="hover:bg-gray-50">
-                                    <td className="px-5 py-3 font-medium text-gray-900">Intervenant #{i.id.slice(0, 8)}</td>
+                                    <td className="px-5 py-3 font-medium text-gray-900">{names[i.id] ?? `Intervenant #${i.id.slice(0, 8)}`}</td>
                                     <td className="px-5 py-3 text-gray-700">{contractLabels[i.contractType] ?? i.contractType}</td>
                                     <td className="px-5 py-3">
                                         <div className="flex flex-wrap gap-1">

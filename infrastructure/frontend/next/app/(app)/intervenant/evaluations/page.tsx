@@ -23,9 +23,23 @@ type Row = Assessment & { courseLabel: string; groupsCount: number; submissionsC
 
 type GroupDetail = {
     id: string;
-    members: { id: string; studentId: string }[];
+    members: { id: string; studentId: string; studentName: string }[];
     submissions: { id: string; fileId: string }[];
 };
+
+const studentNameCache = new Map<string, string>();
+
+async function resolveStudentName(studentId: string): Promise<string> {
+    const cached = studentNameCache.get(studentId);
+    if (cached) return cached;
+    const name = await api
+        .get<{ userId: string }>(`/students/${studentId}`)
+        .then((student) => api.get<{ firstname: string; lastname: string }>(`/users/${student.userId}`))
+        .then((user) => `${user.firstname} ${user.lastname}`)
+        .catch(() => `Étudiant #${studentId.slice(0, 8)}`);
+    studentNameCache.set(studentId, name);
+    return name;
+}
 
 async function loadCourseOptions(): Promise<CourseOption[]> {
     const courses = await api.get<{ id: string; moduleId: string; groupId: string }[]>("/courses/mine");
@@ -69,7 +83,10 @@ async function loadGroupDetails(assessmentId: string): Promise<GroupDetail[]> {
     const groups = await api.get<{ id: string }[]>(`/assessment-groups/assessment/${assessmentId}`);
     const details: GroupDetail[] = [];
     for (const g of groups) {
-        const members = await api.get<{ id: string; studentId: string }[]>(`/assessment-group-members/group/${g.id}`);
+        const rawMembers = await api.get<{ id: string; studentId: string }[]>(`/assessment-group-members/group/${g.id}`);
+        const members = await Promise.all(
+            rawMembers.map(async (m) => ({ ...m, studentName: await resolveStudentName(m.studentId) })),
+        );
         const submissions = await api.get<{ id: string; fileId: string }[]>(`/file-assessments/group/${g.id}`);
         details.push({ id: g.id, members, submissions });
     }
@@ -363,7 +380,7 @@ export default function EvaluationsIntervenant() {
                                             <div key={g.id} className="flex items-center gap-3 text-xs bg-gray-50 rounded-lg px-3 py-2">
                                                 <span className="font-medium text-gray-700">Groupe {i + 1}</span>
                                                 <span className="text-gray-500">
-                                                    {g.members.map((m) => `Étudiant #${m.studentId.slice(0, 8)}`).join(", ")}
+                                                    {g.members.map((m) => m.studentName).join(", ")}
                                                 </span>
                                                 {g.submissions.length > 0 && (
                                                     <div className="flex items-center gap-2 ml-auto">

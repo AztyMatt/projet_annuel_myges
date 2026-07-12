@@ -19,6 +19,19 @@ type Me = { id: string; role: string };
 
 const COLORS = ["bg-blue-500", "bg-emerald-500", "bg-orange-500", "bg-purple-500", "bg-pink-500"];
 
+const senderNameCache = new Map<string, string>();
+
+async function resolveSenderName(userId: string): Promise<string> {
+    const cached = senderNameCache.get(userId);
+    if (cached) return cached;
+    const name = await api
+        .get<{ firstname: string; lastname: string }>(`/users/${userId}`)
+        .then((u) => `${u.firstname} ${u.lastname}`)
+        .catch(() => `Utilisateur #${userId.slice(0, 8)}`);
+    senderNameCache.set(userId, name);
+    return name;
+}
+
 function initialsOf(label: string) {
     return label
         .split(" ")
@@ -115,6 +128,7 @@ export default function Messagerie() {
 
     const [activeId, setActiveId] = useState<string | null>(null);
     const [messages, setMessages] = useState<Message[]>([]);
+    const [senderNames, setSenderNames] = useState<Record<string, string>>({});
     const [messagesError, setMessagesError] = useState("");
     const [draft, setDraft] = useState("");
     const [sending, setSending] = useState(false);
@@ -160,7 +174,7 @@ export default function Messagerie() {
         setMessagesError("");
         api
             .get<Message[]>(`/messages/conversation/${activeId}`)
-            .then((msgs) => {
+            .then(async (msgs) => {
                 setMessages(msgs);
                 // Marquage "lu" best-effort : on ne bloque pas l'affichage si ça échoue.
                 if (me) {
@@ -170,6 +184,9 @@ export default function Messagerie() {
                             void api.post("/message-reads", { messageId: m.id, userId: me.id }).catch(() => {});
                         });
                 }
+                const uniqueSenderIds = [...new Set(msgs.map((m) => m.senderId).filter((id) => id !== me?.id))];
+                const resolved = await Promise.all(uniqueSenderIds.map(async (id) => [id, await resolveSenderName(id)] as const));
+                setSenderNames((prev) => ({ ...prev, ...Object.fromEntries(resolved) }));
             })
             .catch((error) => {
                 setMessagesError(error instanceof ApiError ? error.message : "Impossible de charger les messages.");
@@ -289,7 +306,12 @@ export default function Messagerie() {
                                     {messages.map((msg) => {
                                         const isMine = msg.senderId === me?.id;
                                         return (
-                                            <div key={msg.id} className={cn("flex", isMine ? "justify-end" : "justify-start")}>
+                                            <div key={msg.id} className={cn("flex flex-col", isMine ? "items-end" : "items-start")}>
+                                                {!isMine && (
+                                                    <span className="text-xs font-semibold text-gray-500 mb-0.5 px-1">
+                                                        {senderNames[msg.senderId] ?? "…"}
+                                                    </span>
+                                                )}
                                                 <div
                                                     className={cn(
                                                         "max-w-xs lg:max-w-md px-4 py-2.5 rounded-2xl text-sm",
