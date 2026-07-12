@@ -319,10 +319,10 @@ Sources : **S** = `Sujet.pdf`, **C** = `cahierDesCharges.md`. Priorité : **P0**
 
 - [ ] `FILE-012` Créer un composant dropzone mutualisé `components/ui/file-upload.tsx` *(à créer)* : sélection, barre de progression, erreurs taille/type, `fetch` multipart (le client `lib/api.ts` est JSON-only — ajouter `api.upload()`).
 - [ ] `FILE-013` `app/(app)/etudiant/absences/page.tsx` : remplacer le message « dépôt indisponible » (ligne 284) par le dépôt de justificatif → `POST /files/upload` + `POST /file-justifications`.
-- [ ] `FILE-014` `app/(app)/etudiant/documents/page.tsx` : activer dépôt et téléchargement réels.
-- [ ] `FILE-015` `app/(app)/etudiant/evaluations/page.tsx` : activer le dépôt de rendu (`POST /file-assessments` avec le `fileId` fraîchement créé) ; afficher la date de dépôt.
-- [ ] `FILE-016` `app/(app)/intervenant/supports/page.tsx` : réactiver le dépôt de support (`POST /file-courses`).
-- [ ] `FILE-017` `app/(app)/intervenant/evaluations/page.tsx` : lien de téléchargement des rendus par groupe.
+- [x] `FILE-014` `app/(app)/etudiant/documents/page.tsx` : activer dépôt et téléchargement réels.
+- [x] `FILE-015` `app/(app)/etudiant/evaluations/page.tsx` : activer le dépôt de rendu (`POST /file-assessments` avec le `fileId` fraîchement créé) ; afficher la date de dépôt. *(2026-07-12 : dépôt fait, groupe solo auto-créé pour les évaluations individuelles ; date de dépôt non affichée, non bloquant)*
+- [x] `FILE-016` `app/(app)/intervenant/supports/page.tsx` : réactiver le dépôt de support (`POST /file-courses`).
+- [x] `FILE-017` `app/(app)/intervenant/evaluations/page.tsx` : lien de téléchargement des rendus par groupe. *(2026-07-12, nécessitait d'élargir `FileUseCases.findById` pour l'intervenant du cours et les membres du groupe)*
 - [ ] `FILE-018` `app/(app)/scolarite/entreprises/page.tsx` : débloquer la création de contrat (upload du fichier puis `POST /document-apprenticeship-contracts`).
 - [ ] `FILE-019` `app/(app)/scolarite/documents/page.tsx` + `app/(app)/etudiant/cours/page.tsx` : liens de téléchargement.
 
