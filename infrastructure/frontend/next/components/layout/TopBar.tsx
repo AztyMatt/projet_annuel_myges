@@ -62,7 +62,7 @@ const roleBadge: Record<Role, { label: string; className: string }> = {
 
 export function TopBar() {
     const pathname = usePathname();
-    const me = useCurrentUser();
+    const { user: me } = useCurrentUser();
     const title = pageTitles[pathname] ?? "MyGES 2.0";
     const role = getRole(pathname, me?.role);
     const badge = roleBadge[role];
