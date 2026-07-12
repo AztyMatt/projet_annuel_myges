@@ -1,0 +1,69 @@
+import { and, eq } from "drizzle-orm";
+import { type ProgramModuleRepository } from "@application/program/program-module/program-module.repository";
+import { type ProgramModule } from "@domain/program/program-module/program-module.entity";
+import { db } from "@express/src/postgres/db";
+import { programModule as programModuleTable } from "@express/src/postgres/schema/program-module";
+
+function rowToProgramModule(row: typeof programModuleTable.$inferSelect): ProgramModule {
+    return {
+        id: row.id,
+        programId: row.programId,
+        moduleId: row.moduleId,
+        coefficient: row.coefficient,
+        ectsCredits: row.ectsCredits,
+    };
+}
+
+export const programModuleRepository: ProgramModuleRepository = {
+    async findById(id) {
+        const result = await db.select().from(programModuleTable).where(eq(programModuleTable.id, id)).limit(1);
+        return result[0] ? rowToProgramModule(result[0]) : undefined;
+    },
+    async findByProgramId(programId) {
+        const result = await db.select().from(programModuleTable).where(eq(programModuleTable.programId, programId));
+        return result.map(rowToProgramModule);
+    },
+    async existsByProgramId(programId) {
+        const rows = await db.select({ id: programModuleTable.id }).from(programModuleTable).where(eq(programModuleTable.programId, programId)).limit(1);
+        return rows.length > 0;
+    },
+    async findByModuleId(moduleId) {
+        const result = await db.select().from(programModuleTable).where(eq(programModuleTable.moduleId, moduleId));
+        return result.map(rowToProgramModule);
+    },
+    async existsByModuleId(moduleId) {
+        const rows = await db.select({ id: programModuleTable.id }).from(programModuleTable).where(eq(programModuleTable.moduleId, moduleId)).limit(1);
+        return rows.length > 0;
+    },
+    async findByProgramAndModule(programId, moduleId) {
+        const result = await db
+            .select()
+            .from(programModuleTable)
+            .where(and(eq(programModuleTable.programId, programId), eq(programModuleTable.moduleId, moduleId)))
+            .limit(1);
+        return result[0] ? rowToProgramModule(result[0]) : undefined;
+    },
+    async save(programModule) {
+        await db
+            .insert(programModuleTable)
+            .values({
+                id: programModule.id,
+                programId: programModule.programId,
+                moduleId: programModule.moduleId,
+                coefficient: programModule.coefficient,
+                ectsCredits: programModule.ectsCredits,
+            })
+            .onConflictDoUpdate({
+                target: programModuleTable.id,
+                set: {
+                    programId: programModule.programId,
+                    moduleId: programModule.moduleId,
+                    coefficient: programModule.coefficient,
+                    ectsCredits: programModule.ectsCredits,
+                },
+            });
+    },
+    async deleteById(id) {
+        await db.delete(programModuleTable).where(eq(programModuleTable.id, id));
+    },
+};

@@ -1,0 +1,62 @@
+import { and, asc, eq } from "drizzle-orm";
+import { type ClassroomRepository } from "@application/classroom/classroom.repository";
+import { type Classroom } from "@domain/classroom/classroom.entity";
+import { db } from "@express/src/postgres/db";
+import { classroom as classroomTable } from "@express/src/postgres/schema/classroom";
+
+function rowToClassroom(row: typeof classroomTable.$inferSelect): Classroom {
+    return {
+        id: row.id,
+        name: row.name,
+        capacity: row.capacity,
+        campusId: row.campusId,
+    };
+}
+
+export const classroomRepository: ClassroomRepository = {
+    async findById(id) {
+        const result = await db.select().from(classroomTable).where(eq(classroomTable.id, id)).limit(1);
+        return result[0] ? rowToClassroom(result[0]) : undefined;
+    },
+    async findByCampusId(campusId) {
+        const result = await db.select().from(classroomTable).where(eq(classroomTable.campusId, campusId));
+        return result.map(rowToClassroom);
+    },
+    async existsByCampusId(campusId) {
+        const rows = await db.select({ id: classroomTable.id }).from(classroomTable).where(eq(classroomTable.campusId, campusId)).limit(1);
+        return rows.length > 0;
+    },
+    async findByCampusAndName(campusId, name) {
+        const result = await db
+            .select()
+            .from(classroomTable)
+            .where(and(eq(classroomTable.campusId, campusId), eq(classroomTable.name, name)))
+            .limit(1);
+        return result[0] ? rowToClassroom(result[0]) : undefined;
+    },
+    async save(classroom) {
+        await db
+            .insert(classroomTable)
+            .values({
+                id: classroom.id,
+                name: classroom.name,
+                capacity: classroom.capacity,
+                campusId: classroom.campusId,
+            })
+            .onConflictDoUpdate({
+                target: classroomTable.id,
+                set: {
+                    name: classroom.name,
+                    capacity: classroom.capacity,
+                    campusId: classroom.campusId,
+                },
+            });
+    },
+    async deleteById(id) {
+        await db.delete(classroomTable).where(eq(classroomTable.id, id));
+    },
+    async list() {
+        const result = await db.select().from(classroomTable).orderBy(asc(classroomTable.name));
+        return result.map(rowToClassroom);
+    },
+};

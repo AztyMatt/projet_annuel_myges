@@ -1,37 +1,41 @@
 {
-  "name": "projet_annuel_myges",
-  "version": "1.0.0",
-  "description": "",
-  "private": true,
-  "workspaces": [
-    "domain",
-    "application",
-    "infrastructure/*",
-    "infrastructure/backend/express",
-    "infrastructure/frontend/next"
-  ],
-  "scripts": {
-    "dev:express": "npm run dev --workspace=@myges/express",
-    "build:express": "npm run build --workspace=@myges/express",
-    "start:express": "npm run start --workspace=@myges/express",
-    "dev:next": "npm run dev --workspace=@myges/next",
-    "start:next": "npm run start --workspace=@myges/next"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/ludovicMAK/projet_annuel_myges.git"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/ludovicMAK/projet_annuel_myges/issues"
-  },
-  "homepage": "https://github.com/ludovicMAK/projet_annuel_myges#readme",
-  "devDependencies": {
-    "ts-node": "^10.9.2",
-    "tsconfig-paths": "^4.2.0",
-    "tsx": "^4.19.3",
-    "typescript": "^6.0.2"
-  }
+    "name": "projet_annuel_myges",
+    "version": "1.0.0",
+    "description": "",
+    "private": true,
+    "workspaces": [
+        "domain",
+        "application",
+        "infrastructure/*",
+        "infrastructure/backend/express",
+        "infrastructure/frontend/next"
+    ],
+    "scripts": {
+        "dev:express": "npm run dev --workspace=@myges/express",
+        "build:express": "npm run build --workspace=@myges/express",
+        "start:express": "npm run start --workspace=@myges/express",
+        "dev:next": "npm run dev --workspace=@myges/next",
+        "start:next": "npm run start --workspace=@myges/next",
+        "db:generate": "npm run db:generate --workspace=@myges/express",
+        "db:migrate": "npm run db:migrate --workspace=@myges/express",
+        "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,yaml,yml}\""
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/ludovicMAK/projet_annuel_myges.git"
+    },
+    "keywords": [],
+    "author": "",
+    "license": "ISC",
+    "bugs": {
+        "url": "https://github.com/ludovicMAK/projet_annuel_myges/issues"
+    },
+    "homepage": "https://github.com/ludovicMAK/projet_annuel_myges#readme",
+    "devDependencies": {
+        "prettier": "^3.8.3",
+        "ts-node": "^10.9.2",
+        "tsconfig-paths": "^4.2.0",
+        "tsx": "^4.19.3",
+        "typescript": "^6.0.2"
+    }
 }

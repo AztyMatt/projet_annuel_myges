@@ -5,7 +5,6 @@ on:
   push:
     branches: [main, develop]
 
-
 jobs:
   build:
     name: ${{ github.ref == 'refs/heads/main' && 'Build & Push' || 'Build' }} ${{ matrix.service }}

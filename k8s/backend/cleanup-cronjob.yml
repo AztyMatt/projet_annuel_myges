@@ -1,0 +1,31 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: cleanup-2fa-sessions
+  namespace: backend
+spec:
+  schedule: "0 3 * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: cleanup
+              image: curlimages/curl:latest
+              command:
+                - curl
+                - --fail
+                - --silent
+                - --show-error
+                - -X
+                - POST
+                - http://backend.backend.svc.cluster.local:3001/admin/auth/cleanup-sessions
+                - -H
+                - "Authorization: Bearer $(CRON_SECRET)"
+              env:
+                - name: CRON_SECRET
+                  valueFrom:
+                    secretKeyRef:
+                      name: backend-generated-secrets
+                      key: CRON_SECRET

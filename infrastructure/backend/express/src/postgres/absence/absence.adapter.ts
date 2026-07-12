@@ -1,0 +1,82 @@
+import { and, desc, eq } from "drizzle-orm";
+import { type AbsenceRepository } from "@application/absence/absence.repository";
+import { type Absence } from "@domain/absence/absence.entity";
+import { BasicStatus } from "@domain/absence/absence.enums";
+import { assertEnum } from "@express/src/postgres/assert-enum";
+import { db } from "@express/src/postgres/db";
+import { absence as absenceTable } from "@express/src/postgres/schema/absence";
+
+function rowToAbsence(row: typeof absenceTable.$inferSelect): Absence {
+    return {
+        id: row.id,
+        studentId: row.studentId,
+        sessionId: row.sessionId,
+        reason: row.reason,
+        status: assertEnum(row.status, BasicStatus),
+        declaredAt: row.declaredAt,
+    };
+}
+
+export const absenceRepository: AbsenceRepository = {
+    async findById(id) {
+        const result = await db.select().from(absenceTable).where(eq(absenceTable.id, id)).limit(1);
+        return result[0] ? rowToAbsence(result[0]) : undefined;
+    },
+    async findByStudentId(studentId) {
+        const result = await db
+            .select()
+            .from(absenceTable)
+            .where(eq(absenceTable.studentId, studentId))
+            .orderBy(desc(absenceTable.declaredAt));
+        return result.map(rowToAbsence);
+    },
+    async existsByStudentId(studentId) {
+        const rows = await db.select({ id: absenceTable.id }).from(absenceTable).where(eq(absenceTable.studentId, studentId)).limit(1);
+        return rows.length > 0;
+    },
+    async findBySessionId(sessionId) {
+        const result = await db.select().from(absenceTable).where(eq(absenceTable.sessionId, sessionId));
+        return result.map(rowToAbsence);
+    },
+    async existsBySessionId(sessionId) {
+        const rows = await db.select({ id: absenceTable.id }).from(absenceTable).where(eq(absenceTable.sessionId, sessionId)).limit(1);
+        return rows.length > 0;
+    },
+    async findByStudentAndSession(studentId, sessionId) {
+        const result = await db
+            .select()
+            .from(absenceTable)
+            .where(and(eq(absenceTable.studentId, studentId), eq(absenceTable.sessionId, sessionId)))
+            .limit(1);
+        return result[0] ? rowToAbsence(result[0]) : undefined;
+    },
+    async save(absence) {
+        await db
+            .insert(absenceTable)
+            .values({
+                id: absence.id,
+                studentId: absence.studentId,
+                sessionId: absence.sessionId,
+                reason: absence.reason,
+                status: absence.status,
+                declaredAt: absence.declaredAt,
+            })
+            .onConflictDoUpdate({
+                target: absenceTable.id,
+                set: {
+                    studentId: absence.studentId,
+                    sessionId: absence.sessionId,
+                    reason: absence.reason,
+                    status: absence.status,
+                    declaredAt: absence.declaredAt,
+                },
+            });
+    },
+    async deleteById(id) {
+        await db.delete(absenceTable).where(eq(absenceTable.id, id));
+    },
+    async list() {
+        const result = await db.select().from(absenceTable).orderBy(desc(absenceTable.declaredAt));
+        return result.map(rowToAbsence);
+    },
+};
