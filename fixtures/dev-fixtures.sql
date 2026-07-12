@@ -233,21 +233,28 @@ INSERT INTO "course" ("id", "instructor_id", "module_id", "group_id", "bloc_id",
 
 -- =====================================================================================
 -- Sessions (2 par cours : 1 passée, 1 future)
+-- Ancrées sur le lundi de la semaine en cours / prochaine (date_trunc('week', now()) tombe
+-- toujours un lundi) plutôt que sur un simple décalage en jours, pour ne jamais retomber sur
+-- un week-end et rester visibles dans le planning par défaut (semaine en cours = passé proche,
+-- semaine prochaine = futur proche) quel que soit le jour où ce fichier est chargé.
 -- =====================================================================================
 
+-- Chaque cours alterne présentiel/distanciel entre sa séance passée et sa séance future
+-- (au lieu d'un mode figé par cours) pour que le filtre "Distanciel" du planning ait toujours
+-- quelque chose à montrer, quel que soit le cours/groupe consulté.
 INSERT INTO "session" ("id", "course_id", "start_time", "end_time", "mode", "classroom_id") VALUES
-('fx_session_1a', 'fx_course_1', (now() - interval '14 days')::date + time '09:00', (now() - interval '14 days')::date + time '10:30', 'ON_SITE', 'fx_room_101'),
-('fx_session_1b', 'fx_course_1', (now() + interval '7 days')::date + time '09:00', (now() + interval '7 days')::date + time '10:30', 'ON_SITE', 'fx_room_101'),
-('fx_session_2a', 'fx_course_2', (now() - interval '13 days')::date + time '11:00', (now() - interval '13 days')::date + time '12:30', 'REMOTE', NULL),
-('fx_session_2b', 'fx_course_2', (now() + interval '8 days')::date + time '11:00', (now() + interval '8 days')::date + time '12:30', 'REMOTE', NULL),
-('fx_session_3a', 'fx_course_3', (now() - interval '12 days')::date + time '14:00', (now() - interval '12 days')::date + time '15:30', 'ON_SITE', 'fx_room_102'),
-('fx_session_3b', 'fx_course_3', (now() + interval '9 days')::date + time '14:00', (now() + interval '9 days')::date + time '15:30', 'ON_SITE', 'fx_room_102'),
-('fx_session_4a', 'fx_course_4', (now() - interval '14 days')::date + time '09:00', (now() - interval '14 days')::date + time '10:30', 'ON_SITE', 'fx_room_101'),
-('fx_session_4b', 'fx_course_4', (now() + interval '7 days')::date + time '09:00', (now() + interval '7 days')::date + time '10:30', 'ON_SITE', 'fx_room_101'),
-('fx_session_5a', 'fx_course_5', (now() - interval '13 days')::date + time '11:00', (now() - interval '13 days')::date + time '12:30', 'REMOTE', NULL),
-('fx_session_5b', 'fx_course_5', (now() + interval '8 days')::date + time '11:00', (now() + interval '8 days')::date + time '12:30', 'REMOTE', NULL),
-('fx_session_6a', 'fx_course_6', (now() - interval '12 days')::date + time '14:00', (now() - interval '12 days')::date + time '15:30', 'ON_SITE', 'fx_room_102'),
-('fx_session_6b', 'fx_course_6', (now() + interval '9 days')::date + time '14:00', (now() + interval '9 days')::date + time '15:30', 'ON_SITE', 'fx_room_102');
+('fx_session_1a', 'fx_course_1', (date_trunc('week', now()))::date + time '09:00', (date_trunc('week', now()))::date + time '10:30', 'ON_SITE', 'fx_room_101'),
+('fx_session_1b', 'fx_course_1', (date_trunc('week', now()) + interval '7 days')::date + time '09:00', (date_trunc('week', now()) + interval '7 days')::date + time '10:30', 'REMOTE', NULL),
+('fx_session_2a', 'fx_course_2', (date_trunc('week', now()) + interval '1 days')::date + time '11:00', (date_trunc('week', now()) + interval '1 days')::date + time '12:30', 'REMOTE', NULL),
+('fx_session_2b', 'fx_course_2', (date_trunc('week', now()) + interval '8 days')::date + time '11:00', (date_trunc('week', now()) + interval '8 days')::date + time '12:30', 'ON_SITE', 'fx_room_101'),
+('fx_session_3a', 'fx_course_3', (date_trunc('week', now()) + interval '2 days')::date + time '14:00', (date_trunc('week', now()) + interval '2 days')::date + time '15:30', 'ON_SITE', 'fx_room_102'),
+('fx_session_3b', 'fx_course_3', (date_trunc('week', now()) + interval '9 days')::date + time '14:00', (date_trunc('week', now()) + interval '9 days')::date + time '15:30', 'REMOTE', NULL),
+('fx_session_4a', 'fx_course_4', (date_trunc('week', now()) + interval '3 days')::date + time '09:00', (date_trunc('week', now()) + interval '3 days')::date + time '10:30', 'REMOTE', NULL),
+('fx_session_4b', 'fx_course_4', (date_trunc('week', now()) + interval '10 days')::date + time '09:00', (date_trunc('week', now()) + interval '10 days')::date + time '10:30', 'ON_SITE', 'fx_room_101'),
+('fx_session_5a', 'fx_course_5', (date_trunc('week', now()) + interval '4 days')::date + time '11:00', (date_trunc('week', now()) + interval '4 days')::date + time '12:30', 'ON_SITE', 'fx_room_102'),
+('fx_session_5b', 'fx_course_5', (date_trunc('week', now()) + interval '11 days')::date + time '11:00', (date_trunc('week', now()) + interval '11 days')::date + time '12:30', 'REMOTE', NULL),
+('fx_session_6a', 'fx_course_6', (date_trunc('week', now()))::date + time '14:00', (date_trunc('week', now()))::date + time '15:30', 'REMOTE', NULL),
+('fx_session_6b', 'fx_course_6', (date_trunc('week', now()) + interval '7 days')::date + time '14:00', (date_trunc('week', now()) + interval '7 days')::date + time '15:30', 'ON_SITE', 'fx_room_102');
 
 -- =====================================================================================
 -- Évaluations (1 par cours)
@@ -379,11 +386,11 @@ INSERT INTO "grade_manual_notation" ("id", "grade_id", "grade_manual_id") VALUES
 -- =====================================================================================
 
 INSERT INTO "absence" ("id", "student_id", "session_id", "reason", "status", "declared_at") VALUES
-('fx_absence_1', 'fx_student_2', 'fx_session_1a', 'Maladie', 'VALIDATED', now() - interval '13 days'),
-('fx_absence_2', 'fx_student_5', 'fx_session_2a', 'Rendez-vous medical', 'PENDING', now() - interval '12 days'),
-('fx_absence_3', 'fx_student_7', 'fx_session_3a', 'Probleme de transport', 'REJECTED', now() - interval '11 days'),
-('fx_absence_4', 'fx_student_10', 'fx_session_4a', 'Raison familiale', 'PENDING', now() - interval '13 days'),
-('fx_absence_5', 'fx_student_14', 'fx_session_5a', 'Entretien professionnel', 'VALIDATED', now() - interval '12 days');
+('fx_absence_1', 'fx_student_2', 'fx_session_1a', 'Maladie', 'VALIDATED', date_trunc('week', now())),
+('fx_absence_2', 'fx_student_5', 'fx_session_2a', 'Rendez-vous medical', 'PENDING', date_trunc('week', now()) + interval '1 days'),
+('fx_absence_3', 'fx_student_7', 'fx_session_3a', 'Probleme de transport', 'REJECTED', date_trunc('week', now()) + interval '2 days'),
+('fx_absence_4', 'fx_student_10', 'fx_session_4a', 'Raison familiale', 'PENDING', date_trunc('week', now()) + interval '3 days'),
+('fx_absence_5', 'fx_student_14', 'fx_session_5a', 'Entretien professionnel', 'VALIDATED', date_trunc('week', now()) + interval '4 days');
 
 -- =====================================================================================
 -- Entreprises et externes
