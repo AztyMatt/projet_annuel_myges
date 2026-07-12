@@ -52,6 +52,7 @@ async function loadStudentSessions(): Promise<CalendarSession[]> {
 
     const moduleCache = new Map<string, string>();
     const classroomCache = new Map<string, string>();
+    const campusCache = new Map<string, string>();
     const sessions: CalendarSession[] = [];
 
     for (const sg of studentGroups) {
@@ -72,8 +73,12 @@ async function loadStudentSessions(): Promise<CalendarSession[]> {
                 let room = "Distanciel";
                 if (session.mode === "ON_SITE" && session.classroomId) {
                     if (!classroomCache.has(session.classroomId)) {
-                        const classroom = await api.get<{ name: string }>(`/classrooms/${session.classroomId}`);
-                        classroomCache.set(session.classroomId, classroom.name);
+                        const classroom = await api.get<{ name: string; campusId: string }>(`/classrooms/${session.classroomId}`);
+                        if (!campusCache.has(classroom.campusId)) {
+                            const campus = await api.get<{ name: string }>(`/campuses/${classroom.campusId}`);
+                            campusCache.set(classroom.campusId, campus.name);
+                        }
+                        classroomCache.set(session.classroomId, `${campusCache.get(classroom.campusId)} — ${classroom.name}`);
                     }
                     room = classroomCache.get(session.classroomId)!;
                 }
@@ -225,6 +230,7 @@ export default function PlanningEtudiant() {
                                     return (
                                         <div
                                             key={session.id}
+                                            title={`${session.moduleName} — ${session.room}`}
                                             className={cn(
                                                 "absolute left-1 right-1 rounded-lg border px-2 py-1.5 overflow-hidden cursor-pointer hover:shadow-md transition-shadow",
                                                 cfg.bg,

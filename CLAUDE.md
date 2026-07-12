@@ -39,7 +39,7 @@ Il a été construit en confrontant ces deux documents au **code réel** (backen
 
 Next.js (frontend) · Express.js (backend) · PostgreSQL + Drizzle (ORM) · Docker Compose (dev) / Kubernetes (prod) · Traefik (prod) / Nginx (dev) · Infisical (secrets) · GHCR (registre Docker).
 
-**Fixtures de dev** : `fixtures/dev-fixtures.sql` — jeu de données réaliste (16 étudiants, 4 intervenants, 2 filières, notes, absences, examens...) à charger via `docker compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" < fixtures/dev-fixtures.sql` (voir l'en-tête du fichier pour les identifiants de test).
+**Fixtures de dev** : `fixtures/dev-fixtures.sql` — jeu de données réaliste (16 étudiants, 4 intervenants, 2 filières, notes, absences, examens...) à charger via `docker compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" < fixtures/dev-fixtures.sql` (voir l'en-tête du fichier pour les identifiants de test). Les sessions sont ancrées sur `date_trunc('week', now())` (lundi de la semaine en cours/prochaine) plutôt que sur un décalage fixe en jours — corrigé le 2026-07-12 après qu'un décalage fixe soit tombé un dimanche, rendant `/etudiant/planning` vide par défaut (aucun bug applicatif, juste des données de test mal calées). Chaque cours alterne présentiel/distanciel entre sa séance passée et sa séance future (6 `ON_SITE` / 6 `REMOTE` au total) plutôt qu'un mode figé par cours, pour que le filtre "Distanciel" ait toujours quelque chose à montrer.
 
 ---
 
@@ -236,6 +236,7 @@ Seulement 4 rôles (pas les 6-7 décrits dans `cahierDesCharges.md` §2, l'admin
 - [x] **`/etudiant/planning`** — emploi du temps §3.1, reconnecté
   - Chaîne réelle : `students/me` → `student-groups` → `groups/:id/courses` → `courses/:id/sessions`, grille semaine avec navigation
   - Seuls deux modes existent réellement côté backend (`ON_SITE`/`REMOTE`) — pas de mode "entreprise" dédié dans `SessionMode`, retiré du filtre/légende (une journée entreprise = simplement l'absence de session)
+  - **Bug corrigé (2026-07-12)** : le lieu affiché n'était que le nom court de la salle (ex. `P101`), sans le campus — impossible de savoir où se rendre si l'école a plusieurs campus. Résolution de `classroom.campusId` → `campus.name` ajoutée, affichage désormais `Campus Paris — P101` (+ `title` avec le nom complet du module en cas de troncature)
 
 - [x] **`/etudiant/notes`** — notes et moyennes §3.2, reconnecté
   - Chaque note (`Grade`) n'est liée à un module qu'indirectement (`grade-assessment` / `grade-session-exam` / `grade-manual-notation` → remonter jusqu'au module) — logique de résolution écrite dans la page
@@ -268,6 +269,7 @@ Seulement 4 rôles (pas les 6-7 décrits dans `cahierDesCharges.md` §2, l'admin
 
 - [x] **`/intervenant/planning`** — mon planning §3.1, reconnecté (`courses/mine` → `courses/:id/sessions`, avec nom de groupe et effectif réels)
   - Non fait : détail session avec présence/absent en un clic (nécessite `/intervenant/notes`-like UI, laissé pour une prochaine itération)
+  - **Bug corrigé (2026-07-12)** : même gap de lieu que `/etudiant/planning` (campus manquant) ; en plus, le lieu ne s'affichait que si la carte dépassait 90px de haut (~1h36 de cours), donc quasiment jamais visible pour une séance standard de 1h30. Seuil abaissé à 40px (même règle que côté étudiant) et lieu affiché avant le groupe/effectif
 
 - [x] **`/intervenant/notes`** — régression corrigée, reconnectée
   - Sélecteur cours (`courses/mine`) → évaluation (`courses/:id/assessments`) → roster du groupe (`groups/:id/students`), notes résolues via `grade-assessments/assessment/:id` + `grades/:id`
