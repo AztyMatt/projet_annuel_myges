@@ -16,6 +16,7 @@ import { type StorageService } from "@application/file/storage.service";
 import { type UnitOfWork } from "@application/types/unit-of-work";
 import { type AuthContext } from "@application/types/auth-context";
 import { NotFound, Forbidden, ForbiddenOwnership } from "@application/types/results";
+import { type NotificationUseCases } from "@application/notification/notification.use-cases";
 
 export type AbsenceView = {
     id: string;
@@ -70,6 +71,7 @@ export class AbsenceUseCases {
         private readonly courses: CourseRepository,
         private readonly instructors: InstructorRepository,
         private readonly studentGroups: StudentGroupRepository,
+        private readonly notifications: NotificationUseCases,
     ) {}
 
     async declare(
@@ -116,6 +118,17 @@ export class AbsenceUseCases {
         if (absence.status !== BasicStatus.PENDING && !auth.isSuperAdmin) return { kind: "absence_already_processed" };
         absence.status = BasicStatus.VALIDATED;
         await this.absences.save(absence);
+        const student = await this.students.findById(absence.studentId);
+        if (student) {
+            await this.notifications.notify({
+                userId: student.userId,
+                type: "ABSENCE_VALIDATED",
+                title: "Absence validée",
+                body: "Votre absence a été validée par l'administration.",
+                entityName: "absence",
+                entityId: absence.id,
+            });
+        }
         return { kind: "absence_validated", absence: toView(absence) };
     }
 
@@ -127,6 +140,17 @@ export class AbsenceUseCases {
         if (absence.status !== BasicStatus.PENDING && !auth.isSuperAdmin) return { kind: "absence_already_processed" };
         absence.status = BasicStatus.REJECTED;
         await this.absences.save(absence);
+        const student = await this.students.findById(absence.studentId);
+        if (student) {
+            await this.notifications.notify({
+                userId: student.userId,
+                type: "ABSENCE_REJECTED",
+                title: "Absence rejetée",
+                body: "Votre absence a été rejetée par l'administration.",
+                entityName: "absence",
+                entityId: absence.id,
+            });
+        }
         return { kind: "absence_rejected", absence: toView(absence) };
     }
 

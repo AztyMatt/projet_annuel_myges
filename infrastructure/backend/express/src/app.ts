@@ -27,6 +27,7 @@ import { externalRouter } from "@express/src/external/routes";
 import { fileRouter } from "@express/src/file/routes";
 import { documentRouter } from "@express/src/document/routes";
 import { auditLogRouter } from "@express/src/audit-log/routes";
+import { notificationRouter } from "@express/src/notification/routes";
 import { send } from "@express/src/http/responses";
 
 const routers = [
@@ -57,6 +58,7 @@ const routers = [
     documentRouter,
     auditLogRouter,
     planningRouter,
+    notificationRouter,
 ];
 
 export const app = express();
