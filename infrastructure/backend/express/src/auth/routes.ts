@@ -279,6 +279,14 @@ authRouter.get("/users/me", ...authed(async (request, response) => {
     send(response, { status: httpResponse.status, body: httpResponse.body });
 }));
 
+authRouter.get("/users/:id", ...authed(async (request, response) => {
+    const result = await authUseCases.findPublicProfile(String(request.params.id));
+    respond(response, result, {
+        user_not_found: { status: 404, error: "Utilisateur introuvable" },
+        user_found: (r) => ({ status: 200, body: r.user }),
+    });
+}));
+
 authRouter.get("/admin/security/users", ...authed(async (request, response) => {
         const auth = getAuthFlags(request.auth);
         const result = await authUseCases.listUsersForAdmin(auth);

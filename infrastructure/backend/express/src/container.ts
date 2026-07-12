@@ -101,7 +101,7 @@ export const authUseCases = new AuthUseCases(
 );
 
 export const adminUseCases = new AdminUseCases(adminRepository, userRepository);
-export const studentUseCases = new StudentUseCases(studentRepository, studentGroupRepository, absenceRepository, sessionExamStudentRepository, assessmentGroupMemberRepository, fileDocumentRepository, userRepository, programRepository);
+export const studentUseCases = new StudentUseCases(studentRepository, studentGroupRepository, absenceRepository, sessionExamStudentRepository, assessmentGroupMemberRepository, fileDocumentRepository, userRepository, programRepository, courseRepository, instructorRepository);
 export const instructorUseCases = new InstructorUseCases(instructorRepository, courseRepository, sessionExamInstructorRepository, userRepository);
 export const campusUseCases = new CampusUseCases(campusRepository, classroomRepository);
 export const classroomUseCases = new ClassroomUseCases(classroomRepository, sessionRepository, campusRepository);
