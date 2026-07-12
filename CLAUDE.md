@@ -32,10 +32,14 @@ Il a été construit en confrontant ces deux documents au **code réel** (backen
 - [ ] **CronJob 2FA en 404** — `k8s/backend/cleanup-cronjob.yml` appelle l'URL sans le préfixe `/api` (les routeurs sont montés sous `/api`, `app.ts:65`) → `K8S-001`
 - [ ] **Journal d'audit jamais alimenté** — l'API `GET /audit-logs` et les pages `/superadmin/*` existent mais aucun code n'écrit dans la table `audit_log` → `AUD-001…010`
 - [ ] Dépôt git imbriqué `infrastructure/frontend/next/.git` à supprimer (les fichiers sont bien suivis par le dépôt parent) → `TECH-001`
+- [ ] **`/etudiant/notes` plante pour toute note liée via `manual_notation`** — la page appelle `GET /manual-notations/:id` pour résoudre le nom du module, mais ce endpoint est réservé admin/intervenant-du-module (`canManageModuleNotations` dans `grade.use-cases.ts`) ; l'étudiant se prend un 403 et **ne voit plus aucune note du tout**, pas juste celle-là. Découvert le 2026-07-12 en peuplant la base avec `fixtures/dev-fixtures.sql` (jamais détecté avant faute de compte étudiant de test avec de vraies notes en contrôle continu) → `NOTE-002`
+- [ ] **Migration Drizzle `0006_abnormal_nemesis.sql` éditée après application** — son timestamp dans `meta/_journal.json` ne correspond plus à celui enregistré dans `drizzle.__drizzle_migrations` sur les bases déjà migrées, donc le backend **replante au démarrage** dès qu'on `docker compose restart backend` (Drizzle rejoue tout le fichier et échoue sur `CREATE TABLE password_reset_tokens` déjà existante). Corrigé uniquement sur la base locale de cette session (ALTER TABLE manquants rejoués à la main + `created_at` resynchronisé) ; **chaque poste de l'équipe qui a déjà cette migration appliquée percutera le même crash** à son prochain restart tant que ce n'est pas corrigé chez lui de la même façon. Ne plus jamais éditer un fichier de migration déjà appliqué — toujours en générer un nouveau → `TECH-002`
 
 ## Stack (rappel, voir `README.md` pour le détail)
 
 Next.js (frontend) · Express.js (backend) · PostgreSQL + Drizzle (ORM) · Docker Compose (dev) / Kubernetes (prod) · Traefik (prod) / Nginx (dev) · Infisical (secrets) · GHCR (registre Docker).
+
+**Fixtures de dev** : `fixtures/dev-fixtures.sql` — jeu de données réaliste (16 étudiants, 4 intervenants, 2 filières, notes, absences, examens...) à charger via `docker compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" < fixtures/dev-fixtures.sql` (voir l'en-tête du fichier pour les identifiants de test).
 
 ---
 
