@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Clock, CheckCircle, AlertTriangle, Users } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Clock, CheckCircle, AlertTriangle, Users, Upload } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import { StatusBadge, type StatusTone } from "@/components/ui/status-badge";
 
@@ -65,6 +65,9 @@ export default function EvaluationsEtudiant() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [formingId, setFormingId] = useState<string | null>(null);
+    const [uploadingId, setUploadingId] = useState<string | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const uploadTargetRef = useRef<Row | null>(null);
 
     const refresh = async () => {
         setLoading(true);
@@ -83,12 +86,17 @@ export default function EvaluationsEtudiant() {
         void refresh();
     }, []);
 
+    const formGroup = async (assessmentId: string): Promise<string> => {
+        const student = await api.get<{ id: string }>("/students/me");
+        const group = await api.post<{ id: string }>("/assessment-groups", { assessmentId });
+        await api.post("/assessment-group-members", { assessmentGroupId: group.id, studentId: student.id });
+        return group.id;
+    };
+
     const handleFormGroup = async (assessmentId: string) => {
         setFormingId(assessmentId);
         try {
-            const student = await api.get<{ id: string }>("/students/me");
-            const group = await api.post<{ id: string }>("/assessment-groups", { assessmentId });
-            await api.post("/assessment-group-members", { assessmentGroupId: group.id, studentId: student.id });
+            await formGroup(assessmentId);
             await refresh();
         } catch (e) {
             setError(e instanceof ApiError ? e.message : "Formation du groupe impossible.");
@@ -97,15 +105,41 @@ export default function EvaluationsEtudiant() {
         }
     };
 
+    const openFilePicker = (row: Row) => {
+        uploadTargetRef.current = row;
+        fileInputRef.current?.click();
+    };
+
+    const handleFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        const row = uploadTargetRef.current;
+        e.target.value = "";
+        if (!file || !row) return;
+
+        setUploadingId(row.id);
+        setError("");
+        try {
+            const groupId = row.myGroupId ?? (await formGroup(row.id));
+            const uploaded = await api.upload<{ id: string }>("/files/upload", file);
+            await api.post("/file-assessments", { assessmentId: row.id, assessmentGroupId: groupId, fileId: uploaded.id });
+            await refresh();
+        } catch (e) {
+            setError(e instanceof ApiError ? e.message : "Le dépôt du rendu a échoué.");
+        } finally {
+            setUploadingId(null);
+        }
+    };
+
     return (
         <div className="space-y-6 max-w-4xl">
             <div>
                 <h2 className="text-2xl font-bold text-gray-900">Évaluations</h2>
                 <p className="text-sm text-gray-500 mt-1">
-                    Le dépôt de rendu dépend de l&apos;upload de fichiers, pas encore implémenté côté backend (voir
-                    CLAUDE.md) — cette page affiche les échéances et permet de former votre groupe.
+                    Échéances de vos évaluations publiées — formez votre groupe si nécessaire puis déposez votre rendu.
                 </p>
             </div>
+
+            <input ref={fileInputRef} type="file" className="hidden" onChange={(e) => void handleFileSelected(e)} />
 
             {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl p-4">{error}</div>}
             {loading && <p className="text-sm text-gray-400">Chargement…</p>}
@@ -116,6 +150,7 @@ export default function EvaluationsEtudiant() {
                     {rows.map((row) => {
                         const s = statusOf(row);
                         const SIcon = s.icon;
+                        const canSubmit = !row.hasSubmission && new Date(row.dueDate) > new Date();
                         return (
                             <div key={row.id} className="flex items-center gap-4 px-5 py-4">
                                 <div className="flex-1 min-w-0">
@@ -138,6 +173,15 @@ export default function EvaluationsEtudiant() {
                                             <Users size={12} /> Former mon groupe
                                         </button>
                                     )
+                                )}
+                                {canSubmit && (
+                                    <button
+                                        onClick={() => openFilePicker(row)}
+                                        disabled={uploadingId === row.id}
+                                        className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 disabled:opacity-50"
+                                    >
+                                        <Upload size={12} /> {uploadingId === row.id ? "Envoi…" : "Déposer un rendu"}
+                                    </button>
                                 )}
                                 <StatusBadge tone={s.tone} icon={SIcon} className="flex-shrink-0">{s.label}</StatusBadge>
                             </div>

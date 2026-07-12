@@ -404,6 +404,19 @@ export class FileUseCases {
             }
         }
 
+        // Un rendu d'évaluation est uploadé par un membre du groupe : on l'autorise aussi pour
+        // l'intervenant qui enseigne le cours et pour les autres membres du même groupe.
+        const fileAssessment = await this.fileAssessments.findByFileId(id);
+        if (fileAssessment) {
+            const assessment = await this.assessments.findById(fileAssessment.assessmentId);
+            if (assessment && (await isCourseInstructor({ courses: this.courses, instructors: this.instructors }, assessment.courseId, auth.requesterId))) {
+                return { kind: "file_found", file: toFileView(file) };
+            }
+            if (student && (await this.assessmentGroupMembers.findByGroupAndStudent(fileAssessment.assessmentGroupId, student.id))) {
+                return { kind: "file_found", file: toFileView(file) };
+            }
+        }
+
         return NotFound;
     }
 
