@@ -20,7 +20,7 @@ blocRouter.get("/blocs", ...authed(async (_req, res) => {
 blocRouter.get("/blocs/:id", ...authed(async (req, res) => {
     const result = await blocUseCases.findById(String(req.params.id));
     respond(res, result, {
-        not_found: { status: 404, error: "Bloc not found" },
+        not_found: { status: 404, error: "Bloc introuvable" },
         bloc_found: (r) => ({ status: 200, body: r.bloc }),
     });
 }));
@@ -29,8 +29,8 @@ blocRouter.post("/blocs", ...authed(async (req, res) => {
     const auth = getAuthFlags(req.auth);
     const result = await blocUseCases.create(req.body, auth);
     respond(res, result, {
-        program_not_found: { status: 404, error: "Program not found" },
-        bloc_already_exists: { blocked: { type: "Creation", reason: "A bloc with this name already exists in this program" } },
+        program_not_found: { status: 404, error: "Filière introuvable" },
+        bloc_already_exists: { blocked: { type: "Creation", reason: "Un bloc portant ce nom existe déjà dans cette filière" } },
         bloc_created: (r) => ({ status: 201, body: r.bloc }),
     });
 }, createBlocSchema));
@@ -39,9 +39,9 @@ blocRouter.patch("/blocs/:id", ...authed(async (req, res) => {
     const auth = getAuthFlags(req.auth);
     const result = await blocUseCases.update(String(req.params.id), req.body, auth);
     respond(res, result, {
-        not_found: { status: 404, error: "Bloc not found" },
-        program_not_found: { status: 404, error: "Program not found" },
-        bloc_already_exists: { blocked: { type: "Operation", reason: "A bloc with this name already exists in this program" } },
+        not_found: { status: 404, error: "Bloc introuvable" },
+        program_not_found: { status: 404, error: "Filière introuvable" },
+        bloc_already_exists: { blocked: { type: "Operation", reason: "Un bloc portant ce nom existe déjà dans cette filière" } },
         bloc_updated: (r) => ({ status: 200, body: r.bloc }),
     });
 }, updateBlocSchema));
@@ -50,9 +50,9 @@ blocRouter.delete("/blocs/:id", ...authed(async (req, res) => {
     const auth = getAuthFlags(req.auth);
     const result = await blocUseCases.delete(String(req.params.id), auth);
     respond(res, result, {
-        not_found: { status: 404, error: "Bloc not found" },
-        bloc_has_courses: { blocked: { type: "Deletion", reason: "Bloc has courses" } },
-        bloc_deleted: { status: 200, body: { message: "Bloc deleted" } },
+        not_found: { status: 404, error: "Bloc introuvable" },
+        bloc_has_courses: { blocked: { type: "Deletion", reason: "Le bloc a des cours" } },
+        bloc_deleted: { status: 200, body: { message: "Bloc supprimé" } },
     });
 }));
 

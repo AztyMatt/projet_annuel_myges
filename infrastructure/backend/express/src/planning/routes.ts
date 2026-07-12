@@ -19,12 +19,12 @@ planningRouter.get("/planning/mine", ...authed(async (req, res) => {
     const from = parseDay(req.query.from);
     const to = parseDay(req.query.to);
     if (from === null || to === null)
-        return void send(res, { status: 400, error: "from and to must be valid dates (YYYY-MM-DD)" });
+        return void send(res, { status: 400, error: "from et to doivent être des dates valides (AAAA-MM-JJ)" });
     if ((from && !to) || (!from && to))
-        return void send(res, { status: 400, error: "from and to must be provided together" });
+        return void send(res, { status: 400, error: "from et to doivent être fournis ensemble" });
     const result = await planningUseCases.listMine(auth, { from: from ?? undefined, to: to ?? undefined });
     respond(res, result, {
-        not_found: { status: 404, error: "No student or instructor profile for this account" },
+        not_found: { status: 404, error: "Aucun profil étudiant ou intervenant pour ce compte" },
         planning_listed: (r) => ({ status: 200, body: r.mode === "range"
             ? { mode: r.mode, from: r.from, to: r.to, entries: r.entries }
             : { mode: r.mode, weeks: r.weeks } }),

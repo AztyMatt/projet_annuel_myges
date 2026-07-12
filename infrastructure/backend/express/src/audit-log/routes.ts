@@ -42,15 +42,15 @@ auditLogRouter.get("/audit-logs/:id", ...authed(async (req, res) => {
     const auth = getAuthFlags(req.auth);
     const result = await auditLogUseCases.findById(String(req.params.id), auth);
     respond(res, result, {
-        not_found: { status: 404, error: "Audit log not found" },
+        not_found: { status: 404, error: "Journal d'audit introuvable" },
         audit_log_found: (r) => ({ status: 200, body: r.auditLog }),
     });
 }));
 
 auditLogRouter.delete("/audit-logs", ...authed((_req, res) => {
-    send(res, { status: 405, error: "Audit logs cannot be deleted" });
+    send(res, { status: 405, error: "Les journaux d'audit ne peuvent pas être supprimés" });
 }));
 
 auditLogRouter.delete("/audit-logs/:id", ...authed((_req, res) => {
-    send(res, { status: 405, error: "Audit logs cannot be deleted" });
+    send(res, { status: 405, error: "Les journaux d'audit ne peuvent pas être supprimés" });
 }));

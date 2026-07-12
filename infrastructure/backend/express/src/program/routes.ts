@@ -20,7 +20,7 @@ programRouter.get("/programs", ...authed(async (_req, res) => {
 programRouter.get("/programs/:id", ...authed(async (req, res) => {
     const result = await programUseCases.findById(String(req.params.id));
     respond(res, result, {
-        not_found: { status: 404, error: "Program not found" },
+        not_found: { status: 404, error: "Filière introuvable" },
         program_found: (r) => ({ status: 200, body: r.program }),
     });
 }));
@@ -29,8 +29,8 @@ programRouter.post("/programs", ...authed(async (req, res) => {
     const auth = getAuthFlags(req.auth);
     const result = await programUseCases.create(req.body, auth);
     respond(res, result, {
-        period_not_found: { status: 404, error: "Period not found" },
-        program_already_exists: { blocked: { type: "Creation", reason: "A program with this name and code already exists" } },
+        period_not_found: { status: 404, error: "Période introuvable" },
+        program_already_exists: { blocked: { type: "Creation", reason: "Une filière avec ce nom et ce code existe déjà" } },
         program_created: (r) => ({ status: 201, body: r.program }),
     });
 }, createProgramSchema));
@@ -39,9 +39,9 @@ programRouter.patch("/programs/:id", ...authed(async (req, res) => {
     const auth = getAuthFlags(req.auth);
     const result = await programUseCases.update(String(req.params.id), req.body, auth);
     respond(res, result, {
-        not_found: { status: 404, error: "Program not found" },
-        period_not_found: { status: 404, error: "Period not found" },
-        program_already_exists: { blocked: { type: "Operation", reason: "A program with this name and code already exists" } },
+        not_found: { status: 404, error: "Filière introuvable" },
+        period_not_found: { status: 404, error: "Période introuvable" },
+        program_already_exists: { blocked: { type: "Operation", reason: "Une filière avec ce nom et ce code existe déjà" } },
         program_updated: (r) => ({ status: 200, body: r.program }),
     });
 }, updateProgramSchema));
@@ -50,12 +50,12 @@ programRouter.delete("/programs/:id", ...authed(async (req, res) => {
     const auth = getAuthFlags(req.auth);
     const result = await programUseCases.delete(String(req.params.id), auth);
     respond(res, result, {
-        not_found: { status: 404, error: "Program not found" },
-        program_has_modules: { blocked: { type: "Deletion", reason: "Program has modules" } },
-        program_has_classes: { blocked: { type: "Deletion", reason: "Program has classes" } },
-        program_has_blocs: { blocked: { type: "Deletion", reason: "Program has blocs" } },
-        program_has_students: { blocked: { type: "Deletion", reason: "Program has students" } },
-        program_deleted: { status: 200, body: { message: "Program deleted" } },
+        not_found: { status: 404, error: "Filière introuvable" },
+        program_has_modules: { blocked: { type: "Deletion", reason: "La filière a des modules" } },
+        program_has_classes: { blocked: { type: "Deletion", reason: "La filière a des classes" } },
+        program_has_blocs: { blocked: { type: "Deletion", reason: "La filière a des blocs" } },
+        program_has_students: { blocked: { type: "Deletion", reason: "La filière a des étudiants" } },
+        program_deleted: { status: 200, body: { message: "Filière supprimée" } },
     });
 }));
 
@@ -68,9 +68,9 @@ programRouter.post("/programs/:id/modules", ...authed(async (req, res) => {
     const auth = getAuthFlags(req.auth);
     const result = await programUseCases.addModule({ programId: String(req.params.id), ...req.body }, auth);
     respond(res, result, {
-        program_not_found: { status: 404, error: "Program not found" },
-        module_not_found: { status: 404, error: "Module not found" },
-        program_module_already_exists: { blocked: { type: "Creation", reason: "This module is already attached to this program" } },
+        program_not_found: { status: 404, error: "Filière introuvable" },
+        module_not_found: { status: 404, error: "Module introuvable" },
+        program_module_already_exists: { blocked: { type: "Creation", reason: "Ce module est déjà rattaché à cette filière" } },
         program_module_created: (r) => ({ status: 201, body: r.programModule }),
     });
 }, addProgramModuleSchema));
@@ -79,8 +79,8 @@ programRouter.delete("/program-modules/:id", ...authed(async (req, res) => {
     const auth = getAuthFlags(req.auth);
     const result = await programUseCases.removeModule(String(req.params.id), auth);
     respond(res, result, {
-        not_found: { status: 404, error: "Program module not found" },
-        program_module_deleted: { status: 200, body: { message: "Program module deleted" } },
+        not_found: { status: 404, error: "Module de filière introuvable" },
+        program_module_deleted: { status: 200, body: { message: "Module de filière supprimé" } },
     });
 }));
 
@@ -98,9 +98,9 @@ programRouter.post("/program-modules", ...authed(async (req, res) => {
     const auth = getAuthFlags(req.auth);
     const result = await programUseCases.addModule(req.body, auth);
     respond(res, result, {
-        program_not_found: { status: 404, error: "Program not found" },
-        module_not_found: { status: 404, error: "Module not found" },
-        program_module_already_exists: { blocked: { type: "Creation", reason: "This module is already attached to this program" } },
+        program_not_found: { status: 404, error: "Filière introuvable" },
+        module_not_found: { status: 404, error: "Module introuvable" },
+        program_module_already_exists: { blocked: { type: "Creation", reason: "Ce module est déjà rattaché à cette filière" } },
         program_module_created: (r) => ({ status: 201, body: r.programModule }),
     });
 }, createProgramModuleSchema));

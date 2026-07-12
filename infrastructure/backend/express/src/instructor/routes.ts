@@ -29,7 +29,7 @@ instructorRouter.get("/instructors", ...authed(async (req, res) => {
 instructorRouter.get("/instructors/me", ...authed(async (req, res) => {
     const result = await instructorUseCases.findByUserId(req.auth.userId);
     respond(res, result, {
-        not_found: { status: 404, error: "Instructor profile not found" },
+        not_found: { status: 404, error: "Profil intervenant introuvable" },
         instructor_found: (r) => ({ status: 200, body: r.instructor }),
     });
 }));
@@ -38,7 +38,7 @@ instructorRouter.get("/instructors/:id", ...authed(async (req, res) => {
     const auth = getAuthFlags(req.auth);
     const result = await instructorUseCases.findById(String(req.params.id), auth);
     respond(res, result, {
-        not_found: { status: 404, error: "Instructor not found" },
+        not_found: { status: 404, error: "Intervenant introuvable" },
         instructor_found: (r) => ({ status: 200, body: r.instructor }),
     });
 }));
@@ -47,8 +47,8 @@ instructorRouter.post("/instructors", ...authed(async (req, res) => {
     const auth = getAuthFlags(req.auth);
     const result = await instructorUseCases.create(req.body, auth);
     respond(res, result, {
-        user_not_found: { status: 404, error: "User not found" },
-        user_already_instructor: { blocked: { type: "Creation", reason: "This user is already an instructor" } },
+        user_not_found: { status: 404, error: "Utilisateur introuvable" },
+        user_already_instructor: { blocked: { type: "Creation", reason: "Cet utilisateur est déjà intervenant" } },
         instructor_created: (r) => ({ status: 201, body: r.instructor }),
     });
 }, createInstructorSchema));
@@ -57,7 +57,7 @@ instructorRouter.patch("/instructors/:id", ...authed(async (req, res) => {
     const auth = getAuthFlags(req.auth);
     const result = await instructorUseCases.update(String(req.params.id), req.body, auth);
     respond(res, result, {
-        not_found: { status: 404, error: "Instructor not found" },
+        not_found: { status: 404, error: "Intervenant introuvable" },
         instructor_updated: (r) => ({ status: 200, body: r.instructor }),
     });
 }, updateInstructorSchema));
@@ -66,10 +66,10 @@ instructorRouter.delete("/instructors/:id", ...authed(async (req, res) => {
     const auth = getAuthFlags(req.auth);
     const result = await instructorUseCases.delete(String(req.params.id), auth);
     respond(res, result, {
-        not_found: { status: 404, error: "Instructor not found" },
-        instructor_has_courses: { blocked: { type: "Deletion", reason: "Instructor has courses" } },
-        instructor_has_session_exams: { blocked: { type: "Deletion", reason: "Instructor has session exam assignments" } },
-        instructor_deleted: { status: 200, body: { message: "Instructor deleted" } },
+        not_found: { status: 404, error: "Intervenant introuvable" },
+        instructor_has_courses: { blocked: { type: "Deletion", reason: "L'intervenant a des cours" } },
+        instructor_has_session_exams: { blocked: { type: "Deletion", reason: "L'intervenant a des affectations à des sessions d'examen" } },
+        instructor_deleted: { status: 200, body: { message: "Intervenant supprimé" } },
     });
 }));
 

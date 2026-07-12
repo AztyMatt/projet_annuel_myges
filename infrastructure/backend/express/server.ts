@@ -1,9 +1,14 @@
+import { z } from "zod";
+import { fr } from "zod/locales";
 import { app } from "@express/src/app";
 import { SEED_ON_START } from "@express/src/auth/auth.config";
 import { seedUsers } from "@express/src/auth/seed.service";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { db } from "@express/src/postgres/db";
 import path from "path";
+
+// Messages de validation Zod (schémas invalides) en français plutôt qu'en anglais par défaut.
+z.config(fr());
 
 const PORT = process.env.BACKEND_PORT;
 

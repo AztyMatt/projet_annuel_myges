@@ -35,7 +35,7 @@ sessionRouter.get("/sessions/:id", ...authed(async (req, res) => {
     const auth = getAuthFlags(req.auth);
     const result = await sessionUseCases.findById(String(req.params.id), auth);
     respond(res, result, {
-        not_found: { status: 404, error: "Session not found" },
+        not_found: { status: 404, error: "Session introuvable" },
         session_found: (r) => ({ status: 200, body: r.session }),
     });
 }));
@@ -44,14 +44,14 @@ sessionRouter.post("/sessions", ...authed(async (req, res) => {
     const auth = getAuthFlags(req.auth);
     const result = await sessionUseCases.create(req.body, auth);
     respond(res, result, {
-        classroom_required: { status: 400, error: "classroomId is required for an ON_SITE session" },
-        classroom_forbidden: { status: 400, error: "classroomId must be null for a REMOTE session" },
-        invalid_time_range: { status: 400, error: "startTime must be before endTime" },
-        course_not_found: { status: 404, error: "Course not found" },
-        classroom_not_found: { status: 404, error: "Classroom not found" },
-        classroom_conflict: { blocked: { type: "Creation", reason: "This classroom already has a session overlapping this time slot" } },
-        instructor_conflict: { blocked: { type: "Creation", reason: "The instructor already has a session overlapping this time slot" } },
-        classroom_capacity_exceeded: { blocked: { type: "Creation", reason: "Classroom capacity is lower than the group size" } },
+        classroom_required: { status: 400, error: "classroomId est requis pour une session en présentiel" },
+        classroom_forbidden: { status: 400, error: "classroomId doit être nul pour une session en distanciel" },
+        invalid_time_range: { status: 400, error: "startTime doit être antérieur à endTime" },
+        course_not_found: { status: 404, error: "Cours introuvable" },
+        classroom_not_found: { status: 404, error: "Salle introuvable" },
+        classroom_conflict: { blocked: { type: "Creation", reason: "Cette salle a déjà une session qui chevauche ce créneau horaire" } },
+        instructor_conflict: { blocked: { type: "Creation", reason: "L'intervenant a déjà une session qui chevauche ce créneau horaire" } },
+        classroom_capacity_exceeded: { blocked: { type: "Creation", reason: "La capacité de la salle est inférieure à l'effectif du groupe" } },
         session_created: (r) => ({ status: 201, body: r.session }),
     });
 }, createSessionSchema));
@@ -60,13 +60,13 @@ sessionRouter.patch("/sessions/:id", ...authed(async (req, res) => {
     const auth = getAuthFlags(req.auth);
     const result = await sessionUseCases.update(String(req.params.id), req.body, auth);
     respond(res, result, {
-        not_found: { status: 404, error: "Session not found" },
-        classroom_required: { status: 400, error: "classroomId is required for an ON_SITE session" },
-        invalid_time_range: { status: 400, error: "startTime must be before endTime" },
-        classroom_not_found: { status: 404, error: "Classroom not found" },
-        classroom_conflict: { blocked: { type: "Operation", reason: "This classroom already has a session overlapping this time slot" } },
-        instructor_conflict: { blocked: { type: "Operation", reason: "The instructor already has a session overlapping this time slot" } },
-        classroom_capacity_exceeded: { blocked: { type: "Operation", reason: "Classroom capacity is lower than the group size" } },
+        not_found: { status: 404, error: "Session introuvable" },
+        classroom_required: { status: 400, error: "classroomId est requis pour une session en présentiel" },
+        invalid_time_range: { status: 400, error: "startTime doit être antérieur à endTime" },
+        classroom_not_found: { status: 404, error: "Salle introuvable" },
+        classroom_conflict: { blocked: { type: "Operation", reason: "Cette salle a déjà une session qui chevauche ce créneau horaire" } },
+        instructor_conflict: { blocked: { type: "Operation", reason: "L'intervenant a déjà une session qui chevauche ce créneau horaire" } },
+        classroom_capacity_exceeded: { blocked: { type: "Operation", reason: "La capacité de la salle est inférieure à l'effectif du groupe" } },
         session_updated: (r) => ({ status: 200, body: r.session }),
     });
 }, updateSessionSchema));
@@ -75,10 +75,10 @@ sessionRouter.delete("/sessions/:id", ...authed(async (req, res) => {
     const auth = getAuthFlags(req.auth);
     const result = await sessionUseCases.delete(String(req.params.id), auth);
     respond(res, result, {
-        not_found: { status: 404, error: "Session not found" },
-        session_has_exams: { blocked: { type: "Deletion", reason: "Session has session exams" } },
-        session_has_absences: { blocked: { type: "Deletion", reason: "Session has absences" } },
-        session_deleted: { status: 200, body: { message: "Session deleted" } },
+        not_found: { status: 404, error: "Session introuvable" },
+        session_has_exams: { blocked: { type: "Deletion", reason: "La session a des examens" } },
+        session_has_absences: { blocked: { type: "Deletion", reason: "La session a des absences" } },
+        session_deleted: { status: 200, body: { message: "Session supprimée" } },
     });
 }));
 
