@@ -33,6 +33,7 @@ import { isCourseInstructor } from "@application/course/course-access";
 import { type StudentGroupRepository } from "@application/group/student-group/student-group.repository";
 import { canReadAbsence } from "@application/absence/absence-access";
 import { MAX_FILE_SIZE_BYTES, isAllowedMimeType, checkAgainstPolicy, CONTEXT_POLICIES } from "@domain/file/file.policy";
+import { type NotificationUseCases } from "@application/notification/notification.use-cases";
 
 export type FileView = {
     id: string;
@@ -324,6 +325,7 @@ export class FileUseCases {
         private readonly instructors: InstructorRepository,
         private readonly sessions: SessionRepository,
         private readonly studentGroups: StudentGroupRepository,
+        private readonly notifications: NotificationUseCases,
     ) {}
 
     private canReadAbsence(absence: Absence, auth: AuthContext): Promise<boolean> {
@@ -563,6 +565,17 @@ export class FileUseCases {
         }
         entry.status = DocumentStatus.VALID;
         await this.fileDocuments.save(entry);
+        const student = await this.students.findById(entry.studentId);
+        if (student) {
+            await this.notifications.notify({
+                userId: student.userId,
+                type: "DOCUMENT_VALIDATED",
+                title: "Document validé",
+                body: "Un de vos documents a été validé par l'administration.",
+                entityName: "file_document",
+                entityId: entry.id,
+            });
+        }
         return { kind: "file_document_validated", fileDocument: toFileDocumentView(entry) };
     }
 

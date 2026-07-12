@@ -22,6 +22,7 @@ import { sessionHasStarted } from "@domain/session/session.policy";
 import { NotFound, Forbidden, ForbiddenOwnership } from "@application/types/results";
 import { type AuthContext } from "@application/types/auth-context";
 import { isCourseInstructor } from "@application/course/course-access";
+import { type NotificationUseCases } from "@application/notification/notification.use-cases";
 
 export type GradeView = {
     id: string;
@@ -216,6 +217,7 @@ export class GradeUseCases {
         private readonly sessions: SessionRepository,
         private readonly sessionExamStudents: SessionExamStudentRepository,
         private readonly modules: ModuleRepository,
+        private readonly notifications: NotificationUseCases,
     ) {}
 
     async create(input: {
@@ -228,7 +230,8 @@ export class GradeUseCases {
 
         if (!isValidGradeValue(value)) return { kind: "grade_out_of_range" };
 
-        if (!(await this.students.findById(studentId))) return NotFound;
+        const student = await this.students.findById(studentId);
+        if (!student) return NotFound;
 
         const grade: Grade = {
             id: randomUUID(),
@@ -240,6 +243,14 @@ export class GradeUseCases {
             enteredBy: auth.requesterId,
         };
         await this.grades.save(grade);
+        await this.notifications.notify({
+            userId: student.userId,
+            type: "GRADE_PUBLISHED",
+            title: "Nouvelle note",
+            body: `Une nouvelle note (${value}/20) vous a été attribuée.`,
+            entityName: "grade",
+            entityId: grade.id,
+        });
         return { kind: "grade_created", grade: toGradeView(grade) };
     }
 

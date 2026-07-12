@@ -1,9 +1,9 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { Bell } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCurrentUser } from "@/lib/use-current-user";
+import { NotificationBell } from "@/components/layout/NotificationBell";
 
 type Role = "etudiant" | "intervenant" | "scolarite" | "superadmin";
 
@@ -81,10 +81,7 @@ export function TopBar() {
                 </span>
 
                 {/* Notifications */}
-                <button className="relative w-9 h-9 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-colors">
-                    <Bell size={17} className="text-gray-600" />
-                    <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full" />
-                </button>
+                <NotificationBell />
             </div>
         </header>
     );
