@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { Bell, Search } from "lucide-react";
+import { Bell } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCurrentUser } from "@/lib/use-current-user";
 
@@ -75,16 +75,6 @@ export function TopBar() {
             </div>
 
             <div className="flex items-center gap-3">
-                {/* Search */}
-                <div className="relative w-52">
-                    <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                    <input
-                        type="text"
-                        placeholder="Rechercher..."
-                        className="w-full pl-8 pr-3 h-9 text-sm bg-gray-50 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
-                    />
-                </div>
-
                 {/* Role badge */}
                 <span className={cn("text-xs font-medium px-2.5 py-1 rounded-full", badge.className)}>
                     {badge.label}

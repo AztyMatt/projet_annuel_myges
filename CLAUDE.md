@@ -32,7 +32,6 @@ Il a été construit en confrontant ces deux documents au **code réel** (backen
 - [ ] **CronJob 2FA en 404** — `k8s/backend/cleanup-cronjob.yml` appelle l'URL sans le préfixe `/api` (les routeurs sont montés sous `/api`, `app.ts:65`) → `K8S-001`
 - [ ] **Journal d'audit jamais alimenté** — l'API `GET /audit-logs` et les pages `/superadmin/*` existent mais aucun code n'écrit dans la table `audit_log` → `AUD-001…010`
 - [ ] Dépôt git imbriqué `infrastructure/frontend/next/.git` à supprimer (les fichiers sont bien suivis par le dépôt parent) → `TECH-001`
-- [ ] Barre de recherche décorative dans `TopBar.tsx` (placeholder sans action) → `UI-001`
 
 ## Stack (rappel, voir `README.md` pour le détail)
 
@@ -384,7 +383,7 @@ Fusionne les responsabilités "Scolarité / Pédagogique / Relations Entreprises
 
 Constats qui ne correspondent à aucune exigence des documents source — chacun nécessite une décision d'équipe explicite avant d'entrer au périmètre :
 
-- **Recherche globale** — la barre "Rechercher..." de `TopBar.tsx` n'a aucune portée fonctionnelle définie (cible : étudiants ? cours ? documents ?). En attendant : la retirer (`UI-001`).
+- **Recherche globale** — la barre "Rechercher..." de `TopBar.tsx` n'avait aucune portée fonctionnelle définie (cible : étudiants ? cours ? documents ?) → retirée le 2026-07-12 (`UI-001` fait). À réintroduire uniquement si une portée précise est définie.
 - **Internationalisation (i18n)** — aucune exigence multilingue dans les documents ; aucune infrastructure de traduction. À ignorer sauf décision contraire.
 - **Rate limiting réseau/IP** — non demandé par les documents (seul le blocage par compte l'est, et il est fait) ; recommandé néanmoins par l'audit → `SEC-103`.
 - **Confirmation SMS (Twilio)** — alternative au TOTP citée par le Sujet, non requise puisqu'un moyen de 2FA suffit.
