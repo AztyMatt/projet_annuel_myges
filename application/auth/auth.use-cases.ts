@@ -80,10 +80,7 @@ export type ResetPasswordResult =
     | { kind: "invalid_or_expired_token" }
     | { kind: "password_updated" };
 
-export type RequestPasswordResetResult =
-    | { kind: "missing_email" }
-    | { kind: "invalid_email" }
-    | { kind: "reset_email_sent" };
+export type RequestPasswordResetResult = { kind: "reset_email_sent" };
 
 export type GetMeResult =
     | { kind: "user_not_found" }
@@ -290,12 +287,8 @@ export class AuthUseCases {
         return this.applyPasswordUpdate(user, newPassword);
     }
 
-    async requestPasswordReset(input: { email?: string }): Promise<RequestPasswordResetResult> {
-        const email = input.email?.trim();
-        if (!email) return { kind: "missing_email" };
-        if (!emailIsValid(email)) return { kind: "invalid_email" };
-
-        const user = await this.users.findByEmail(email.toLowerCase());
+    async requestPasswordReset(input: { email: string }): Promise<RequestPasswordResetResult> {
+        const user = await this.users.findByEmail(input.email.toLowerCase());
         if (user) {
             await this.passwordResetTokens.deleteByUserId(user.id);
             const resetToken = await this.passwordResetTokens.create(user.id);
@@ -306,9 +299,8 @@ export class AuthUseCases {
         return { kind: "reset_email_sent" };
     }
 
-    async resetWithToken(input: { token?: string; newPassword?: string }): Promise<ResetPasswordResult> {
+    async resetWithToken(input: { token: string; newPassword: string }): Promise<ResetPasswordResult> {
         const { token, newPassword } = input;
-        if (!token || !newPassword) return { kind: "missing_reset_payload" };
         if (!isStrongPassword(newPassword)) return { kind: "weak_password" };
 
         const notBefore = new Date(Date.now() - PASSWORD_RESET_TOKEN_EXPIRY_MS);
