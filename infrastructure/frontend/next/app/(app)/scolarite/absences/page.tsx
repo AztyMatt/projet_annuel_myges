@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { CheckCircle, XCircle, Clock, Paperclip, Trash2 } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
+import { buildStudentNameMap, formatStudentName } from "@/lib/user-names";
 import { StatusBadge, type StatusTone } from "@/components/ui/status-badge";
 import { useToast } from "@/components/ui/toast";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -19,6 +20,7 @@ const statusConfig: Record<Status, { label: string; tone: StatusTone; icon: type
 
 export default function AbsencesScolarite() {
     const [rows, setRows] = useState<Row[]>([]);
+    const [studentNames, setStudentNames] = useState<Record<string, string>>({});
     const [statusFilter, setStatusFilter] = useState<Status | "all">("PENDING");
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
@@ -40,6 +42,7 @@ export default function AbsencesScolarite() {
                 }),
             );
             setRows(resolved.sort((a, b) => new Date(b.declaredAt).getTime() - new Date(a.declaredAt).getTime()));
+            void buildStudentNameMap(resolved.map((r) => r.studentId)).then(setStudentNames);
         } catch (e) {
             setError(e instanceof ApiError ? e.message : "Impossible de charger les absences.");
         } finally {
@@ -89,7 +92,7 @@ export default function AbsencesScolarite() {
         <div className="space-y-6 max-w-5xl">
             <div>
                 <h2 className="text-2xl font-bold text-gray-900">Validation des absences</h2>
-                <p className="text-sm text-gray-500 mt-1">Les noms d&apos;étudiants ne sont pas encore disponibles côté backend.</p>
+                <p className="text-sm text-gray-500 mt-1">Valider ou rejeter les déclarations d&apos;absence des étudiants.</p>
             </div>
 
             {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl p-4">{error}</div>}
@@ -122,7 +125,9 @@ export default function AbsencesScolarite() {
                                 const SIcon = s.icon;
                                 return (
                                     <tr key={r.id} className="hover:bg-gray-50">
-                                        <td className="px-5 py-3 font-medium text-gray-900">Étudiant #{r.studentId.slice(0, 8)}</td>
+                                        <td className="px-5 py-3 font-medium text-gray-900">
+                                            {formatStudentName(r.studentId, studentNames)}
+                                        </td>
                                         <td className="px-5 py-3 text-gray-500">{r.sessionDate ? r.sessionDate.toLocaleDateString("fr-FR") : "—"}</td>
                                         <td className="px-5 py-3 text-gray-700">{r.reason}</td>
                                         <td className="px-5 py-3">
@@ -173,7 +178,7 @@ export default function AbsencesScolarite() {
                 title="Supprimer cette absence ?"
                 description={
                     deleteTarget
-                        ? `L'absence de l'étudiant #${deleteTarget.studentId.slice(0, 8)} (${deleteTarget.reason}) sera définitivement supprimée, ainsi que son justificatif éventuel. Cette action est irréversible.`
+                        ? `L'absence de ${formatStudentName(deleteTarget.studentId, studentNames)} (${deleteTarget.reason}) sera définitivement supprimée, ainsi que son justificatif éventuel. Cette action est irréversible.`
                         : ""
                 }
                 confirmLabel="Supprimer"

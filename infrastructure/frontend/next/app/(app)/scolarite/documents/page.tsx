@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { CheckCircle, Clock, AlertTriangle, Trash2 } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
+import { buildStudentNameMap, formatStudentName } from "@/lib/user-names";
 import { StatusBadge, type StatusTone } from "@/components/ui/status-badge";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
@@ -21,6 +22,7 @@ const statusConfig: Record<FileDocumentStatus, { label: string; tone: StatusTone
 export default function DocumentsScolarite() {
     const [pending, setPending] = useState<Row[]>([]);
     const [expiring, setExpiring] = useState<ExpiringDoc[]>([]);
+    const [studentNames, setStudentNames] = useState<Record<string, string>>({});
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [processingId, setProcessingId] = useState<string | null>(null);
@@ -57,6 +59,14 @@ export default function DocumentsScolarite() {
                         expiration: a.expiration!,
                     })),
             );
+            const studentIds = [
+                ...rows.map((r) => r.studentId),
+                ...administratives
+                    .filter((a) => a.expiration && new Date(a.expiration).getTime() < now)
+                    .map((a) => fileDocumentById.get(a.fileDocumentId)?.studentId)
+                    .filter((id): id is string => Boolean(id)),
+            ];
+            void buildStudentNameMap(studentIds).then(setStudentNames);
         } catch (e) {
             setError(e instanceof ApiError ? e.message : "Impossible de charger les documents.");
         } finally {
@@ -100,7 +110,7 @@ export default function DocumentsScolarite() {
         <div className="space-y-6 max-w-5xl">
             <div>
                 <h2 className="text-2xl font-bold text-gray-900">Suivi documentaire</h2>
-                <p className="text-sm text-gray-500 mt-1">Les noms d&apos;étudiants ne sont pas encore disponibles côté backend.</p>
+                <p className="text-sm text-gray-500 mt-1">Validation des dépôts et suivi des documents expirés.</p>
             </div>
 
             {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl p-4">{error}</div>}
@@ -126,7 +136,7 @@ export default function DocumentsScolarite() {
                                     const SIcon = s.icon;
                                     return (
                                         <tr key={r.id} className="hover:bg-gray-50">
-                                            <td className="px-5 py-3 font-medium text-gray-900">Étudiant #{r.studentId.slice(0, 8)}</td>
+                                            <td className="px-5 py-3 font-medium text-gray-900">{formatStudentName(r.studentId, studentNames)}</td>
                                             <td className="px-5 py-3 text-gray-700">{r.fileName}</td>
                                             <td className="px-5 py-3 text-gray-500">{new Date(r.uploadedAt).toLocaleDateString("fr-FR")}</td>
                                             <td className="px-5 py-3">
@@ -159,7 +169,7 @@ export default function DocumentsScolarite() {
                         <div className="divide-y divide-gray-50">
                             {expiring.map((e) => (
                                 <div key={e.id} className="flex items-center gap-4 px-5 py-3 text-sm">
-                                    <span className="flex-1 font-medium text-gray-900">Étudiant #{e.studentId.slice(0, 8)}</span>
+                                    <span className="flex-1 font-medium text-gray-900">{formatStudentName(e.studentId, studentNames)}</span>
                                     <span className="text-gray-600">{e.type}</span>
                                     <span className="text-xs text-red-600">Expiré le {new Date(e.expiration).toLocaleDateString("fr-FR")}</span>
                                 </div>

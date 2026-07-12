@@ -17,6 +17,7 @@ async function request<T>(path: string, options: ApiOptions = {}): Promise<T> {
 
     const response = await fetch(`/api${path}`, {
         ...rest,
+        credentials: "include",
         headers: { "Content-Type": "application/json", ...headers },
         body: body !== undefined ? JSON.stringify(body) : undefined,
     });
@@ -41,7 +42,7 @@ async function upload<T>(path: string, file: File): Promise<T> {
     formData.append("file", file);
 
     // Pas de Content-Type manuel : le navigateur doit poser lui-même le boundary multipart.
-    const response = await fetch(`/api${path}`, { method: "POST", body: formData });
+    const response = await fetch(`/api${path}`, { method: "POST", credentials: "include", body: formData });
 
     if (response.status === 401) {
         if (typeof window !== "undefined") window.location.href = "/login";

@@ -5,6 +5,7 @@ import { Users, AlertTriangle, FileText, CheckCircle, XCircle, Clock, ChevronRig
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { api, ApiError } from "@/lib/api";
+import { buildStudentNameMap, formatStudentName } from "@/lib/user-names";
 
 type PendingAbsence = { id: string; studentId: string; reason: string; sessionDate: Date | null };
 
@@ -29,6 +30,7 @@ async function loadPendingAbsences(): Promise<PendingAbsence[]> {
 
 export default function DashboardScolarite() {
     const [pendingAbsences, setPendingAbsences] = useState<PendingAbsence[]>([]);
+    const [studentNames, setStudentNames] = useState<Record<string, string>>({});
     const [documentIssues, setDocumentIssues] = useState(0);
     const [expiringContracts, setExpiringContracts] = useState(0);
     const [loading, setLoading] = useState(true);
@@ -45,6 +47,7 @@ export default function DashboardScolarite() {
                 api.get<{ endDate: string }[]>("/document-apprenticeship-contracts"),
             ]);
             setPendingAbsences(absences);
+            void buildStudentNameMap(absences.map((a) => a.studentId)).then(setStudentNames);
             setDocumentIssues(fileDocuments.filter((d) => d.status !== "VALID").length);
             const in30Days = Date.now() + 30 * 24 * 60 * 60 * 1000;
             setExpiringContracts(contracts.filter((c) => new Date(c.endDate).getTime() <= in30Days).length);
@@ -130,7 +133,7 @@ export default function DashboardScolarite() {
                                     {pendingAbsences.map((a) => (
                                         <tr key={a.id} className="hover:bg-gray-50 transition-colors">
                                             <td className="py-3 pr-4 font-medium text-gray-900">
-                                                Étudiant #{a.studentId.slice(0, 8)}
+                                                {formatStudentName(a.studentId, studentNames)}
                                             </td>
                                             <td className="py-3 pr-4 text-gray-500">
                                                 {a.sessionDate ? a.sessionDate.toLocaleDateString("fr-FR") : "—"}

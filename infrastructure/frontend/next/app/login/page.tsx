@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { Eye, EyeOff } from "lucide-react";
+import { cacheCurrentUser, type CurrentUser } from "@/lib/use-current-user";
 
 export default function LoginPage() {
     const router = useRouter();
@@ -30,6 +31,17 @@ export default function LoginPage() {
         router.push(roleToRoute[role] ?? "/login");
     };
 
+    type LoginUser = CurrentUser;
+
+    const finishLogin = (user: LoginUser | undefined) => {
+        if (!user?.role) {
+            setError("Réponse serveur invalide.");
+            return;
+        }
+        cacheCurrentUser(user);
+        completeLogin(user.role);
+    };
+
     const handleLogin = async () => {
         setLoading(true);
         setError("");
@@ -43,7 +55,7 @@ export default function LoginPage() {
                 error?: string;
                 twoFactorRequired?: boolean;
                 tempSessionToken?: string;
-                user?: { role?: string };
+                user?: LoginUser;
                 passwordResetRequired?: boolean;
                 setup2FARequired?: boolean;
                 setupSessionToken?: string;
@@ -68,12 +80,7 @@ export default function LoginPage() {
                 return;
             }
 
-            if (payload.user?.role) {
-                completeLogin(payload.user.role);
-                return;
-            }
-
-            setError("Réponse serveur invalide.");
+            finishLogin(payload.user);
         } catch {
             setError("Serveur indisponible. Vérifie que le backend tourne sur le port 3001.");
         } finally {
@@ -92,7 +99,7 @@ export default function LoginPage() {
             });
             const payload = (await response.json()) as {
                 error?: string;
-                user?: { role?: string };
+                user?: LoginUser;
             };
 
             if (!response.ok) {
@@ -100,12 +107,7 @@ export default function LoginPage() {
                 return;
             }
 
-            if (payload.user?.role) {
-                completeLogin(payload.user.role);
-                return;
-            }
-
-            setError("Réponse serveur invalide.");
+            finishLogin(payload.user);
         } catch {
             setError("Erreur lors de la validation du code 2FA.");
         } finally {
