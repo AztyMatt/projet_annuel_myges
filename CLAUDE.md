@@ -88,7 +88,7 @@ Next.js (frontend) · Express.js (backend) · PostgreSQL + Drizzle (ORM) · Dock
 - [~] Ingress Controller — le cahier des charges interne mentionne "Nginx" mais l'implémentation réelle utilise **Traefik** (choix différent mais valide techniquement) → documenter/justifier ce choix si demandé à l'oral
 - [x] Au moins 2 réplicas par service (hors base de données) — backend : 2, frontend : 3, postgres : 1 (normal pour une base de données)
 - [x] PostgreSQL avec volumes persistants — PVC 5Gi (`k8s/postgres/pvc.yml`)
-- [ ] **Stockage réel des fichiers uploadés** (justificatifs, documents administratifs, supports de cours, rendus d'évaluation, contrats) — le module `file` ne stocke que des **métadonnées** (`storagePath`, `mimeType`, `sizeBytes`...) ; **aucun upload multipart, aucun volume/bucket dédié** dans `docker-compose.yml` ni dans `k8s/`. Un port `StorageService` existe (`application/file/storage.service.ts`) mais son adaptateur est un **stub no-op** (`src/storage/storage.adapter.ts` : `delete()` au corps vide). Bloquant pour toutes les pages de dépôt de fichiers listées en section 11 → `FILE-001…024`
+- [~] **Stockage réel des fichiers uploadés** — `StorageService` (`application/file/storage.service.ts`) implémenté en dev (`save`/`read`/`delete` sur disque, `infrastructure/backend/express/src/storage/storage.adapter.ts`, volume dédié `uploads_data:/app/uploads` dans `docker-compose.yml`) ; endpoints `POST /files/upload` (multipart via `multer`) et `GET /files/:id/download` fonctionnels et vérifiés (round-trip réel testé) → `FILE-002…006` faits. Page pilote `/etudiant/documents` branchée (dépôt + téléchargement réels) et `/etudiant/cours` (téléchargement) → `FILE-014` fait, reste `FILE-013`/`015`/`016`/`017`/`018`/`019` (autres pages). **Reste à faire** : PVC k8s pour la prod (`FILE-010`, ⚠️ un PVC `local-path` RWO ne supporte pas les 2 réplicas backend — décision S3/MinIO ou RWX à prendre), sauvegarde du volume (`FILE-011`), tests (`FILE-020…024`).
 
 ## 3. Réponse métier et architecture
 
@@ -151,7 +151,7 @@ Ces gaps backend conditionnent des pages listées en section 11 — à traiter e
 - [x] Endpoint de dégel des notes — `POST /grades/:id/unlock` exposé côté front sur `/scolarite/notes` (bouton "Dégeler") → `NOTE-001` fait
 - [ ] Rétablir l'auto-suppression de compte (`DELETE /users/me` ou équivalent, sans exiger `SUPER_ADMIN`) → `DEL-002/003`
 - [ ] **Écriture des journaux d'audit** — la table, l'API de lecture et les pages existent, mais aucun use case n'écrit jamais d'entrée : brancher un `audit-recorder` sur les actions sensibles (login, notes lock/unlock, absences validate/reject, documents, attributions de rôle) → `AUD-001…010`
-- [ ] Upload réel de fichiers (multipart + stockage disque/S3), au-delà de la simple création de métadonnées `POST /files` → `FILE-*`
+- [x] Upload réel de fichiers (multipart + stockage disque en dev) fait le 2026-07-12 → voir section 2 ; reste le câblage des pages restantes et l'infra prod (`FILE-*`)
 - [ ] Mécanisme de notifications temps réel (WebSocket) pour planning/notes/documents → `NOTIF-*`
 - [ ] Endpoint agrégé `GET /conversations/mine` (la messagerie reconstruit tout côté client en N appels) → `API-001`
 - [ ] Permettre à un `ADMIN` simple de retrouver son `adminId` (`GET /admins/me` ou ouverture de `GET /admins/user/:userId` à l'intéressé) — débloque la messagerie ciblée pour les admins → `API-002`
@@ -248,11 +248,12 @@ Seulement 4 rôles (pas les 6-7 décrits dans `cahierDesCharges.md` §2, l'admin
 
 - [x] **`/etudiant/documents`** — dossier centralisé §3.4, reconnecté
   - `file-documents/mine` (self-service ; corrigé le 2026-07-10, appelait auparavant `file-documents/student/:id` réservé admin, cf. bug ci-dessus sur `/etudiant`) réparti en 3 sections via `document-administratives/file-document/:id` et `document-apprenticeship-contracts/file-document/:id` (déterminent si un `FileDocument` est un document officiel, un contrat, ou un document personnel)
-  - Dépôt/téléchargement **désactivés avec message explicite** : même gap upload/stockage réel
+  - Dépôt et téléchargement **réels et fonctionnels** depuis le 2026-07-12 : modal "Déposer un document" avec **sélection obligatoire d'un type** (`DocumentType`) → `POST /files/upload` puis `POST /file-documents` puis `POST /document-administratives`. Sans type, un document reste bloqué en `PENDING` à vie (`validateDocument` renvoie `file_document_has_no_doc_type` si aucun `document_administrative`/contrat n'est lié, non rattrapable depuis l'UI ensuite)
+  - **Bug corrigé (2026-07-12)** : `findAdministrativeByFileDocument` et `findApprenticeshipContractByFileDocument` (`application/document/document.use-cases.ts`) étaient réservés admin (`if (!auth.isAdmin) return NotFound`), alors qu'un helper `canReadOwnFileDocument` existant dans la même classe et déjà utilisé ailleurs faisait exactement ce qu'il fallait — jamais branché sur ces deux méthodes. Conséquence concrète : **même un document correctement typé retombait toujours dans "Mes documents personnels"** pour l'étudiant (les 2 probes de classification 404 systématiquement pour un non-admin), y compris les documents de fixtures. Appliqué le même helper aux deux méthodes — aucune régression possible côté admin (`canReadOwnFileDocument` retourne `true` immédiatement si `auth.isAdmin`)
 
 - [x] **`/etudiant/cours`** — bibliothèque de supports §3.6, construite
   - Liste des modules suivis résolue via `students/me` → `student-groups` → `groups/:id/courses` → `modules/:id`, fichiers `FileCourse` par module (`file-courses/course/:id`, nom/taille/date)
-  - Lecture seule (pas de dépôt, ni de téléchargement réel) : cohérent avec le rôle de l'intervenant côté dépôt, et bloqué par le même gap d'upload/stockage réel (section 2/10) pour le téléchargement
+  - Téléchargement réel fonctionnel depuis le 2026-07-12. Toujours lecture seule côté dépôt (cohérent avec le rôle de l'intervenant)
 
 - [x] **`/etudiant/evaluations`** — évaluations et rendus §3.6, construite
   - Liste des évaluations publiées de ses cours (titre, module, type continu/examen, échéance), statut calculé "Rendu"/"En retard"/"À rendre" (`file-assessments/group/:id`)
@@ -276,7 +277,7 @@ Seulement 4 rôles (pas les 6-7 décrits dans `cahierDesCharges.md` §2, l'admin
 
 - [x] **`/intervenant/supports`** — reconnecté
   - Liste réelle (`file-courses/course/:id` par cours, taille/date via `files/:id`), suppression fonctionnelle
-  - Dépôt de nouveau fichier **retiré avec message explicite** (même gap upload réel) ; les onglets/statuts publié-brouillon/compteur de téléchargements de la maquette retirés : `FileCourse` n'a ni statut de publication ni compteur de téléchargements
+  - Dépôt et téléchargement **réels et fonctionnels** depuis le 2026-07-12 (`FILE-016` fait) : modal "Ajouter un support" (sélection du cours + fichier → `POST /files/upload` puis `POST /file-courses`), lien de téléchargement par ligne. Les onglets/statuts publié-brouillon/compteur de téléchargements de la maquette restent retirés : `FileCourse` n'a ni statut de publication ni compteur de téléchargements
 
 - [x] **`/intervenant/evaluations`** — création et suivi des évaluations §3.6, construite
   - Liste par cours (`courses/mine`) avec statut publié/brouillon, échéance, nombre de groupes formés et de rendus déposés (`assessment-groups/assessment/:id`, `file-assessments/assessment/:id`)
@@ -360,7 +361,7 @@ Fusionne les responsabilités "Scolarité / Pédagogique / Relations Entreprises
 
 ### 11.7 Points d'architecture transverses à traiter en même temps que les pages
 
-- [x] Client API centralisé (`lib/api.ts`) : `api.get/post/patch/delete` normalisent les erreurs (`ApiError`) et redirigent vers `/login` sur 401. Le header `Authorization` n'a plus besoin d'être posé par les pages : le cookie httpOnly suffit, le middleware l'attache lui-même en le relayant vers le backend. **Utilisé par toutes les pages reconnectées de la section 11** (auth mise à part, qui passe par ses propres route handlers)
+- [x] Client API centralisé (`lib/api.ts`) : `api.get/post/patch/delete` normalisent les erreurs (`ApiError`) et redirigent vers `/login` sur 401. Le header `Authorization` n'a plus besoin d'être posé par les pages : le cookie httpOnly suffit, le middleware l'attache lui-même en le relayant vers le backend. **Utilisé par toutes les pages reconnectées de la section 11** (auth mise à part, qui passe par ses propres route handlers). Depuis le 2026-07-12 : `api.upload(path, file)` (multipart `FormData`, pas de `Content-Type` manuel) pour `POST /files/upload` ; le téléchargement se fait par lien direct `<a href="/api/files/:id/download">` (cookie httpOnly transmis automatiquement, pas besoin de passer par le client JS)
 - [x] Garde de route par rôle — cookie `httpOnly` (`myges_token`) posé par `app/api/auth/login/route.ts` et `app/api/auth/login/2fa/route.ts`, vérifié par `middleware.ts` via `lib/auth.ts` (`jose`, vérification de signature, pas juste un décodage) ; déconnexion via `POST /api/auth/logout` (`Sidebar.tsx`)
   - [ ] À vérifier avant déploiement prod : `JWT_SECRET` doit être accessible au pod frontend k8s (les deux `InfisicalSecret` CRD `backend`/`frontend` pointent déjà sur le même `secretsPath: "/"`, donc a priori déjà synchronisé — à confirmer dans Infisical)
 - [~] Composants mutualisés — `components/ui/status-badge.tsx` (`StatusBadge`, tons vert/rouge/orange/bleu/violet/gris), `components/ui/confirm-dialog.tsx` (`ConfirmDialog`), `components/ui/toast.tsx` (`ToastProvider`/`useToast`, monté dans `(app)/layout.tsx`)

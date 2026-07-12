@@ -30,6 +30,7 @@ import { NotFound, Forbidden, ForbiddenOwnership } from "@application/types/resu
 import { type AuthContext } from "@application/types/auth-context";
 import { isFileOwner } from "@application/file/file-access";
 import { isCourseInstructor } from "@application/course/course-access";
+import { type StudentGroupRepository } from "@application/group/student-group/student-group.repository";
 import { canReadAbsence } from "@application/absence/absence-access";
 import { MAX_FILE_SIZE_BYTES, isAllowedMimeType, checkAgainstPolicy, CONTEXT_POLICIES } from "@domain/file/file.policy";
 
@@ -322,6 +323,7 @@ export class FileUseCases {
         private readonly courses: CourseRepository,
         private readonly instructors: InstructorRepository,
         private readonly sessions: SessionRepository,
+        private readonly studentGroups: StudentGroupRepository,
     ) {}
 
     private canReadAbsence(absence: Absence, auth: AuthContext): Promise<boolean> {
@@ -375,10 +377,32 @@ export class FileUseCases {
     }
 
     async findById(id: string, auth: AuthContext): Promise<GetFileResult> {
-        if (!auth.isAdmin) return NotFound;
         const file = await this.files.findById(id);
         if (!file) return NotFound;
-        return { kind: "file_found", file: toFileView(file) };
+        if (auth.isAdmin || file.uploadedBy === auth.requesterId) return { kind: "file_found", file: toFileView(file) };
+
+        // Un document officiel/contrat est uploadé par un admin, pas par l'étudiant concerné :
+        // on l'autorise aussi via le lien file_document -> student.
+        const student = await this.students.findByUserId(auth.requesterId);
+        const fileDocument = student ? await this.fileDocuments.findByFileId(id) : undefined;
+        if (fileDocument && fileDocument.studentId === student?.id) return { kind: "file_found", file: toFileView(file) };
+
+        // Un support de cours est uploadé par l'intervenant : on l'autorise aussi pour les
+        // étudiants du groupe du cours et pour l'intervenant qui l'enseigne (autre que l'auteur).
+        const fileCourses = await this.fileCourses.findByFileId(id);
+        for (const fileCourse of fileCourses) {
+            if (await isCourseInstructor({ courses: this.courses, instructors: this.instructors }, fileCourse.courseId, auth.requesterId)) {
+                return { kind: "file_found", file: toFileView(file) };
+            }
+            if (student) {
+                const course = await this.courses.findById(fileCourse.courseId);
+                if (course && (await this.studentGroups.findByStudentAndGroup(student.id, course.groupId))) {
+                    return { kind: "file_found", file: toFileView(file) };
+                }
+            }
+        }
+
+        return NotFound;
     }
 
     async list(auth: AuthContext): Promise<ListFilesResult> {

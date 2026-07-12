@@ -293,7 +293,7 @@ export class DocumentUseCases {
     }
 
     async findAdministrativeByFileDocument(fileDocumentId: string, auth: AuthContext): Promise<GetDocumentAdministrativeResult> {
-        if (!auth.isAdmin) return NotFound;
+        if (!(await this.canReadOwnFileDocument(fileDocumentId, auth))) return NotFound;
         const entry = await this.documentAdministratives.findByFileDocumentId(fileDocumentId);
         if (!entry) return NotFound;
         return { kind: "document_administrative_found", document: toDocumentAdministrativeView(entry) };
@@ -387,7 +387,7 @@ export class DocumentUseCases {
     }
 
     async findApprenticeshipContractByFileDocument(fileDocumentId: string, auth: AuthContext): Promise<GetDocumentApprenticeshipContractResult> {
-        if (!auth.isAdmin) return NotFound;
+        if (!(await this.canReadOwnFileDocument(fileDocumentId, auth))) return NotFound;
         const entry = await this.documentApprenticeshipContracts.findByFileDocumentId(fileDocumentId);
         if (!entry) return NotFound;
         return { kind: "document_apprenticeship_contract_found", contract: toDocumentApprenticeshipContractView(entry) };
