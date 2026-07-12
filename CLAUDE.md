@@ -1,5 +1,9 @@
 # MyGES 2.0 — Suivi Projet Annuel
 
+> **Fichier unique de suivi.** Il fusionne l'ancien `WORKFLOW.md` (supprimé le 2026-07-10, son contenu était périmé) et le suivi d'avancement historique de ce fichier. Toute instance de Claude Code intervenant sur ce repo doit le lire avant d'agir, et le remettre à jour à chaque fonctionnalité livrée.
+>
+> **Feuille de route détaillée** : les tâches avec identifiants (`FILE-*`, `AUD-*`, `TEST-*`, `SEC-*`, `K8S-*`…), l'audit complet et le phasage recommandé sont dans **`PROJECT_AUDIT_AND_ROADMAP.md`** (audit du 2026-07-10). Ce fichier-ci reste la vue synthétique par exigence et par page ; l'autre est la liste de travail exécutable. Cocher dans les deux.
+
 Ce fichier centralise l'état d'avancement du projet par rapport aux deux référentiels :
 - `Sujet.pdf` — grille de notation générique du Projet Annuel (fournie par l'école)
 - `cahierDesCharges.md` — spécification propre à MyGES 2.0 rédigée par l'équipe
@@ -10,7 +14,25 @@ Il a été construit en confrontant ces deux documents au **code réel** (backen
 - `[~]` partiellement fait (précisé dans la sous-puce)
 - `[ ]` pas fait / pas trouvé dans le repo
 
-À remettre à jour au fil de l'avancement plutôt que de le laisser devenir obsolète.
+À remettre à jour au fil de l'avancement plutôt que de le laisser devenir obsolète. Dernière synchronisation avec le code : **2026-07-10** (audit complet, branche `develop`, commit `b04b18f`).
+
+## Règles de travail (héritées de WORKFLOW.md, toujours en vigueur)
+
+1. Jamais plusieurs fonctionnalités en parallèle : une fonctionnalité = une session de travail = un scope fermé.
+2. Avant de commencer, relire ce fichier (et la section correspondante de `PROJECT_AUDIT_AND_ROADMAP.md`) ; demander confirmation de la fonctionnalité à traiter si elle n'a pas été précisée.
+3. Ne jamais ajouter une fonctionnalité non listée sans le signaler explicitement et attendre validation.
+4. Avancer par petites étapes vérifiables, pas par gros blocs livrés d'un coup.
+5. Une fois une fonctionnalité terminée : mettre à jour son statut ici et cocher les tâches correspondantes dans `PROJECT_AUDIT_AND_ROADMAP.md`, renseigner les fichiers clés, proposer un message de commit clair (branche `feature/…` si le scope est isolé).
+6. Ne jamais pousser sur Git sans validation explicite.
+7. En cas de blocage ou d'ambiguïté du cahier des charges, l'écrire dans la sous-puce de la fonctionnalité concernée plutôt que de deviner.
+
+## Bugs connus à corriger en priorité (détail et IDs dans `PROJECT_AUDIT_AND_ROADMAP.md` §9.0)
+
+- [ ] **Suppression de compte RGPD cassée** — le front appelle `DELETE /users/me` (`parametres/page.tsx`) mais le backend n'expose plus que `DELETE /users/:id` réservé `SUPER_ADMIN` (régression du refactor `e91555b`) → `DEL-001…005`
+- [ ] **CronJob 2FA en 404** — `k8s/backend/cleanup-cronjob.yml` appelle l'URL sans le préfixe `/api` (les routeurs sont montés sous `/api`, `app.ts:65`) → `K8S-001`
+- [ ] **Journal d'audit jamais alimenté** — l'API `GET /audit-logs` et les pages `/superadmin/*` existent mais aucun code n'écrit dans la table `audit_log` → `AUD-001…010`
+- [ ] Dépôt git imbriqué `infrastructure/frontend/next/.git` à supprimer (les fichiers sont bien suivis par le dépôt parent) → `TECH-001`
+- [ ] Barre de recherche décorative dans `TopBar.tsx` (placeholder sans action) → `UI-001`
 
 ## Stack (rappel, voir `README.md` pour le détail)
 
@@ -22,26 +44,27 @@ Next.js (frontend) · Express.js (backend) · PostgreSQL + Drizzle (ORM) · Dock
 
 - [x] Inscription — `POST /auth/signup`, front `/signup` branché
 - [x] Connexion — `POST /auth/login` (+ étape 2FA `POST /auth/login/2fa`), front `/login` branché
-- [ ] **Mot de passe oublié** (vrai flux par email, sans connaître l'ancien mot de passe) — **aucun endpoint backend, aucune page front**
-  - [ ] Backend : générer un token à usage unique + expiration, endpoint d'envoi d'email, endpoint de confirmation
-  - [ ] Front : page `/forgot-password` (saisie email) + page de confirmation (`/reset-password?token=...`)
-- [~] Réinitialisation de mot de passe — existe uniquement en mode "renouvellement forcé tous les 60 jours" (`POST /auth/password/reset-with-credentials`, nécessite email + ancien mdp + nouveau mdp)
-  - [ ] Ce n'est pas un "mot de passe oublié" : il faut déjà connaître l'ancien mot de passe. À bien distinguer les deux usages sur `/reset-password`
+- [x] **Mot de passe oublié** (vrai flux par email, sans connaître l'ancien mot de passe)
+  - [x] Backend : token à usage unique + expiration (`POST /auth/password/forgot`, `POST /auth/password/reset-with-token`), envoi d'email (log console en dev via `email-sender.adapter.ts`)
+  - [x] Front : page `/forgot-password` + confirmation via `/reset-password?token=...`
+- [x] Réinitialisation de mot de passe — deux usages distincts sur `/reset-password` : renouvellement forcé (email + ancien mdp) via `POST /auth/password/reset-with-credentials` · mot de passe oublié (token email, sans ancien mdp) via `POST /auth/password/reset-with-token`
 - [x] Mot de passe fort (12 caractères min., maj./min./chiffre/symbole) — `domain/auth/security-policy.ts` (`isStrongPassword`)
 - [x] Renouvellement obligatoire tous les 60 jours — `PASSWORD_MAX_AGE_DAYS = 60`, vérifié à chaque login (`needsPasswordReset`)
 - [x] Blocage après tentatives infructueuses — 5 tentatives (`MAX_FAILED_ATTEMPTS`) → verrouillage 15 min (`LOCK_DURATION_MS`), déverrouillage automatique après délai (pas d'action admin nécessaire)
 - [x] Authentification à deux facteurs (TOTP) — fonctionne à l'inscription (`enable2FA`), au login (`totp-provider.adapter.ts`) et à l'activation sur compte existant (`POST /auth/2fa/enable`), **obligatoire pour `SUPER_ADMIN`**
   - [x] Endpoint pour activer la 2FA sur un compte déjà existant — `POST /auth/2fa/enable` + page `/2fa/setup`
+  - [ ] Purge des sessions 2FA expirées **en échec silencieux** : le CronJob k8s appelle l'URL sans `/api` → 404 chaque nuit → `K8S-001`
 - [ ] Confirmation par SMS (Twilio) en alternative au TOTP — non implémenté (non bloquant : un seul moyen de 2FA suffit)
 - [ ] OIDC/OAuth2 (Google, Facebook...) — non implémenté. `cahierDesCharges.md` §5.1 le marque explicitement **"(optionnel)"** → à confirmer à l'oral si un seul mode d'authentification (email/mdp) suffit pour la partie "Authentification Avancée" du sujet
 - [ ] Lien magique — non implémenté (idem, marqué optionnel dans le cahier des charges interne)
 - [x] Hachage sécurisé des mots de passe — Argon2 (`password-hasher.adapter.ts`)
 - [x] Gestion des secrets via variables d'environnement — Infisical (CLI en dev, opérateur Kubernetes en prod)
-- [x] Séparation stricte des rôles — middleware `requireRole` appliqué sur toutes les routes sensibles (vérifié sur absence/document/grade/instructor/student/conversation/audit-log/admin)
+- [~] Séparation stricte des rôles — depuis le refactor `e91555b`, plus de middleware `requireRole` : l'autorisation se fait par **capacités** (`domain/auth/authorization-policy.ts` → `capabilitiesForRole` → `AuthContext` passé aux use cases, qui retournent `Forbidden`). Le HTTP ne fait que l'authentification (`authed()` dans `auth/middleware.ts`)
+  - [ ] Revue systématique des autorisations post-refactor (une régression avérée : suppression de compte, voir bugs connus) → `SEC-101`
 - [~] Conformité RGPD/CNIL
   - [x] Consentement RGPD stocké à l'inscription (`gdprConsentAt`)
   - [x] Export des données personnelles — `GET /gdpr/export`
-  - [x] Suppression de compte — `DELETE /users/me`
+  - [ ] Suppression de compte — **cassée** : le front appelle `DELETE /users/me` mais seul `DELETE /users/:id` existe, réservé `SUPER_ADMIN` (`auth.use-cases.ts` `deleteAccount`) → `DEL-001…005`
   - [ ] Pages légales (CGU/CGV/politique de cookies) — bonus, voir section 9
 - [x] **Garde des routes front par rôle** — le token est désormais un cookie `httpOnly` posé par `app/api/auth/login/route.ts` / `login/2fa/route.ts` (jamais exposé au JS) ; `middleware.ts` vérifie sa signature (`jose`) et bloque/redirige avant le rendu de toute page sous `/etudiant`, `/intervenant`, `/scolarite`, `/superadmin`, `/parametres`, `/messagerie` si absent ou si le rôle ne correspond pas
 
@@ -62,13 +85,13 @@ Next.js (frontend) · Express.js (backend) · PostgreSQL + Drizzle (ORM) · Dock
 - [~] Ingress Controller — le cahier des charges interne mentionne "Nginx" mais l'implémentation réelle utilise **Traefik** (choix différent mais valide techniquement) → documenter/justifier ce choix si demandé à l'oral
 - [x] Au moins 2 réplicas par service (hors base de données) — backend : 2, frontend : 3, postgres : 1 (normal pour une base de données)
 - [x] PostgreSQL avec volumes persistants — PVC 5Gi (`k8s/postgres/pvc.yml`)
-- [ ] **Stockage réel des fichiers uploadés** (justificatifs, documents administratifs, supports de cours, rendus d'évaluation, contrats) — le module `file` ne stocke que des **métadonnées** (`storagePath`, `mimeType`, `sizeBytes`...) ; **aucun upload multipart, aucun volume/bucket dédié** dans `docker-compose.yml` ni dans `k8s/`. Bloquant pour toutes les pages de dépôt de fichiers listées en section 11
+- [ ] **Stockage réel des fichiers uploadés** (justificatifs, documents administratifs, supports de cours, rendus d'évaluation, contrats) — le module `file` ne stocke que des **métadonnées** (`storagePath`, `mimeType`, `sizeBytes`...) ; **aucun upload multipart, aucun volume/bucket dédié** dans `docker-compose.yml` ni dans `k8s/`. Un port `StorageService` existe (`application/file/storage.service.ts`) mais son adaptateur est un **stub no-op** (`src/storage/storage.adapter.ts` : `delete()` au corps vide). Bloquant pour toutes les pages de dépôt de fichiers listées en section 11 → `FILE-001…024`
 
 ## 3. Réponse métier et architecture
 
 - [x] Domaine métier riche et cohérent — 26 modules backend (`domain/`, `infrastructure/backend/express/src/`) couvrant la quasi-totalité du cahier des charges (planning, notes, absences, documents, entreprises, messagerie, audit)
 - [x] Architecture en couches claire — `domain/` (entités, règles), `application/` (cas d'usage), `infrastructure/` (adapters Express/Postgres/Next) — pas de Clean Architecture stricte mais lisible, conforme à ce qui est demandé
-- [ ] Frontend connecté au backend — en cours, voir détail page par page section 11 plus bas
+- [x] Frontend connecté au backend — les 38 pages sont branchées sur le vrai backend (vérifié à l'audit du 2026-07-10 : plus aucune donnée métier statique), voir détail page par page section 11 ; restent les limitations transverses de la section 10 (upload, noms, temps réel)
 
 ## 4. Design et accessibilité
 
@@ -120,10 +143,15 @@ Next.js (frontend) · Express.js (backend) · PostgreSQL + Drizzle (ORM) · Dock
 
 Ces gaps backend conditionnent des pages listées en section 11 — à traiter en parallèle du travail front, pas après :
 
-- [ ] Endpoint mot de passe oublié par email (token à usage unique)
+- [x] Endpoint mot de passe oublié par email (token à usage unique)
 - [x] Endpoint d'activation de la 2FA sur un compte existant (`POST /auth/2fa/enable`)
-- [ ] Upload réel de fichiers (multipart + stockage disque/S3), au-delà de la simple création de métadonnées `POST /files`
-- [ ] Mécanisme de notifications temps réel (WebSocket) pour planning/notes/documents
+- [x] Endpoint de dégel des notes — `POST /grades/:id/unlock` exposé côté front sur `/scolarite/notes` (bouton "Dégeler") → `NOTE-001` fait
+- [ ] Rétablir l'auto-suppression de compte (`DELETE /users/me` ou équivalent, sans exiger `SUPER_ADMIN`) → `DEL-002/003`
+- [ ] **Écriture des journaux d'audit** — la table, l'API de lecture et les pages existent, mais aucun use case n'écrit jamais d'entrée : brancher un `audit-recorder` sur les actions sensibles (login, notes lock/unlock, absences validate/reject, documents, attributions de rôle) → `AUD-001…010`
+- [ ] Upload réel de fichiers (multipart + stockage disque/S3), au-delà de la simple création de métadonnées `POST /files` → `FILE-*`
+- [ ] Mécanisme de notifications temps réel (WebSocket) pour planning/notes/documents → `NOTIF-*`
+- [ ] Endpoint agrégé `GET /conversations/mine` (la messagerie reconstruit tout côté client en N appels) → `API-001`
+- [ ] Permettre à un `ADMIN` simple de retrouver son `adminId` (`GET /admins/me` ou ouverture de `GET /admins/user/:userId` à l'intéressé) — débloque la messagerie ciblée pour les admins → `API-002`
 - [ ] Un moyen de lister les comptes en attente d'attribution de rôle (`pending_role_assignment`) — aujourd'hui `GET /admin/security/users` retourne tous les comptes mais ne distingue pas explicitement "sans rôle" des autres
 - [ ] **Résolution nom/prénom à partir d'un `userId`** — vérifié dans le code (`student.adapter.ts`, `instructor.adapter.ts`, `course.use-cases.ts`, `message.use-cases.ts`) : `GET /students`, `/students/:id`, `/instructors/:id`, `/courses/*`, les messages, etc. ne renvoient que des IDs bruts, jamais de nom joint. Seuls `/users/me`, `/students/me`, `/instructors/me` (soi-même) et `/admin/security/users` (`SUPER_ADMIN` uniquement, tous les comptes) exposent un nom. Bloque l'affichage de "qui" sur `/messagerie`, les dashboards (nom de l'intervenant), `/scolarite/etudiants`, la gestion des intervenants, etc. — à corriger en joignant `firstname`/`lastname` dans les réponses `students`/`instructors`/`courses` concernées, ou via un endpoint restreint `GET /users/:id` (nom uniquement, pas de données sensibles). **Décision d'équipe : en attendant, le front affiche des libellés génériques ("Intervenant", "Administration") ou l'ID plutôt que de bloquer les pages.**
 
@@ -131,7 +159,7 @@ Ces gaps backend conditionnent des pages listées en section 11 — à traiter e
 
 ## 11. Frontend — pages à construire (détail)
 
-Contexte : `infrastructure/frontend/next` est le vrai front. Le dossier `infrastructure/frontend/MyGes refonte/` (fichiers `.jsx` statiques, `localStorage`) est **uniquement une référence de design/interactions**, ne doit plus servir de base de code.
+Contexte : `infrastructure/frontend/next` est le vrai front. L'ancienne maquette statique `infrastructure/frontend/MyGes refonte/` a été **supprimée** (suppression stagée le 2026-07-10) — ne plus s'y référer.
 
 Chaque page ci-dessous liste un **"Contenu"** : ce qu'elle doit afficher/permettre, concrètement, à partir des entités réelles du backend (`domain/*.entity.ts`). Volontairement limité à ce que le cahier des charges demande — ne pas ajouter de sections/fonctionnalités non listées ici sans raison métier.
 
@@ -172,12 +200,8 @@ Seulement 4 rôles (pas les 6-7 décrits dans `cahierDesCharges.md` §2, l'admin
   - À retirer : le sélecteur de rôle actuel (le champ envoyé n'est lu par aucun endpoit backend)
   - Endpoint : `POST /auth/signup`
 
-- [ ] **`/forgot-password`** — 🆕, dépend d'un endpoint backend à créer (section 10)
-  - Contenu : un seul champ email + bouton "Envoyer le lien de réinitialisation" · message de confirmation neutre après envoi (ne jamais indiquer si l'email existe en base, c'est une fuite d'information)
-
-- [~] **`/reset-password`** — branché sur `POST /auth/password/reset-with-credentials`
-  - Contenu actuel (à conserver) : champs email (pré-rempli si redirigé depuis `/login`), ancien mot de passe, nouveau mot de passe + confirmation, indicateur de force
-  - À ajouter : si la page est ouverte avec un paramètre `?token=...` (lien reçu par email via `/forgot-password`), afficher un **second formulaire** sans champ "ancien mot de passe" (juste nouveau mot de passe + confirmation) — les deux usages ("renouvellement expiré" et "mot de passe oublié") ne doivent pas être confondus dans le même formulaire
+- [x] **`/forgot-password`** — saisie email + message de confirmation neutre après envoi
+- [x] **`/reset-password`** — deux formulaires selon le contexte : renouvellement expiré (email + ancien + nouveau mdp) · lien email `?token=...` (nouveau mdp + confirmation, sans ancien mdp)
 
 - [x] **`/2fa/setup`** — QR code + secret TOTP + confirmation par code à 6 chiffres
 
@@ -192,8 +216,10 @@ Seulement 4 rôles (pas les 6-7 décrits dans `cahierDesCharges.md` §2, l'admin
 - [x] **`/messagerie`** — reconnectée
   - Liste des conversations reconstruite côté client (pas d'endpoint agrégé) : classe (étudiant → groupe → classe → `conversationId`), cours (groupe → cours → `conversationId`), privées (`conversation-private`)
   - Fil de messages, envoi (`POST /messages`), marquage lu best-effort (`POST /message-reads`)
+  - **Bug corrigé (smoke test du 2026-07-10)** : la page appelait `GET /conversation-privates/student/:studentId` et `GET /conversation-privates/admin/:adminId`, deux routes qui **n'existent pas** côté backend (seules `/conversation-privates/mine`, `/conversation/:id`, `/:id` existent) → chez tout étudiant, l'appel non catché plantait toute la messagerie ("Une erreur est survenue.", même les conversations de classe/cours disparaissaient). Corrigé en utilisant `GET /conversation-privates/mine` (self-service, filtre déjà par l'utilisateur authentifié) pour étudiants et admins — au passage, l'admin n'a plus besoin de connaître son `adminId` pour *voir* ses conversations privées (seule la *création* en a encore besoin, cf. limitation ci-dessous)
   - "Nouvelle conversation" (ADMIN/SUPER_ADMIN) fonctionnelle mais dégradée : pas de nom d'étudiant à afficher (gap section 10), sélection par ID tronqué
-  - **Limitation connue** : `ADMIN` (non `SUPER_ADMIN`) ne peut pas utiliser la messagerie ciblée — `GET /admins/user/:userId` est réservé à `SUPER_ADMIN`, un simple admin ne peut donc pas retrouver son propre `adminId`. Affiché comme "fonctionnalité limitée pour votre rôle" plutôt que planté
+  - **Limitation connue** : `ADMIN` (non `SUPER_ADMIN`) ne peut pas *démarrer* une messagerie ciblée — `GET /admins/user/:userId` est réservé à `SUPER_ADMIN`, un simple admin ne peut donc pas retrouver son propre `adminId`. Affiché comme "fonctionnalité limitée pour votre rôle" plutôt que planté (voir `API-002`)
+  - [ ] **Bug non corrigé découvert au passage** : la modal "Nouvelle conversation" envoie `POST /conversation-privates` avec `{ adminId, studentId, conversationId }`, mais le backend attend `{ userAId, userBId }` (`conversation/routes.ts`, message d'erreur `"userAId and userBId are required"`) — la création échoue donc systématiquement en 400, même quand `adminId` a pu être résolu. À corriger en envoyant l'userId de l'admin (déjà récupéré via `GET /users/me`) et l'userId de l'étudiant ciblé (`student.userId`, présent dans `GET /students`) plutôt que les IDs d'entité métier → `MSG-001`
 
 - [ ] Notifications temps réel (bandeau/cloche globale, pas une page à part) — dépend du WebSocket backend (section 10), requis par §3.1/§3.5
 
@@ -202,6 +228,7 @@ Seulement 4 rôles (pas les 6-7 décrits dans `cahierDesCharges.md` §2, l'admin
 - [x] **`/etudiant`** — dashboard reconnecté
   - Carte "Prochain cours" (calcul du plus proche créneau futur), carte "Absences en attente", carte "Documents à régulariser", carte "Nouvelles notes" · listes "Prochain cours" et "Dernières notes" détaillées
   - Pas d'ECTS/graphique de progression (aucune notion de validation d'ECTS dans le backend, aurait été inventé)
+  - **Bug corrigé (smoke test du 2026-07-10)** : la carte "Documents à régulariser" appelait `GET /file-documents/student/:studentId` (avec son propre `studentId`), un endpoint réservé aux admins côté backend (`if (!auth.isAdmin) return NotFound`) → tout étudiant se prenait un "File documents not found" affiché tel quel au lieu du dashboard. Corrigé en utilisant `GET /file-documents/mine` (self-service, déjà prévu pour ce cas)
 
 - [x] **`/etudiant/planning`** — emploi du temps §3.1, reconnecté
   - Chaîne réelle : `students/me` → `student-groups` → `groups/:id/courses` → `courses/:id/sessions`, grille semaine avec navigation
@@ -217,7 +244,7 @@ Seulement 4 rôles (pas les 6-7 décrits dans `cahierDesCharges.md` §2, l'admin
   - Dépôt de justificatif **désactivé avec message explicite** : dépend de l'upload réel de fichiers (section 2/10), pas encore implémenté
 
 - [x] **`/etudiant/documents`** — dossier centralisé §3.4, reconnecté
-  - `file-documents/student/:id` réparti en 3 sections via `document-administratives/file-document/:id` et `document-apprenticeship-contracts/file-document/:id` (déterminent si un `FileDocument` est un document officiel, un contrat, ou un document personnel)
+  - `file-documents/mine` (self-service ; corrigé le 2026-07-10, appelait auparavant `file-documents/student/:id` réservé admin, cf. bug ci-dessus sur `/etudiant`) réparti en 3 sections via `document-administratives/file-document/:id` et `document-apprenticeship-contracts/file-document/:id` (déterminent si un `FileDocument` est un document officiel, un contrat, ou un document personnel)
   - Dépôt/téléchargement **désactivés avec message explicite** : même gap upload/stockage réel
 
 - [x] **`/etudiant/cours`** — bibliothèque de supports §3.6, construite
@@ -276,7 +303,7 @@ Fusionne les responsabilités "Scolarité / Pédagogique / Relations Entreprises
 
 - [x] **`/scolarite/notes`** — supervision des notes, reconnectée
   - Sélecteur de filière (`GET /programs`), tableau par module (moyenne/min/max/notes saisies) construit en résolvant chaque `Grade` jusqu'à son module (même logique que `/etudiant/notes`, appliquée à `GET /grades` — toutes les notes du système)
-  - "Geler ce module" fonctionnel : appelle `POST /grades/:id/lock` sur chaque note du module (pas d'endpoint de gel en masse côté backend) — **pas de "dégeler"**, aucun endpoint unlock n'existe
+  - "Geler ce module" / "Dégeler ce module" fonctionnels : appellent `POST /grades/:id/lock` / `POST /grades/:id/unlock` sur chaque note du module (pas d'endpoint de gel/dégel en masse côté backend) → `NOTE-001` fait
   - Section "Notations manuelles" pas encore ajoutée
 
 - [x] **`/scolarite/planning`** — gestion des sessions §3.1, §4, construite
@@ -315,14 +342,14 @@ Fusionne les responsabilités "Scolarité / Pédagogique / Relations Entreprises
 ### 11.6 Super Administrateur uniquement (`/superadmin`)
 
 - [x] **`/superadmin`** — dashboard reconnecté
-  - 3 KPI réels (comptes en attente de rôle, verrouillés, mots de passe expirés) + 8 derniers événements `GET /audit-logs` (nom d'utilisateur non affiché, gap section 10 — affiche l'action et l'entité)
+  - 3 KPI réels (comptes en attente de rôle, verrouillés, mots de passe expirés) + 8 derniers événements `GET /audit-logs` (nom d'utilisateur non affiché, gap section 10 — affiche l'action et l'entité) — ⚠️ liste vide tant que `AUD-*` n'est pas fait (rien n'écrit dans `audit_log`)
 
 - [x] **`/superadmin/gestion`** — **point critique fait** : attribution de rôle fonctionnelle
   - Le rôle de chaque compte est déterminé en croisant `GET /admin/security/users` avec `GET /students`/`/instructors`/`/admins` (par `userId`) puisque le backend ne l'expose pas directement
   - Modal "Attribuer un rôle" sur un compte en attente : Étudiant (+ filière), Intervenant (+ type de contrat), Admin (+ `ADMIN`/`SUPER_ADMIN`) → `POST /students`, `/instructors`, `/admins`
   - Sur un compte admin existant : changer son niveau (`PATCH /admins/:id`) ou le retirer (`DELETE /admins/:id`, ne supprime pas le compte `user`)
 
-- [x] **`/superadmin/securite`** — audit et traçabilité §3.8, construite
+- [x] **`/superadmin/securite`** — audit et traçabilité §3.8, construite — ⚠️ **affiche une liste vide en permanence** tant que l'écriture des audit-logs n'est pas branchée (section 10, `AUD-*`) : rien n'alimente la table `audit_log` aujourd'hui
   - Tableau paginé côté client (20/page) de `GET /audit-logs` (pas de pagination serveur) : date, utilisateur (libellé générique, gap section 10), action (badge coloré par type), entité + id tronqué
   - Filtres client : utilisateur (id), entité (nom), action, plage de dates (du/au) — combinables, bouton réinitialiser
   - Ligne dépliable : diff simplifié avant/après (`oldValue`/`newValue` en JSON brut, pas de diff champ-par-champ)
@@ -348,5 +375,19 @@ Fusionne les responsabilités "Scolarité / Pédagogique / Relations Entreprises
 4. ~~Zone Administration (`/scolarite/*`)~~ ✅ fait — les 13 pages (année académique, campus, formations, classes, intervenants, cours, planning, étudiants, absences, documents, entreprises, externes, examens) sont construites. `Sidebar.tsx` mis à jour avec les 13 entrées de menu correspondantes
 5. ~~`/etudiant/cours` + `/etudiant/evaluations` + `/intervenant/evaluations` (boucle supports/rendus complète)~~ ✅ fait — `Sidebar.tsx`/`TopBar.tsx` mis à jour avec les 3 entrées de menu/titres correspondants
 6. ~~`/superadmin/securite` (audit-log détaillé, filtres)~~ ✅ fait
-7. `/forgot-password` + `/2fa/setup` une fois les endpoints back correspondants ajoutés (section 10) — `/2fa/setup` fait entretemps, `/forgot-password` reste à faire
+7. ~~`/forgot-password` + `/2fa/setup`~~ ✅ fait
 8. ~~Composants à mutualiser (modal de confirmation, toast, badge de statut)~~ ✅ fait — `StatusBadge`/`ConfirmDialog`/`useToast`, déployés sur les suppressions d'entité et les badges de statut dupliqués (détail section 11.7). Table générique et dropzone d'upload restent à faire
+
+---
+
+## 12. Hors périmètre / à trancher (hérité de WORKFLOW.md, toujours d'actualité)
+
+Constats qui ne correspondent à aucune exigence des documents source — chacun nécessite une décision d'équipe explicite avant d'entrer au périmètre :
+
+- **Recherche globale** — la barre "Rechercher..." de `TopBar.tsx` n'a aucune portée fonctionnelle définie (cible : étudiants ? cours ? documents ?). En attendant : la retirer (`UI-001`).
+- **Internationalisation (i18n)** — aucune exigence multilingue dans les documents ; aucune infrastructure de traduction. À ignorer sauf décision contraire.
+- **Rate limiting réseau/IP** — non demandé par les documents (seul le blocage par compte l'est, et il est fait) ; recommandé néanmoins par l'audit → `SEC-103`.
+- **Confirmation SMS (Twilio)** — alternative au TOTP citée par le Sujet, non requise puisqu'un moyen de 2FA suffit.
+- **WebRTC** — aucun besoin métier (pas de visio au cahier des charges).
+- **Distinction notes académiques / appréciations entreprise** (cahier §3.2) — écartée volontairement (aucun champ sur `Grade`/`Assessment`, l'inventer aurait été trompeur) ; à assumer à l'oral ou à modéliser un jour.
+- **Changement de statut initial ↔ alternance** (cahier §4) — non modélisé : le statut se déduit de l'existence d'un contrat d'alternance ; le "changement" = créer/clore un contrat. À documenter pour la soutenance.

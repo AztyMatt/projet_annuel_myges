@@ -2,18 +2,24 @@
 
 import { Suspense, useState, type ChangeEvent, type FormEvent } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { cn } from "@/lib/utils";
 
 function ResetPasswordForm() {
+    const router = useRouter();
     const searchParams = useSearchParams();
+    const token = searchParams.get("token");
+    const isForgotFlow = Boolean(token);
+
     const [email, setEmail] = useState(searchParams.get("email") ?? "");
     const [oldPassword, setOldPassword] = useState("");
     const [newPassword, setNewPassword] = useState("");
+    const [confirmPassword, setConfirmPassword] = useState("");
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
 
-    const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    const handleCredentialsSubmit = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         setLoading(true);
         setError("");
@@ -33,6 +39,38 @@ function ResetPasswordForm() {
             setSuccess(payload.message ?? "Mot de passe mis à jour.");
             setOldPassword("");
             setNewPassword("");
+            setConfirmPassword("");
+        } catch {
+            setError("Serveur indisponible.");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleTokenSubmit = async (event: FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        if (newPassword !== confirmPassword) {
+            setError("Les mots de passe ne correspondent pas.");
+            return;
+        }
+
+        setLoading(true);
+        setError("");
+        setSuccess("");
+
+        try {
+            const response = await fetch("/api/auth/password/reset-with-token", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ token, newPassword }),
+            });
+            const payload = (await response.json()) as { error?: string; message?: string };
+            if (!response.ok) {
+                setError(payload.error ?? "Lien invalide ou expiré.");
+                return;
+            }
+            setSuccess("Mot de passe mis à jour. Vous pouvez vous connecter.");
+            setTimeout(() => router.push("/login"), 2000);
         } catch {
             setError("Serveur indisponible.");
         } finally {
@@ -48,30 +86,41 @@ function ResetPasswordForm() {
             <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-8">
                 <h1 className="text-2xl font-bold text-gray-900">Réinitialisation mot de passe</h1>
                 <p className="text-sm text-gray-500 mt-1 mb-6">
-                    Obligatoire tous les 60 jours - nouveau mot de passe fort requis.
+                    {isForgotFlow
+                        ? "Choisissez un nouveau mot de passe fort (12+ caractères, majuscule, minuscule, chiffre, symbole)."
+                        : "Obligatoire tous les 60 jours — saisissez votre ancien mot de passe et un nouveau mot de passe fort."}
                 </p>
 
-                <form onSubmit={handleSubmit} className="space-y-3">
-                    <div>
-                        <label className="text-xs font-medium text-gray-700 block mb-1">Adresse email</label>
-                        <input
-                            type="email"
-                            value={email}
-                            onChange={(e: ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
-                            className="w-full px-3 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-lg outline-none"
-                            required
-                        />
-                    </div>
-                    <div>
-                        <label className="text-xs font-medium text-gray-700 block mb-1">Ancien mot de passe</label>
-                        <input
-                            type="password"
-                            value={oldPassword}
-                            onChange={(e: ChangeEvent<HTMLInputElement>) => setOldPassword(e.target.value)}
-                            className="w-full px-3 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-lg outline-none"
-                            required
-                        />
-                    </div>
+                <form
+                    onSubmit={isForgotFlow ? handleTokenSubmit : handleCredentialsSubmit}
+                    className="space-y-3"
+                >
+                    {!isForgotFlow && (
+                        <>
+                            <div>
+                                <label className="text-xs font-medium text-gray-700 block mb-1">Adresse email</label>
+                                <input
+                                    type="email"
+                                    value={email}
+                                    onChange={(e: ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
+                                    className="w-full px-3 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-lg outline-none"
+                                    required
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs font-medium text-gray-700 block mb-1">
+                                    Ancien mot de passe
+                                </label>
+                                <input
+                                    type="password"
+                                    value={oldPassword}
+                                    onChange={(e: ChangeEvent<HTMLInputElement>) => setOldPassword(e.target.value)}
+                                    className="w-full px-3 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-lg outline-none"
+                                    required
+                                />
+                            </div>
+                        </>
+                    )}
                     <div>
                         <label className="text-xs font-medium text-gray-700 block mb-1">Nouveau mot de passe</label>
                         <input
@@ -82,6 +131,20 @@ function ResetPasswordForm() {
                             required
                         />
                     </div>
+                    {isForgotFlow && (
+                        <div>
+                            <label className="text-xs font-medium text-gray-700 block mb-1">
+                                Confirmer le nouveau mot de passe
+                            </label>
+                            <input
+                                type="password"
+                                value={confirmPassword}
+                                onChange={(e: ChangeEvent<HTMLInputElement>) => setConfirmPassword(e.target.value)}
+                                className="w-full px-3 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-lg outline-none"
+                                required
+                            />
+                        </div>
+                    )}
 
                     {error && (
                         <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-2">{error}</p>
@@ -95,7 +158,10 @@ function ResetPasswordForm() {
                     <button
                         type="submit"
                         disabled={loading}
-                        className="w-full py-2.5 rounded-xl font-semibold text-sm text-white bg-[#001944] hover:bg-[#002C6E] disabled:bg-gray-300"
+                        className={cn(
+                            "w-full py-2.5 rounded-xl font-semibold text-sm text-white transition-all",
+                            !loading ? "bg-[#001944] hover:bg-[#002C6E]" : "bg-gray-300 cursor-not-allowed",
+                        )}
                     >
                         {loading ? "Mise à jour..." : "Mettre à jour le mot de passe"}
                     </button>
@@ -113,7 +179,16 @@ function ResetPasswordForm() {
 
 export default function ResetPasswordPage() {
     return (
-        <Suspense>
+        <Suspense
+            fallback={
+                <div
+                    className="min-h-screen flex items-center justify-center px-4"
+                    style={{ background: "linear-gradient(135deg, #001944 0%, #002C6E 55%, #1d4ed8 100%)" }}
+                >
+                    <p className="text-white text-sm">Chargement…</p>
+                </div>
+            }
+        >
             <ResetPasswordForm />
         </Suspense>
     );

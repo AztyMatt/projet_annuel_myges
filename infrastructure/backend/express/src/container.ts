@@ -1,5 +1,6 @@
 import { userRepository } from "@express/src/postgres/auth/user.adapter";
 import { twoFactorSessionRepository } from "@express/src/postgres/auth/two-factor-session.adapter";
+import { passwordResetTokenRepository } from "@express/src/postgres/auth/password-reset-token.adapter";
 import { adminRepository } from "@express/src/postgres/admin/admin.adapter";
 import { studentRepository } from "@express/src/postgres/student/student.adapter";
 import { instructorRepository } from "@express/src/postgres/instructor/instructor.adapter";
@@ -49,6 +50,7 @@ import { unitOfWork } from "@express/src/postgres/unit-of-work";
 import { passwordHasher } from "@express/src/auth/password-hasher.adapter";
 import { tokenProvider } from "@express/src/auth/token-provider.adapter";
 import { totpProvider } from "@express/src/auth/totp-provider.adapter";
+import { emailSender } from "@express/src/auth/email-sender.adapter";
 
 import { AuthUseCases } from "@application/auth/auth.use-cases";
 import { AdminUseCases } from "@application/admin/admin.use-cases";
@@ -91,6 +93,9 @@ export const authUseCases = new AuthUseCases(
     tokenProvider,
     totpProvider,
     twoFactorSessionRepository,
+    passwordResetTokenRepository,
+    emailSender,
+    process.env.FRONTEND_PUBLIC_URL ?? "http://localhost:3000",
 );
 
 export const adminUseCases = new AdminUseCases(adminRepository, userRepository);

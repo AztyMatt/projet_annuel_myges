@@ -34,7 +34,7 @@ async function loadStudentConversations(): Promise<ConversationEntry[]> {
     const student = await api.get<{ id: string }>("/students/me");
     const [studentGroups, privates] = await Promise.all([
         api.get<{ groupId: string }[]>(`/student-groups/student/${student.id}`),
-        api.get<{ conversationId: string }[]>(`/conversation-privates/student/${student.id}`),
+        api.get<{ conversationId: string }[]>("/conversation-privates/mine"),
     ]);
 
     const entries: ConversationEntry[] = [];
@@ -95,28 +95,15 @@ async function loadInstructorConversations(): Promise<ConversationEntry[]> {
     return entries;
 }
 
-// Un ADMIN (non SUPER_ADMIN) n'a aujourd'hui aucun moyen de connaître son propre adminId
-// (GET /admins/user/:userId est réservé à SUPER_ADMIN) : la messagerie ciblée est donc
-// indisponible pour ce rôle tant que ce gap backend n'est pas comblé (voir CLAUDE.md section 10).
-async function loadAdminConversations(userId: string): Promise<{ entries: ConversationEntry[]; limited: boolean }> {
-    try {
-        const admin = await api.get<{ id: string }>(`/admins/user/${userId}`);
-        const privates = await api.get<{ id: string; studentId: string; conversationId: string }[]>(
-            `/conversation-privates/admin/${admin.id}`,
-        );
-        return {
-            entries: privates.map((p, i) => ({
-                id: p.conversationId,
-                label: `Étudiant #${p.studentId.slice(0, 8)}`,
-                sublabel: "Message privé",
-                color: COLORS[i % COLORS.length],
-                initials: "ET",
-            })),
-            limited: false,
-        };
-    } catch {
-        return { entries: [], limited: true };
-    }
+async function loadAdminConversations(): Promise<ConversationEntry[]> {
+    const privates = await api.get<{ conversationId: string }[]>("/conversation-privates/mine");
+    return privates.map((p, i) => ({
+        id: p.conversationId,
+        label: "Étudiant",
+        sublabel: "Message privé",
+        color: COLORS[i % COLORS.length],
+        initials: "ET",
+    }));
 }
 
 export default function Messagerie() {
@@ -147,9 +134,15 @@ export default function Messagerie() {
                 if (user.role === "STUDENT") entries = await loadStudentConversations();
                 else if (user.role === "INSTRUCTOR") entries = await loadInstructorConversations();
                 else {
-                    const result = await loadAdminConversations(user.id);
-                    entries = result.entries;
-                    setLimitedRole(result.limited);
+                    entries = await loadAdminConversations();
+                    // Un ADMIN (non SUPER_ADMIN) n'a aujourd'hui aucun moyen de connaître son propre adminId
+                    // (GET /admins/user/:userId est réservé à SUPER_ADMIN) : démarrer une nouvelle conversation
+                    // ciblée est donc indisponible pour ce rôle tant que ce gap backend n'est pas comblé
+                    // (voir CLAUDE.md section 10) — sondage best-effort pour masquer le bouton le cas échéant.
+                    await api
+                        .get(`/admins/user/${user.id}`)
+                        .then(() => setLimitedRole(false))
+                        .catch(() => setLimitedRole(true));
                 }
 
                 setConversations(entries);
