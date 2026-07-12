@@ -22,9 +22,15 @@ spec:
       containers:
         - name: backend
           image: __BACKEND_IMAGE__
+          env:
+            - name: UPLOADS_DIR
+              value: /data/uploads
           envFrom:
             - secretRef:
                 name: backend-generated-secrets
+          volumeMounts:
+            - name: uploads
+              mountPath: /data/uploads
           resources:
             requests:
               cpu: "100m"
@@ -51,3 +57,7 @@ spec:
             periodSeconds: 10
             failureThreshold: 3
             timeoutSeconds: 2
+      volumes:
+        - name: uploads
+          persistentVolumeClaim:
+            claimName: backend-uploads

@@ -28,10 +28,12 @@ jobs:
           sed -i "s|__BACKEND_IMAGE__|ghcr.io/${OWNER,,}/${REPO,,}-backend:${SHA}|" k8s/backend/deployment.yml
           sed -i "s|__FRONTEND_IMAGE__|ghcr.io/${OWNER,,}/${REPO,,}-frontend:${SHA}|" k8s/frontend/deployment.yml
 
-      - name: Set hostnames in IngressRoutes
+      - name: Set hostnames in IngressRoutes and Certificates
         run: |
           sed -i "s|__FRONTEND_HOST__|${{ vars.FRONTEND_HOST }}|g" k8s/frontend/ingressRoute.yml
           sed -i "s|__BACKEND_HOST__|${{ vars.BACKEND_HOST }}|g" k8s/backend/ingressRoute.yml
+          sed -i "s|__FRONTEND_HOST__|${{ vars.FRONTEND_HOST }}|g" k8s/frontend/certificate.yml
+          sed -i "s|__BACKEND_HOST__|${{ vars.BACKEND_HOST }}|g" k8s/backend/certificate.yml
 
       - name: Configure kubeconfig
         run: |
