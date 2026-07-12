@@ -313,8 +313,9 @@ Fusionne les responsabilités "Scolarité / Pédagogique / Relations Entreprises
   - Section "Notations manuelles" pas encore ajoutée
 
 - [x] **`/scolarite/planning`** — gestion des sessions §3.1, §4, construite
-  - Sélection d'un cours → liste/création/édition/suppression de ses sessions (date, heure, mode, salle)
   - Pas de champ motif dédié pour tracer une annulation/déplacement exceptionnel (n'existe pas sur `Session` — modifier ou supprimer la session est le seul levier actuel, noté explicitement dans la page)
+  - **Refonte (2026-07-12)** : l'ancienne version listait un cours à la fois dans un tableau texte brut (dates `06/07/2026 11:00`, pas de vue d'ensemble). Remplacée par la même grille calendrier hebdomadaire que `/etudiant/planning`/`/intervenant/planning`, mais avec **tous les cours/groupes affichés simultanément** (pas de sélecteur de cours global) : clic sur une session pour l'éditer, icône corbeille au survol pour la supprimer directement, `GET /sessions` (admin, liste tout le système) au lieu d'un fetch par cours. La modale "Nouvelle session" embarque désormais le sélecteur de cours (`PATCH /sessions/:id` ne permet pas de changer le cours d'une session existante, donc verrouillé en édition). Vérifié en vrai : création, édition, suppression, navigation semaine précédente/suivante, filtres présentiel/distanciel
+  - **Bug corrigé (2026-07-12)** : une session de 30 min ne mesurait que 24px de haut sur la grille — insuffisant pour même afficher le nom du module sans le tronquer verticalement (padding + texte dépassaient la hauteur disponible). Même souci sur `/etudiant/planning` et `/intervenant/planning`. Corrigé sur les 3 pages : hauteur minimale de bloc (28px) + mise en page compacte sur une seule ligne (module + mode, tronqués proprement) en dessous d'un certain seuil, au lieu d'empiler plusieurs lignes qui débordaient
 
 - [x] **`/scolarite/examens`** — sessions d'examen §3.7, construite
   - Création (session existante, type écrit/soutenance, case rattrapage, évaluation liée optionnelle), affectation étudiants/intervenants/externes avec retrait
