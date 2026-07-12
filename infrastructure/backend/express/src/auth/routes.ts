@@ -51,6 +51,15 @@ const resetWithCredentialsSchema = z.object({
     newPassword: z.string().min(1),
 });
 
+const forgotPasswordSchema = z.object({
+    email: z.email(),
+});
+
+const resetWithTokenSchema = z.object({
+    token: z.string().min(1),
+    newPassword: z.string().min(1),
+});
+
 type AuthUserView = { id: string; firstname: string; lastname: string; email: string; role: string };
 
 type LoginResponseBody =
@@ -148,10 +157,6 @@ const requestPasswordResetResponse = (
     result: RequestPasswordResetResult,
 ): { status: HttpStatus; body: ResetPasswordResponseBody } => {
     switch (result.kind) {
-        case "missing_email":
-            return { status: 400, body: { error: "Email is required" } };
-        case "invalid_email":
-            return { status: 400, body: { error: "Invalid email format" } };
         case "reset_email_sent":
             return {
                 status: 200,
@@ -259,17 +264,13 @@ authRouter.post("/auth/password/reset-with-credentials", validateBody(resetWithC
     send(response, { status: httpResponse.status, body: httpResponse.body });
 });
 
-authRouter.post("/auth/password/forgot", async (request, response) => {
-    const httpResponse = requestPasswordResetResponse(
-        await authUseCases.requestPasswordReset(request.body as { email?: string }),
-    );
+authRouter.post("/auth/password/forgot", validateBody(forgotPasswordSchema), async (request, response) => {
+    const httpResponse = requestPasswordResetResponse(await authUseCases.requestPasswordReset(request.body));
     send(response, { status: httpResponse.status, body: httpResponse.body });
 });
 
-authRouter.post("/auth/password/reset-with-token", async (request, response) => {
-    const httpResponse = resetPasswordResponse(
-        await authUseCases.resetWithToken(request.body as { token?: string; newPassword?: string }),
-    );
+authRouter.post("/auth/password/reset-with-token", validateBody(resetWithTokenSchema), async (request, response) => {
+    const httpResponse = resetPasswordResponse(await authUseCases.resetWithToken(request.body));
     send(response, { status: httpResponse.status, body: httpResponse.body });
 });
 
