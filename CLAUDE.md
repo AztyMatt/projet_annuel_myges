@@ -28,8 +28,8 @@ Il a été construit en confrontant ces deux documents au **code réel** (backen
 
 ## Bugs connus à corriger en priorité (détail et IDs dans `PROJECT_AUDIT_AND_ROADMAP.md` §9.0)
 
-- [ ] **Suppression de compte RGPD cassée** — le front appelle `DELETE /users/me` (`parametres/page.tsx`) mais le backend n'expose plus que `DELETE /users/:id` réservé `SUPER_ADMIN` (régression du refactor `e91555b`) → `DEL-001…005`
-- [ ] **CronJob 2FA en 404** — `k8s/backend/cleanup-cronjob.yml` appelle l'URL sans le préfixe `/api` (les routeurs sont montés sous `/api`, `app.ts:65`) → `K8S-001`
+- [x] **Suppression de compte RGPD rétablie (2026-07-12)** — `DELETE /users/me` réintroduit (`auth/routes.ts`), `deleteAccount` autorise l'auto-suppression (`auth.requesterId === userId`) → `DEL-001…005` corrigé
+- [x] **CronJob 2FA corrigé (2026-07-12)** — `k8s/backend/cleanup-cronjob.yml` appelle désormais `/api/admin/auth/cleanup-sessions` → `K8S-001`
 - [ ] **Journal d'audit jamais alimenté** — l'API `GET /audit-logs` et les pages `/superadmin/*` existent mais aucun code n'écrit dans la table `audit_log` → `AUD-001…010`
 - [ ] Dépôt git imbriqué `infrastructure/frontend/next/.git` à supprimer (les fichiers sont bien suivis par le dépôt parent) → `TECH-001`
 - [x] **`NOTE-002` corrigé (2026-07-12)** — `/etudiant/notes` plantait pour toute note liée via `manual_notation` : `GET /manual-notations/:id` était réservé admin/intervenant-du-module (`canManageModuleNotations`), l'étudiant se prenait un 403 et ne voyait plus aucune note. `findManualNotationById` (`grade.use-cases.ts`) autorise désormais aussi l'étudiant propriétaire de la note (via `grade-manual-notations` → `canReadGrade`, même pattern que les fixes `findById`/`findAdministrativeByFileDocument` du même jour)
@@ -58,18 +58,18 @@ Next.js (frontend) · Express.js (backend) · PostgreSQL + Drizzle (ORM) · Dock
 - [x] Blocage après tentatives infructueuses — 5 tentatives (`MAX_FAILED_ATTEMPTS`) → verrouillage 15 min (`LOCK_DURATION_MS`), déverrouillage automatique après délai (pas d'action admin nécessaire)
 - [x] Authentification à deux facteurs (TOTP) — fonctionne à l'inscription (`enable2FA`), au login (`totp-provider.adapter.ts`) et à l'activation sur compte existant (`POST /auth/2fa/enable`), **obligatoire pour `SUPER_ADMIN`**
   - [x] Endpoint pour activer la 2FA sur un compte déjà existant — `POST /auth/2fa/enable` + page `/2fa/setup`
-  - [ ] Purge des sessions 2FA expirées **en échec silencieux** : le CronJob k8s appelle l'URL sans `/api` → 404 chaque nuit → `K8S-001`
+  - [x] Purge des sessions 2FA expirées — CronJob k8s corrigé (`K8S-001`, 2026-07-12)
 - [ ] Confirmation par SMS (Twilio) en alternative au TOTP — non implémenté (non bloquant : un seul moyen de 2FA suffit)
 - [ ] OIDC/OAuth2 (Google, Facebook...) — non implémenté. `cahierDesCharges.md` §5.1 le marque explicitement **"(optionnel)"** → à confirmer à l'oral si un seul mode d'authentification (email/mdp) suffit pour la partie "Authentification Avancée" du sujet
 - [ ] Lien magique — non implémenté (idem, marqué optionnel dans le cahier des charges interne)
 - [x] Hachage sécurisé des mots de passe — Argon2 (`password-hasher.adapter.ts`)
 - [x] Gestion des secrets via variables d'environnement — Infisical (CLI en dev, opérateur Kubernetes en prod)
 - [~] Séparation stricte des rôles — depuis le refactor `e91555b`, plus de middleware `requireRole` : l'autorisation se fait par **capacités** (`domain/auth/authorization-policy.ts` → `capabilitiesForRole` → `AuthContext` passé aux use cases, qui retournent `Forbidden`). Le HTTP ne fait que l'authentification (`authed()` dans `auth/middleware.ts`)
-  - [ ] Revue systématique des autorisations post-refactor (une régression avérée : suppression de compte, voir bugs connus) → `SEC-101`
+  - [ ] Revue systématique des autorisations post-refactor → `SEC-101` (la régression suppression de compte est corrigée, 2026-07-12)
 - [~] Conformité RGPD/CNIL
   - [x] Consentement RGPD stocké à l'inscription (`gdprConsentAt`)
   - [x] Export des données personnelles — `GET /gdpr/export`
-  - [ ] Suppression de compte — **cassée** : le front appelle `DELETE /users/me` mais seul `DELETE /users/:id` existe, réservé `SUPER_ADMIN` (`auth.use-cases.ts` `deleteAccount`) → `DEL-001…005`
+  - [x] Suppression de compte — `DELETE /users/me` réintroduit, auto-suppression autorisée (`DEL-001…005`, 2026-07-12)
   - [ ] Pages légales (CGU/CGV/politique de cookies) — bonus, voir section 9
 - [x] **Garde des routes front par rôle** — le token est désormais un cookie `httpOnly` posé par `app/api/auth/login/route.ts` / `login/2fa/route.ts` (jamais exposé au JS) ; `middleware.ts` vérifie sa signature (`jose`) et bloque/redirige avant le rendu de toute page sous `/etudiant`, `/intervenant`, `/scolarite`, `/superadmin`, `/parametres`, `/messagerie` si absent ou si le rôle ne correspond pas
 
@@ -151,14 +151,14 @@ Ces gaps backend conditionnent des pages listées en section 11 — à traiter e
 - [x] Endpoint mot de passe oublié par email (token à usage unique)
 - [x] Endpoint d'activation de la 2FA sur un compte existant (`POST /auth/2fa/enable`)
 - [x] Endpoint de dégel des notes — `POST /grades/:id/unlock` exposé côté front sur `/scolarite/notes` (bouton "Dégeler") → `NOTE-001` fait
-- [ ] Rétablir l'auto-suppression de compte (`DELETE /users/me` ou équivalent, sans exiger `SUPER_ADMIN`) → `DEL-002/003`
+- [x] Rétablir l'auto-suppression de compte (`DELETE /users/me`) → `DEL-002/003` (2026-07-12)
 - [ ] **Écriture des journaux d'audit** — la table, l'API de lecture et les pages existent, mais aucun use case n'écrit jamais d'entrée : brancher un `audit-recorder` sur les actions sensibles (login, notes lock/unlock, absences validate/reject, documents, attributions de rôle) → `AUD-001…010`
 - [x] Upload réel de fichiers (multipart + stockage disque en dev) fait le 2026-07-12 → voir section 2 ; reste le câblage des pages restantes et l'infra prod (`FILE-*`)
 - [x] **Notifications (2026-07-12)** — version simplifiée **sans WebSocket** (choix assumé : décision d'équipe, cf. section 11.2) : nouvelle table `notification` (`domain/notification`, `application/notification`, `infrastructure/backend/express/src/notification`), déclenchée sur 4 évènements (`GRADE_PUBLISHED` à la création d'une note, `ABSENCE_VALIDATED`/`ABSENCE_REJECTED`, `NEW_MESSAGE` à l'envoi d'un message — résout tous les destinataires réels d'une conversation privée/cours/classe —, `DOCUMENT_VALIDATED`). Routes `GET /notifications/mine`, `GET /notifications/mine/unread-count`, `POST /notifications/:id/read`, `POST /notifications/read-all`. Front : `components/layout/NotificationBell.tsx`, polling toutes les 30s, remplace l'ancienne cloche décorative (point rouge codé en dur) de `TopBar.tsx`. **Non couvert par ce premier passage** : aucun déclencheur sur évaluation publiée/support de cours déposé/contrat expirant — à étendre au fil de l'eau via `notificationUseCases.notify(...)` (même pattern que les 4 déclencheurs existants) → reste de `NOTIF-*`
 - [ ] Endpoint agrégé `GET /conversations/mine` (la messagerie reconstruit tout côté client en N appels) → `API-001`
-- [ ] Permettre à un `ADMIN` simple de retrouver son `adminId` (`GET /admins/me` ou ouverture de `GET /admins/user/:userId` à l'intéressé) — débloque la messagerie ciblée pour les admins → `API-002`
+- [x] Permettre à un `ADMIN` simple de retrouver son profil admin — `GET /admins/me` (`admin/routes.ts`, `resolveOwnAdmin`) débloque la messagerie ciblée → `API-002` (2026-07-12)
 - [ ] Un moyen de lister les comptes en attente d'attribution de rôle (`pending_role_assignment`) — aujourd'hui `GET /admin/security/users` retourne tous les comptes mais ne distingue pas explicitement "sans rôle" des autres
-- [~] **Résolution nom/prénom à partir d'un `userId`** — `GET /users/:id` existe désormais (2026-07-12, `findPublicProfile` dans `auth.use-cases.ts`, accessible à tout utilisateur authentifié, ne renvoie que `id`/`firstname`/`lastname`). `/intervenant/notes` l'utilise déjà (chaîné avec `GET /students/:id`, lui-même élargi pour autoriser l'intervenant concerné, cf. section 11.4). Reste à appliquer page par page : `GET /students`, `/students/:id` (roster hors instructeur concerné), `/instructors/:id`, `/courses/*`, les messages, etc. ne renvoient toujours que des IDs bruts. Bloque encore l'affichage de "qui" sur `/scolarite/etudiants`, etc. — même pattern à reproduire (élargir l'accès à l'entité si besoin, puis chaîner vers `GET /users/:id`). Sur `/messagerie` : le nom de l'expéditeur dans le fil de messages est résolu (2026-07-12, `senderId` est déjà un `userId`) ; la liste des conversations (nom du contact) et le sélecteur "Nouvelle conversation" restent en libellé générique/ID. **Décision d'équipe toujours valable pour les pages non traitées : libellés génériques ("Intervenant", "Administration") ou ID plutôt que de bloquer.**
+- [~] **Résolution nom/prénom à partir d'un `userId`** — `GET /users/:id` existe (2026-07-12). Appliqué sur `/intervenant/notes`, `/messagerie` (expéditeur, liste des conversations privées admin, sélecteur "Nouvelle conversation") et `/scolarite/etudiants` (2026-07-12). Reste à appliquer page par page : `/students/:id` (roster hors instructeur concerné), `/instructors/:id`, `/courses/*`, etc.
 
 ---
 
@@ -223,9 +223,8 @@ Seulement 4 rôles (pas les 6-7 décrits dans `cahierDesCharges.md` §2, l'admin
   - Fil de messages, envoi (`POST /messages`), marquage lu best-effort (`POST /message-reads`)
   - **Nom de l'expéditeur affiché sur chaque message (2026-07-12)** : `Message.senderId` est directement un `userId` (posé par le backend depuis `req.auth.userId`, pas un id d'entité métier) — résolution directe via `GET /users/:id`, sans hop intermédiaire ni élargissement d'autorisation nécessaire, contrairement aux autres pages de cette session. Répond au signalement "pour les messages de cours on ne peut pas savoir qui a envoyé les messages" : dans une conversation de classe/cours à plusieurs participants, chaque bulle reçue affiche désormais `Prénom Nom` au-dessus (mise en cache par `senderId` le temps de la session de page)
   - **Bug corrigé (smoke test du 2026-07-10)** : la page appelait `GET /conversation-privates/student/:studentId` et `GET /conversation-privates/admin/:adminId`, deux routes qui **n'existent pas** côté backend (seules `/conversation-privates/mine`, `/conversation/:id`, `/:id` existent) → chez tout étudiant, l'appel non catché plantait toute la messagerie ("Une erreur est survenue.", même les conversations de classe/cours disparaissaient). Corrigé en utilisant `GET /conversation-privates/mine` (self-service, filtre déjà par l'utilisateur authentifié) pour étudiants et admins — au passage, l'admin n'a plus besoin de connaître son `adminId` pour *voir* ses conversations privées (seule la *création* en a encore besoin, cf. limitation ci-dessous)
-  - "Nouvelle conversation" (ADMIN/SUPER_ADMIN) fonctionnelle mais dégradée : pas de nom d'étudiant à afficher (gap section 10), sélection par ID tronqué
-  - **Limitation connue** : `ADMIN` (non `SUPER_ADMIN`) ne peut pas *démarrer* une messagerie ciblée — `GET /admins/user/:userId` est réservé à `SUPER_ADMIN`, un simple admin ne peut donc pas retrouver son propre `adminId`. Affiché comme "fonctionnalité limitée pour votre rôle" plutôt que planté (voir `API-002`)
-  - [ ] **Bug non corrigé découvert au passage** : la modal "Nouvelle conversation" envoie `POST /conversation-privates` avec `{ adminId, studentId, conversationId }`, mais le backend attend `{ userAId, userBId }` (`conversation/routes.ts`, message d'erreur `"userAId and userBId are required"`) — la création échoue donc systématiquement en 400, même quand `adminId` a pu être résolu. À corriger en envoyant l'userId de l'admin (déjà récupéré via `GET /users/me`) et l'userId de l'étudiant ciblé (`student.userId`, présent dans `GET /students`) plutôt que les IDs d'entité métier → `MSG-001`
+  - "Nouvelle conversation" (ADMIN/SUPER_ADMIN) fonctionnelle : envoie `{ userAId, userBId }` via `POST /conversation-privates` (corrigé `MSG-001`, 2026-07-12), noms d'étudiants résolus via `GET /users/:id`, `GET /admins/me` pour débloquer les admins simples (`API-002`)
+  - Liste des conversations privées admin : nom de l'autre participant résolu via `conversation-privates/mine` + `GET /users/:id` (2026-07-12)
 
 - [x] Notifications (cloche globale, pas une page à part) — fait le 2026-07-12 en version polling (30s), pas de WebSocket ; voir section 10 pour le détail et les évènements couverts
 
@@ -302,7 +301,7 @@ Fusionne les responsabilités "Scolarité / Pédagogique / Relations Entreprises
 
 - [x] **`/scolarite/etudiants`** — dossiers étudiants, construite (le lien mort du `Sidebar` pointe maintenant vers une vraie page)
   - Filtre par filière, fiche détail dépliable (groupe(s), absences en attente, documents à régulariser)
-  - Sans nom d'étudiant (gap section 10) ; statut initial/alternant **non affiché dans la liste** (aurait demandé un aller-retour fichier/contrat par étudiant, trop coûteux pour une liste — resterait à faire dans la fiche détail individuelle)
+  - Noms affichés via chaînage `GET /students` → `GET /users/:userId` (2026-07-12) ; statut initial/alternant **non affiché dans la liste** (aurait demandé un aller-retour fichier/contrat par étudiant, trop coûteux pour une liste — resterait à faire dans la fiche détail individuelle)
 
 - [x] **`/scolarite/absences`** — validation des absences §3.3, construite
   - Tableau filtrable par statut (`PENDING` par défaut), Valider/Rejeter en un clic, indicateur de justificatif déposé

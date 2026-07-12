@@ -462,7 +462,8 @@ export class AuthUseCases {
     }
 
     async deleteAccount(userId: string, auth: AuthContext): Promise<DeleteAccountResult> {
-        if (!auth.isSuperAdmin) return Forbidden;
+        const isSelf = auth.requesterId === userId;
+        if (!isSelf && !auth.isSuperAdmin) return Forbidden;
         const user = await this.users.findById(userId);
         if (!user) return { kind: "user_not_found" };
         if (await this.resolveRole(userId)) return { kind: "user_has_active_role" };
