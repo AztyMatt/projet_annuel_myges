@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { type External } from "@domain/external/external.entity";
-import { type ExternalType } from "@domain/external/external.enums";
+import { ExternalType } from "@domain/external/external.enums";
 import { type ExternalRepository } from "@application/external/external.repository";
 import { type SessionExamExternalRepository } from "@application/session/session-exam/session-exam-external/session-exam-external.repository";
 import { type AuthContext } from "@application/types/auth-context";
-import { NotFound, MissingFields, Forbidden } from "@application/types/results";
+import { NotFound, Forbidden } from "@application/types/results";
 
 export type ExternalView = {
     id: string;
@@ -15,7 +15,6 @@ export type ExternalView = {
 };
 
 export type CreateExternalResult =
-    | MissingFields
     | Forbidden
     | { kind: "external_already_exists" }
     | { kind: "external_created"; external: ExternalView };
@@ -23,6 +22,7 @@ export type CreateExternalResult =
 export type UpdateExternalResult =
     | NotFound
     | Forbidden
+    | { kind: "external_already_exists" }
     | { kind: "external_updated"; external: ExternalView };
 
 export type DeleteExternalResult = NotFound | Forbidden | { kind: "external_has_session_exams" } | { kind: "external_deleted" };
@@ -52,9 +52,14 @@ export class ExternalUseCases {
         type?: ExternalType;
     }, auth: AuthContext): Promise<CreateExternalResult> {
         if (!auth.isAdmin) return Forbidden;
-        const { firstname, lastname, email, type } = input;
-        if (!firstname || !lastname || !email || !type) return MissingFields;
-        if (await this.externals.findByIdentity(firstname, lastname, email)) return { kind: "external_already_exists" };
+        const { firstname, lastname, email, type } = input as {
+            firstname: string;
+            lastname: string;
+            email: string;
+            type: ExternalType;
+        };
+
+        if (await this.externals.findByEmail(email)) return { kind: "external_already_exists" };
         const external: External = { id: randomUUID(), firstname, lastname, email, type };
         await this.externals.save(external);
         return { kind: "external_created", external: toView(external) };
@@ -68,6 +73,11 @@ export class ExternalUseCases {
         if (!auth.isAdmin) return Forbidden;
         const external = await this.externals.findById(id);
         if (!external) return NotFound;
+
+        if (input.email !== undefined && input.email !== external.email) {
+            const duplicate = await this.externals.findByEmail(input.email);
+            if (duplicate && duplicate.id !== id) return { kind: "external_already_exists" };
+        }
         if (input.firstname !== undefined) external.firstname = input.firstname;
         if (input.lastname !== undefined) external.lastname = input.lastname;
         if (input.email !== undefined) external.email = input.email;

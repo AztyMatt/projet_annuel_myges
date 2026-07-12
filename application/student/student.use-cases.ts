@@ -6,20 +6,24 @@ import { type AbsenceRepository } from "@application/absence/absence.repository"
 import { type SessionExamStudentRepository } from "@application/session/session-exam/session-exam-student/session-exam-student.repository";
 import { type AssessmentGroupMemberRepository } from "@application/assessment/assessment-group-member/assessment-group-member.repository";
 import { type FileDocumentRepository } from "@application/file/file-document/file-document.repository";
-import { NotFound, MissingFields, Forbidden } from "@application/types/results";
+import { type UserRepository } from "@application/auth/user.repository";
+import { type ProgramRepository } from "@application/program/program.repository";
+import { NotFound, Forbidden } from "@application/types/results";
 import { type AuthContext } from "@application/types/auth-context";
 
 export type StudentView = { id: string; userId: string; programId: string };
 
 export type CreateStudentResult =
-    | MissingFields
     | Forbidden
+    | { kind: "user_not_found" }
+    | { kind: "program_not_found" }
     | { kind: "user_already_student" }
     | { kind: "student_created"; student: StudentView };
 
 export type UpdateStudentResult =
     | NotFound
     | Forbidden
+    | { kind: "program_not_found" }
     | { kind: "student_updated"; student: StudentView };
 
 export type DeleteStudentResult =
@@ -46,12 +50,16 @@ export class StudentUseCases {
         private readonly sessionExamStudents: SessionExamStudentRepository,
         private readonly assessmentGroupMembers: AssessmentGroupMemberRepository,
         private readonly fileDocuments: FileDocumentRepository,
+        private readonly users: UserRepository,
+        private readonly programs: ProgramRepository,
     ) {}
 
     async create(input: { userId?: string; programId?: string }, auth: AuthContext): Promise<CreateStudentResult> {
         if (!auth.isAdmin) return Forbidden;
-        const { userId, programId } = input;
-        if (!userId || !programId) return MissingFields;
+        const { userId, programId } = input as { userId: string; programId: string };
+        if (!(await this.users.findById(userId))) return { kind: "user_not_found" };
+
+        if (!(await this.programs.findById(programId))) return { kind: "program_not_found" };
         if (await this.students.findByUserId(userId)) return { kind: "user_already_student" };
         const student: Student = { id: randomUUID(), userId, programId };
         await this.students.save(student);
@@ -62,6 +70,7 @@ export class StudentUseCases {
         if (!auth.isAdmin) return Forbidden;
         const student = await this.students.findById(id);
         if (!student) return NotFound;
+        if (input.programId !== undefined && !(await this.programs.findById(input.programId))) return { kind: "program_not_found" };
         if (input.programId !== undefined) student.programId = input.programId;
         await this.students.save(student);
         return { kind: "student_updated", student: toView(student) };

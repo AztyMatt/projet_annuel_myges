@@ -1,7 +1,20 @@
 import { Router } from "express";
+import { z } from "zod";
 import { authed, getAuthFlags } from "@express/src/auth/middleware";
 import { classroomUseCases } from "@express/src/container";
 import { respond, send } from "@express/src/http/responses";
+import { patchBody } from "@express/src/http/zod-schemas";
+
+const createClassroomSchema = z.object({
+    name: z.string().min(1),
+    capacity: z.number().int().positive(),
+    campusId: z.string().min(1),
+});
+const updateClassroomSchema = patchBody({
+    name: z.string().min(1).optional(),
+    capacity: z.number().int().positive().optional(),
+    campusId: z.string().min(1).optional(),
+});
 
 export const classroomRouter = Router();
 
@@ -22,20 +35,22 @@ classroomRouter.post("/classrooms", ...authed(async (req, res) => {
     const auth = getAuthFlags(req.auth);
     const result = await classroomUseCases.create(req.body, auth);
     respond(res, result, {
-        missing_fields: { status: 400, error: "name, capacity and campusId are required" },
+        campus_not_found: { status: 404, error: "Campus not found" },
         classroom_already_exists: { blocked: { type: "Creation", reason: "A classroom with this name already exists in this campus" } },
         classroom_created: (r) => ({ status: 201, body: r.classroom }),
     });
-}));
+}, createClassroomSchema));
 
 classroomRouter.patch("/classrooms/:id", ...authed(async (req, res) => {
     const auth = getAuthFlags(req.auth);
     const result = await classroomUseCases.update(String(req.params.id), req.body, auth);
     respond(res, result, {
         not_found: { status: 404, error: "Classroom not found" },
+        campus_not_found: { status: 404, error: "Campus not found" },
+        classroom_already_exists: { blocked: { type: "Operation", reason: "A classroom with this name already exists in this campus" } },
         classroom_updated: (r) => ({ status: 200, body: r.classroom }),
     });
-}));
+}, updateClassroomSchema));
 
 classroomRouter.delete("/classrooms/:id", ...authed(async (req, res) => {
     const auth = getAuthFlags(req.auth);

@@ -51,18 +51,28 @@ export const gradeAssessmentRepository: GradeAssessmentRepository = {
         return result[0] ? rowToGradeAssessment(result[0]) : undefined;
     },
     async save(gradeAssessment) {
+        const [linked] = await db
+            .select({ studentId: gradeTable.studentId, isRetake: gradeTable.isRetake })
+            .from(gradeTable)
+            .where(eq(gradeTable.id, gradeAssessment.gradeId))
+            .limit(1);
+        if (!linked) throw new Error(`grade ${gradeAssessment.gradeId} not found while saving grade_assessment`);
         await db
             .insert(gradeAssessmentTable)
             .values({
                 id: gradeAssessment.id,
                 gradeId: gradeAssessment.gradeId,
                 assessmentId: gradeAssessment.assessmentId,
+                studentId: linked.studentId,
+                isRetake: linked.isRetake,
             })
             .onConflictDoUpdate({
                 target: gradeAssessmentTable.id,
                 set: {
                     gradeId: gradeAssessment.gradeId,
                     assessmentId: gradeAssessment.assessmentId,
+                    studentId: linked.studentId,
+                    isRetake: linked.isRetake,
                 },
             });
     },

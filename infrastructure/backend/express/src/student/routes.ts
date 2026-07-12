@@ -1,7 +1,12 @@
 import { Router } from "express";
+import { z } from "zod";
 import { authed, getAuthFlags } from "@express/src/auth/middleware";
 import { studentUseCases } from "@express/src/container";
 import { send, respond } from "@express/src/http/responses";
+import { patchBody } from "@express/src/http/zod-schemas";
+
+const createStudentSchema = z.object({ userId: z.string().min(1), programId: z.string().min(1) });
+const updateStudentSchema = patchBody({ programId: z.string().min(1).optional() });
 
 export const studentRouter = Router();
 
@@ -34,20 +39,22 @@ studentRouter.post("/students", ...authed(async (req, res) => {
     const auth = getAuthFlags(req.auth);
     const result = await studentUseCases.create(req.body, auth);
     respond(res, result, {
-        missing_fields: { status: 400, error: "userId and programId are required" },
+        user_not_found: { status: 404, error: "User not found" },
+        program_not_found: { status: 404, error: "Program not found" },
         user_already_student: { blocked: { type: "Creation", reason: "This user is already a student" } },
         student_created: (r) => ({ status: 201, body: r.student }),
     });
-}));
+}, createStudentSchema));
 
 studentRouter.patch("/students/:id", ...authed(async (req, res) => {
     const auth = getAuthFlags(req.auth);
     const result = await studentUseCases.update(String(req.params.id), req.body, auth);
     respond(res, result, {
         not_found: { status: 404, error: "Student not found" },
+        program_not_found: { status: 404, error: "Program not found" },
         student_updated: (r) => ({ status: 200, body: r.student }),
     });
-}));
+}, updateStudentSchema));
 
 studentRouter.delete("/students/:id", ...authed(async (req, res) => {
     const auth = getAuthFlags(req.auth);

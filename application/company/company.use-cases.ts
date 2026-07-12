@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { type Company } from "@domain/company/company.entity";
 import { type CompanyRepository } from "@application/company/company.repository";
 import { type DocumentApprenticeshipContractRepository } from "@application/document/document-apprenticeship-contract/document-apprenticeship-contract.repository";
-import { NotFound, MissingFields, Forbidden } from "@application/types/results";
+import { NotFound, Forbidden } from "@application/types/results";
 import { type AuthContext } from "@application/types/auth-context";
 
 export type CompanyView = {
@@ -16,7 +16,6 @@ export type CompanyView = {
 };
 
 export type CreateCompanyResult =
-    | MissingFields
     | Forbidden
     | { kind: "siret_already_exists" }
     | { kind: "company_created"; company: CompanyView };
@@ -24,6 +23,7 @@ export type CreateCompanyResult =
 export type UpdateCompanyResult =
     | NotFound
     | Forbidden
+    | { kind: "siret_already_exists" }
     | { kind: "company_updated"; company: CompanyView };
 
 export type DeleteCompanyResult = NotFound | Forbidden | { kind: "company_has_contracts" } | { kind: "company_deleted" };
@@ -49,16 +49,15 @@ export class CompanyUseCases {
     ) {}
 
     async create(input: {
-        name?: string;
-        siret?: string;
-        address?: string;
-        contactName?: string;
+        name: string;
+        siret: string;
+        address: string;
+        contactName: string;
         contactNumber?: string;
         contactEmail?: string;
     }, auth: AuthContext): Promise<CreateCompanyResult> {
         if (!auth.isAdmin) return Forbidden;
         const { name, siret, address, contactName, contactNumber, contactEmail } = input;
-        if (!name || !siret || !address || !contactName) return MissingFields;
         if (await this.companies.findBySiret(siret)) return { kind: "siret_already_exists" };
         const company: Company = {
             id: randomUUID(),
@@ -88,6 +87,11 @@ export class CompanyUseCases {
         if (!auth.isAdmin) return Forbidden;
         const company = await this.companies.findById(id);
         if (!company) return NotFound;
+
+        if (input.siret !== undefined && input.siret !== company.siret) {
+            const duplicate = await this.companies.findBySiret(input.siret);
+            if (duplicate && duplicate.id !== id) return { kind: "siret_already_exists" };
+        }
         if (input.name !== undefined) company.name = input.name;
         if (input.siret !== undefined) company.siret = input.siret;
         if (input.address !== undefined) company.address = input.address;

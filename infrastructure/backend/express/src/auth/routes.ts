@@ -6,12 +6,49 @@ import {
     type Verify2faResult,
 } from "@application/auth/auth.use-cases";
 import { Router, type Response } from "express";
+import { z } from "zod";
 import { authed, requireCronSecret, getAuthFlags } from "@express/src/auth/middleware";
 import { tokenProvider } from "@express/src/auth/token-provider.adapter";
 import { authUseCases } from "@express/src/container";
 import { respond, send, type HttpStatus } from "@express/src/http/responses";
+import { validateBody } from "@express/src/http/validate";
 
 export const authRouter = Router();
+
+const signupSchema = z.object({
+    firstname: z.string().min(1),
+    lastname: z.string().min(1),
+    email: z.email(),
+    password: z.string().min(1),
+    enable2FA: z.boolean().optional(),
+    gdprConsent: z.boolean().optional(),
+});
+
+const loginSchema = z.object({
+    email: z.email(),
+    password: z.string().min(1),
+});
+
+const verify2faSchema = z.object({
+    tempSessionToken: z.string().min(1),
+    code: z.string().min(1),
+});
+
+const enable2faSchema = z.object({
+    code: z.string().optional(),
+    setupSessionToken: z.string().optional(),
+});
+
+const resetPasswordSchema = z.object({
+    oldPassword: z.string().min(1),
+    newPassword: z.string().min(1),
+});
+
+const resetWithCredentialsSchema = z.object({
+    email: z.email(),
+    oldPassword: z.string().min(1),
+    newPassword: z.string().min(1),
+});
 
 type AuthUserView = { id: string; firstname: string; lastname: string; email: string; role: string };
 
@@ -38,8 +75,6 @@ type GetMeResponseBody =
 
 const loginResponse = (result: LoginResult): { status: HttpStatus; body: LoginResponseBody } => {
     switch (result.kind) {
-        case "missing_credentials":
-            return { status: 400, body: { error: "Email and password are required" } };
         case "invalid_credentials":
             return { status: 401, body: { error: "Invalid credentials" } };
         case "pending_role_assignment":
@@ -81,8 +116,6 @@ const loginResponse = (result: LoginResult): { status: HttpStatus; body: LoginRe
 
 const verify2faResponse = (result: Verify2faResult): { status: HttpStatus; body: Verify2faResponseBody } => {
     switch (result.kind) {
-        case "missing_2fa_payload":
-            return { status: 400, body: { error: "tempSessionToken and code are required" } };
         case "invalid_2fa_session":
             return { status: 401, body: { error: "Invalid 2FA session" } };
         case "invalid_totp_code":
@@ -94,8 +127,6 @@ const verify2faResponse = (result: Verify2faResult): { status: HttpStatus; body:
 
 const resetPasswordResponse = (result: ResetPasswordResult): { status: HttpStatus; body: ResetPasswordResponseBody } => {
     switch (result.kind) {
-        case "missing_reset_payload":
-            return { status: 400, body: { error: "email, oldPassword and newPassword are required" } };
         case "weak_password":
             return {
                 status: 400,
@@ -122,16 +153,12 @@ const getMeResponse = (result: GetMeResult): { status: HttpStatus; body: GetMeRe
     }
 };
 
-const enable2faResponse = (result: Enable2faResult): { status: number; body: Enable2faResponseBody } => {
+const enable2faResponse = (result: Exclude<Enable2faResult, { kind: "already_enabled" }>): { status: number; body: Enable2faResponseBody } => {
     switch (result.kind) {
         case "unauthorized":
             return { status: 401, body: { error: "Unauthorized" } };
         case "invalid_session":
             return { status: 401, body: { error: "Invalid or expired setup session" } };
-        case "already_enabled":
-            return { status: 409, body: { error: "Two-factor authentication is already enabled" } };
-        case "missing_code":
-            return { status: 400, body: { error: "TOTP code is required to confirm activation" } };
         case "invalid_totp_code":
             return { status: 401, body: { error: "Invalid TOTP code" } };
         case "setup_initiated":
@@ -144,11 +171,9 @@ const enable2faResponse = (result: Enable2faResult): { status: number; body: Ena
     }
 };
 
-authRouter.post("/auth/signup", async (request, response) => {
+authRouter.post("/auth/signup", validateBody(signupSchema), async (request, response) => {
     const result = await authUseCases.signup(request.body);
     respond(response, result, {
-        missing_credentials: { status: 400, error: "firstname, lastname, email and password are required" },
-        invalid_email: { status: 400, error: "Invalid email format" },
         missing_gdpr_consent: { status: 400, error: "GDPR consent is required" },
         weak_password: { status: 400, error: "Weak password. Minimum 12 chars with uppercase, lowercase, number and symbol." },
         user_already_exists: { blocked: { type: "Creation", reason: "A user with this email already exists" } },
@@ -165,17 +190,17 @@ authRouter.post("/auth/signup", async (request, response) => {
     });
 });
 
-authRouter.post("/auth/login", async (request, response) => {
+authRouter.post("/auth/login", validateBody(loginSchema), async (request, response) => {
     const httpResponse = loginResponse(await authUseCases.login(request.body));
     send(response, { status: httpResponse.status, body: httpResponse.body });
 });
 
-authRouter.post("/auth/login/2fa", async (request, response) => {
+authRouter.post("/auth/login/2fa", validateBody(verify2faSchema), async (request, response) => {
     const httpResponse = verify2faResponse(await authUseCases.verify2fa(request.body));
     send(response, { status: httpResponse.status, body: httpResponse.body });
 });
 
-authRouter.post("/auth/2fa/enable", async (request, response) => {
+authRouter.post("/auth/2fa/enable", validateBody(enable2faSchema), async (request, response) => {
     const { code, setupSessionToken } = request.body as { code?: string; setupSessionToken?: string };
     const authorization = request.headers.authorization;
     let userId: string | undefined;
@@ -188,12 +213,16 @@ authRouter.post("/auth/2fa/enable", async (request, response) => {
     }
 
     const result = await authUseCases.enable2fa({ userId, setupSessionToken, code });
+
+    if (result.kind === "already_enabled") {
+        return void send(response, { blocked: { type: "Operation", reason: "Two-factor authentication is already enabled" } });
+    }
     const httpResponse = enable2faResponse(result);
     response.status(httpResponse.status).json(httpResponse.body);
 });
 
 authRouter.post("/auth/password/reset", ...authed(async (request, response) => {
-    const { oldPassword, newPassword } = request.body as { oldPassword?: string; newPassword?: string };
+    const { oldPassword, newPassword } = request.body as { oldPassword: string; newPassword: string };
     const result = await authUseCases.resetAuthenticatedPassword({
         userId: request.auth.userId,
         oldPassword,
@@ -201,9 +230,9 @@ authRouter.post("/auth/password/reset", ...authed(async (request, response) => {
     });
     const httpResponse = resetPasswordResponse(result);
     send(response, { status: httpResponse.status, body: httpResponse.body });
-}));
+}, resetPasswordSchema));
 
-authRouter.post("/auth/password/reset-with-credentials", async (request, response) => {
+authRouter.post("/auth/password/reset-with-credentials", validateBody(resetWithCredentialsSchema), async (request, response) => {
     const httpResponse = resetPasswordResponse(await authUseCases.resetWithCredentials(request.body));
     send(response, { status: httpResponse.status, body: httpResponse.body });
 });

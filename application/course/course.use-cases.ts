@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { type Course } from "@domain/course/course.entity";
+import { GENERAL_GROUP_NAME } from "@domain/group/group.entity";
 import { type Conversation } from "@domain/conversation/conversation.entity";
 import { type CourseRepository } from "@application/course/course.repository";
 import { type SessionRepository } from "@application/session/session.repository";
@@ -8,9 +9,14 @@ import { type FileCourseRepository } from "@application/file/file-course/file-co
 import { type FileRepository } from "@application/file/file.repository";
 import { type StorageService } from "@application/file/storage.service";
 import { type ConversationRepository } from "@application/conversation/conversation.repository";
+import { type GroupRepository } from "@application/group/group.repository";
+import { type ClassRepository } from "@application/class/class.repository";
+import { type BlocRepository } from "@application/bloc/bloc.repository";
+import { type ProgramModuleRepository } from "@application/program/program-module/program-module.repository";
 import { type UnitOfWork } from "@application/types/unit-of-work";
 import { type AuthContext } from "@application/types/auth-context";
-import { NotFound, MissingFields, Forbidden } from "@application/types/results";
+import { NotFound, Forbidden, ForbiddenOwnership } from "@application/types/results";
+import { type InstructorRepository } from "@application/instructor/instructor.repository";
 
 export type CourseView = {
     id: string;
@@ -21,11 +27,25 @@ export type CourseView = {
     conversationId: string;
 };
 
-export type CreateCourseResult = MissingFields | Forbidden | { kind: "course_already_exists" } | { kind: "course_created"; course: CourseView };
+type CourseStructureError =
+    | { kind: "group_not_found" }
+    | { kind: "class_not_found" }
+    | { kind: "instructor_not_found" }
+    | { kind: "module_not_in_program" }
+    | { kind: "bloc_not_in_program" };
+
+export type CreateCourseResult =
+    | Forbidden
+    | CourseStructureError
+    | { kind: "group_not_in_class" }
+    | { kind: "course_already_exists" }
+    | { kind: "course_created"; course: CourseView };
 
 export type UpdateCourseResult =
     | NotFound
     | Forbidden
+    | CourseStructureError
+    | { kind: "course_already_exists" }
     | { kind: "course_updated"; course: CourseView };
 
 export type DeleteCourseResult =
@@ -58,21 +78,65 @@ export class CourseUseCases {
         private readonly files: FileRepository,
         private readonly storage: StorageService,
         private readonly conversations: ConversationRepository,
+        private readonly groups: GroupRepository,
+        private readonly classes: ClassRepository,
+        private readonly blocs: BlocRepository,
+        private readonly programModules: ProgramModuleRepository,
         private readonly unitOfWork: UnitOfWork,
+        private readonly instructors: InstructorRepository,
     ) {}
+
+    private async validateModuleAndBloc(
+        groupId: string,
+        moduleId: string,
+        blocId: string,
+    ): Promise<CourseStructureError | null> {
+        const group = await this.groups.findById(groupId);
+        if (!group) return { kind: "group_not_found" };
+        const cls = await this.classes.findById(group.classId);
+        if (!cls) return { kind: "class_not_found" };
+        if (!(await this.programModules.findByProgramAndModule(cls.programId, moduleId))) return { kind: "module_not_in_program" };
+        const bloc = await this.blocs.findById(blocId);
+        if (!bloc || bloc.programId !== cls.programId) return { kind: "bloc_not_in_program" };
+        return null;
+    }
 
     async create(input: {
         instructorId?: string;
         moduleId?: string;
+        classId?: string;
         groupId?: string;
         blocId?: string;
     }, auth: AuthContext): Promise<CreateCourseResult> {
         if (!auth.isAdmin) return Forbidden;
-        const { instructorId, moduleId, groupId, blocId } = input;
-        if (!instructorId || !moduleId || !groupId || !blocId) return MissingFields;
-        if (await this.courses.findByInstructorModuleGroup(instructorId, moduleId, groupId)) return { kind: "course_already_exists" };
+        const { instructorId, moduleId, classId, groupId, blocId } = input as {
+            instructorId: string;
+            moduleId: string;
+            classId: string;
+            groupId?: string;
+            blocId: string;
+        };
+        const cls = await this.classes.findById(classId);
+        if (!cls) return { kind: "class_not_found" };
+
+        let resolvedGroupId: string;
+        if (groupId) {
+            const group = await this.groups.findById(groupId);
+            if (!group) return { kind: "group_not_found" };
+            if (group.classId !== classId) return { kind: "group_not_in_class" };
+            resolvedGroupId = group.id;
+        } else {
+            const general = await this.groups.findByClassAndName(classId, GENERAL_GROUP_NAME);
+            if (!general) return { kind: "group_not_found" };
+            resolvedGroupId = general.id;
+        }
+
+        if (!(await this.instructors.findById(instructorId))) return { kind: "instructor_not_found" };
+        const structureError = await this.validateModuleAndBloc(resolvedGroupId, moduleId, blocId);
+        if (structureError) return structureError;
+        if (await this.courses.findByInstructorModuleGroup(instructorId, moduleId, resolvedGroupId)) return { kind: "course_already_exists" };
         const conversation: Conversation = { id: randomUUID(), createdAt: new Date() };
-        const course: Course = { id: randomUUID(), instructorId, moduleId, groupId, blocId, conversationId: conversation.id };
+        const course: Course = { id: randomUUID(), instructorId, moduleId, groupId: resolvedGroupId, blocId, conversationId: conversation.id };
         await this.unitOfWork.run(async () => {
             await this.conversations.save(conversation);
             await this.courses.save(course);
@@ -93,10 +157,22 @@ export class CourseUseCases {
         if (!auth.isAdmin) return Forbidden;
         const course = await this.courses.findById(id);
         if (!course) return NotFound;
-        if (input.instructorId !== undefined) course.instructorId = input.instructorId;
-        if (input.moduleId !== undefined) course.moduleId = input.moduleId;
-        if (input.groupId !== undefined) course.groupId = input.groupId;
-        if (input.blocId !== undefined) course.blocId = input.blocId;
+        const newGroupId = input.groupId !== undefined ? input.groupId : course.groupId;
+        const newModuleId = input.moduleId !== undefined ? input.moduleId : course.moduleId;
+        const newBlocId = input.blocId !== undefined ? input.blocId : course.blocId;
+        const newInstructorId = input.instructorId !== undefined ? input.instructorId : course.instructorId;
+
+        if (input.instructorId !== undefined && !(await this.instructors.findById(input.instructorId)))
+            return { kind: "instructor_not_found" };
+        const structureError = await this.validateModuleAndBloc(newGroupId, newModuleId, newBlocId);
+        if (structureError) return structureError;
+
+        const duplicate = await this.courses.findByInstructorModuleGroup(newInstructorId, newModuleId, newGroupId);
+        if (duplicate && duplicate.id !== id) return { kind: "course_already_exists" };
+        course.instructorId = newInstructorId;
+        course.moduleId = newModuleId;
+        course.groupId = newGroupId;
+        course.blocId = newBlocId;
         await this.courses.save(course);
         return { kind: "course_updated", course: toView(course) };
     }
@@ -129,7 +205,11 @@ export class CourseUseCases {
         return { kind: "courses_listed", courses: courses.map(toView) };
     }
 
-    async listByInstructor(instructorId: string): Promise<ListCoursesResult> {
+    async listByInstructor(instructorId: string, auth: AuthContext): Promise<ListCoursesResult> {
+        if (!auth.isAdmin) {
+            const instructor = await this.instructors.findByUserId(auth.requesterId);
+            if (!instructor || instructor.id !== instructorId) return ForbiddenOwnership;
+        }
         const courses = await this.courses.findByInstructorId(instructorId);
         return { kind: "courses_listed", courses: courses.map(toView) };
     }

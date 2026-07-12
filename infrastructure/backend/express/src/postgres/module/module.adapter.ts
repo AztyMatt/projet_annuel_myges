@@ -25,6 +25,10 @@ export const moduleRepository: ModuleRepository = {
             .limit(1);
         return result[0] ? rowToModule(result[0]) : undefined;
     },
+    async findByCode(code) {
+        const result = await db.select().from(moduleTable).where(eq(moduleTable.code, code)).limit(1);
+        return result[0] ? rowToModule(result[0]) : undefined;
+    },
     async save(moduleEntity) {
         await db
             .insert(moduleTable)

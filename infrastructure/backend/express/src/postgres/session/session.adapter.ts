@@ -1,9 +1,10 @@
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { and, asc, eq, gt, lt, ne } from "drizzle-orm";
 import { type SessionRepository } from "@application/session/session.repository";
 import { type Session } from "@domain/session/session.entity";
 import { type SessionMode } from "@domain/session/session.enums";
 import { db } from "@express/src/postgres/db";
 import { session as sessionTable } from "@express/src/postgres/schema/session";
+import { course as courseTable } from "@express/src/postgres/schema/course";
 
 function rowToSession(row: typeof sessionTable.$inferSelect): Session {
     return {
@@ -45,18 +46,35 @@ export const sessionRepository: SessionRepository = {
         const rows = await db.select({ id: sessionTable.id }).from(sessionTable).where(eq(sessionTable.classroomId, classroomId)).limit(1);
         return rows.length > 0;
     },
-    async findBySlot(courseId, classroomId, startTime, endTime) {
+    async findClassroomOverlap(classroomId, startTime, endTime, excludeId) {
+        const conditions = [
+            eq(sessionTable.classroomId, classroomId),
+            lt(sessionTable.startTime, endTime),
+            gt(sessionTable.endTime, startTime),
+        ];
+        if (excludeId) conditions.push(ne(sessionTable.id, excludeId));
+        const result = await db.select().from(sessionTable).where(and(...conditions)).limit(1);
+        return result[0] ? rowToSession(result[0]) : undefined;
+    },
+    async findInstructorOverlap(instructorId, startTime, endTime, excludeId) {
+        const conditions = [
+            eq(courseTable.instructorId, instructorId),
+            lt(sessionTable.startTime, endTime),
+            gt(sessionTable.endTime, startTime),
+        ];
+        if (excludeId) conditions.push(ne(sessionTable.id, excludeId));
         const result = await db
-            .select()
+            .select({
+                id: sessionTable.id,
+                courseId: sessionTable.courseId,
+                startTime: sessionTable.startTime,
+                endTime: sessionTable.endTime,
+                mode: sessionTable.mode,
+                classroomId: sessionTable.classroomId,
+            })
             .from(sessionTable)
-            .where(
-                and(
-                    eq(sessionTable.courseId, courseId),
-                    classroomId === null ? isNull(sessionTable.classroomId) : eq(sessionTable.classroomId, classroomId),
-                    eq(sessionTable.startTime, startTime),
-                    eq(sessionTable.endTime, endTime),
-                ),
-            )
+            .innerJoin(courseTable, eq(sessionTable.courseId, courseTable.id))
+            .where(and(...conditions))
             .limit(1);
         return result[0] ? rowToSession(result[0]) : undefined;
     },

@@ -2,7 +2,6 @@ import { type StorageService } from "@application/file/storage.service";
 
 export const storageService: StorageService = {
     async delete(_storagePath: string): Promise<void> {
-        
     },
     async deleteMany(storagePaths: string[]): Promise<string[]> {
         const failedPaths: string[] = [];

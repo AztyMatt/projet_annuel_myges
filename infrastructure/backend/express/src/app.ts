@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import { authRouter } from "@express/src/auth/routes";
+import { planningRouter } from "@express/src/planning/routes";
 import { adminRouter } from "@express/src/admin/routes";
 import { studentRouter } from "@express/src/student/routes";
 import { instructorRouter } from "@express/src/instructor/routes";
@@ -55,6 +56,7 @@ const routers = [
     fileRouter,
     documentRouter,
     auditLogRouter,
+    planningRouter,
 ];
 
 export const app = express();
@@ -68,10 +70,15 @@ app.get("/api/hello", (_request, response) => {
     send(response, { status: 200, body: { message: "Hello from Express!" } });
 });
 
-app.use((err: { code?: string }, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+app.use((err: { code?: string; detail?: string }, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
     if (err.code === "23505") return void send(res, { blocked: { type: "Creation", reason: "This entry already exists" } });
-    if (err.code === "23503") return void send(res, { blocked: { type: "Deletion", reason: "This record is still referenced by other data" } });
-    
+    if (err.code === "23503") {
+        const stillReferenced = typeof err.detail === "string" && err.detail.includes("still referenced");
+        return void send(res, stillReferenced
+            ? { blocked: { type: "Deletion", reason: "This record is still referenced by other data" } }
+            : { blocked: { type: "Creation", reason: "A referenced record does not exist" } });
+    }
+
     console.error(err);
     send(res, { status: 500, error: "Internal server error" });
 });

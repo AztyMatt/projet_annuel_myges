@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { type Instructor } from "@domain/instructor/instructor.entity";
-import { type InstructorContractType } from "@domain/instructor/instructor.enums";
+import { InstructorContractType } from "@domain/instructor/instructor.enums";
 import { type InstructorRepository } from "@application/instructor/instructor.repository";
 import { type CourseRepository } from "@application/course/course.repository";
 import { type SessionExamInstructorRepository } from "@application/session/session-exam/session-exam-instructor/session-exam-instructor.repository";
+import { type UserRepository } from "@application/auth/user.repository";
 import { type AuthContext } from "@application/types/auth-context";
-import { NotFound, MissingFields, Forbidden } from "@application/types/results";
+import { NotFound, Forbidden } from "@application/types/results";
 
 export type InstructorView = {
     id: string;
@@ -15,8 +16,8 @@ export type InstructorView = {
 };
 
 export type CreateInstructorResult =
-    | MissingFields
     | Forbidden
+    | { kind: "user_not_found" }
     | { kind: "user_already_instructor" }
     | { kind: "instructor_created"; instructor: InstructorView };
 
@@ -43,6 +44,7 @@ export class InstructorUseCases {
         private readonly instructors: InstructorRepository,
         private readonly courses: CourseRepository,
         private readonly sessionExamInstructors: SessionExamInstructorRepository,
+        private readonly users: UserRepository,
     ) {}
 
     async create(input: {
@@ -51,8 +53,12 @@ export class InstructorUseCases {
         specialties?: string[];
     }, auth: AuthContext): Promise<CreateInstructorResult> {
         if (!auth.isAdmin) return Forbidden;
-        const { userId, contractType, specialties } = input;
-        if (!userId || !contractType) return MissingFields;
+        const { userId, contractType, specialties } = input as {
+            userId: string;
+            contractType: InstructorContractType;
+            specialties?: string[];
+        };
+        if (!(await this.users.findById(userId))) return { kind: "user_not_found" };
         if (await this.instructors.findByUserId(userId)) return { kind: "user_already_instructor" };
         const instructor: Instructor = {
             id: randomUUID(),
