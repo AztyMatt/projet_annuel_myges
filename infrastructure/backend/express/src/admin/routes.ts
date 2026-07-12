@@ -14,6 +14,15 @@ const updateAdminSchema = patchBody({ role: z.enum(Object.values(AdminRole) as [
 
 export const adminRouter = Router();
 
+adminRouter.get("/admins/me", ...authed(async (req, res) => {
+    const auth = getAuthFlags(req.auth);
+    const result = await adminUseCases.resolveOwnAdmin(auth);
+    respond(res, result, {
+        not_found: { status: 404, error: "Administrateur introuvable" },
+        admin_found: (r) => ({ status: 200, body: r.admin }),
+    });
+}));
+
 adminRouter.get("/admins", ...authed(async (req, res) => {
     const auth = getAuthFlags(req.auth);
     const result = await adminUseCases.list(auth);

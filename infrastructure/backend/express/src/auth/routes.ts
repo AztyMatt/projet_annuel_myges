@@ -331,6 +331,12 @@ const sendDeleteAccountResult = (result: DeleteAccountResult, response: Response
     });
 };
 
+authRouter.delete("/users/me", ...authed(async (request, response) => {
+    const auth = getAuthFlags(request.auth);
+    const result = await authUseCases.deleteAccount(request.auth.userId, auth);
+    sendDeleteAccountResult(result, response);
+}));
+
 authRouter.delete("/users/:id", ...authed(async (request, response) => {
     const auth = getAuthFlags(request.auth);
     const result = await authUseCases.deleteAccount(String(request.params.id), auth);

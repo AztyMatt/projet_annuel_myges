@@ -108,15 +108,23 @@ async function loadInstructorConversations(): Promise<ConversationEntry[]> {
     return entries;
 }
 
-async function loadAdminConversations(): Promise<ConversationEntry[]> {
-    const privates = await api.get<{ conversationId: string }[]>("/conversation-privates/mine");
-    return privates.map((p, i) => ({
-        id: p.conversationId,
-        label: "Étudiant",
-        sublabel: "Message privé",
-        color: COLORS[i % COLORS.length],
-        initials: "ET",
-    }));
+async function loadAdminConversations(myUserId: string): Promise<ConversationEntry[]> {
+    const privates = await api.get<{ conversationId: string; userAId: string | null; userBId: string | null }[]>(
+        "/conversation-privates/mine",
+    );
+    return Promise.all(
+        privates.map(async (p, i) => {
+            const otherUserId = p.userAId === myUserId ? p.userBId : p.userAId;
+            const label = otherUserId ? await resolveSenderName(otherUserId) : "Conversation privée";
+            return {
+                id: p.conversationId,
+                label,
+                sublabel: "Message privé",
+                color: COLORS[i % COLORS.length],
+                initials: initialsOf(label),
+            };
+        }),
+    );
 }
 
 export default function Messagerie() {
@@ -148,15 +156,13 @@ export default function Messagerie() {
                 if (user.role === "STUDENT") entries = await loadStudentConversations();
                 else if (user.role === "INSTRUCTOR") entries = await loadInstructorConversations();
                 else {
-                    entries = await loadAdminConversations();
-                    // Un ADMIN (non SUPER_ADMIN) n'a aujourd'hui aucun moyen de connaître son propre adminId
-                    // (GET /admins/user/:userId est réservé à SUPER_ADMIN) : démarrer une nouvelle conversation
-                    // ciblée est donc indisponible pour ce rôle tant que ce gap backend n'est pas comblé
-                    // (voir CLAUDE.md section 10) — sondage best-effort pour masquer le bouton le cas échéant.
-                    await api
-                        .get(`/admins/user/${user.id}`)
-                        .then(() => setLimitedRole(false))
-                        .catch(() => setLimitedRole(true));
+                    entries = await loadAdminConversations(user.id);
+                    if (user.role === "ADMIN" || user.role === "SUPER_ADMIN") {
+                        await api
+                            .get("/admins/me")
+                            .then(() => setLimitedRole(false))
+                            .catch(() => setLimitedRole(user.role === "ADMIN"));
+                    }
                 }
 
                 setConversations(entries);
@@ -386,30 +392,40 @@ export default function Messagerie() {
 }
 
 function NewConversationModal({ onClose }: { onClose: () => void }) {
-    const [students, setStudents] = useState<{ id: string }[]>([]);
-    const [studentId, setStudentId] = useState("");
+    const [students, setStudents] = useState<{ id: string; userId: string; label: string }[]>([]);
+    const [studentUserId, setStudentUserId] = useState("");
     const [error, setError] = useState("");
     const [submitting, setSubmitting] = useState(false);
 
     useEffect(() => {
         api
-            .get<{ id: string }[]>("/students")
-            .then(setStudents)
+            .get<{ id: string; userId: string }[]>("/students")
+            .then(async (list) => {
+                const withLabels = await Promise.all(
+                    list.map(async (s) => {
+                        const user = await api
+                            .get<{ firstname: string; lastname: string }>(`/users/${s.userId}`)
+                            .catch(() => null);
+                        return {
+                            ...s,
+                            label: user ? `${user.firstname} ${user.lastname}` : `Étudiant #${s.id.slice(0, 8)}`,
+                        };
+                    }),
+                );
+                setStudents(withLabels);
+            })
             .catch((e) => setError(e instanceof ApiError ? e.message : "Impossible de charger les étudiants."));
     }, []);
 
     const handleCreate = async () => {
-        if (!studentId) return;
+        if (!studentUserId) return;
         setSubmitting(true);
         setError("");
         try {
             const me = await api.get<{ id: string }>("/users/me");
-            const admin = await api.get<{ id: string }>(`/admins/user/${me.id}`);
-            const conversation = await api.post<{ id: string }>("/conversations", {});
             await api.post("/conversation-privates", {
-                adminId: admin.id,
-                studentId,
-                conversationId: conversation.id,
+                userAId: me.id,
+                userBId: studentUserId,
             });
             onClose();
             window.location.reload();
@@ -429,18 +445,15 @@ function NewConversationModal({ onClose }: { onClose: () => void }) {
                         <X size={16} />
                     </button>
                 </div>
-                <p className="text-xs text-gray-500 mb-3">
-                    Les noms d&apos;étudiants ne sont pas encore disponibles côté backend — sélection par identifiant.
-                </p>
                 <select
-                    value={studentId}
-                    onChange={(e) => setStudentId(e.target.value)}
+                    value={studentUserId}
+                    onChange={(e) => setStudentUserId(e.target.value)}
                     className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none mb-4"
                 >
                     <option value="">Choisir un étudiant…</option>
                     {students.map((s) => (
-                        <option key={s.id} value={s.id}>
-                            Étudiant #{s.id.slice(0, 8)}
+                        <option key={s.id} value={s.userId}>
+                            {s.label}
                         </option>
                     ))}
                 </select>
@@ -454,7 +467,7 @@ function NewConversationModal({ onClose }: { onClose: () => void }) {
                     </button>
                     <button
                         onClick={() => void handleCreate()}
-                        disabled={!studentId || submitting}
+                        disabled={!studentUserId || submitting}
                         className="flex-1 px-4 py-2.5 bg-[#001944] text-white rounded-xl text-sm font-semibold hover:bg-[#002C6E] disabled:opacity-50"
                     >
                         {submitting ? "Création…" : "Créer"}
