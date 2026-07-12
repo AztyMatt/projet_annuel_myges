@@ -216,6 +216,7 @@ export const fileUseCases = new FileUseCases(
     courseRepository,
     instructorRepository,
     sessionRepository,
+    studentGroupRepository,
 );
 export const documentUseCases = new DocumentUseCases(
     documentAdministrativeRepository,

@@ -1,11 +1,16 @@
 import { Router } from "express";
+import multer from "multer";
 import { z } from "zod";
-import { authed, getAuthFlags, sendForbidden } from "@express/src/auth/middleware";
+import { authed, getAuthFlags, requireAuth, sendForbidden } from "@express/src/auth/middleware";
 import { adminUseCases, fileUseCases } from "@express/src/container";
 import { respond, send } from "@express/src/http/responses";
 import { storageCleanupWarning } from "@express/src/storage/storage-warning";
+import { storageService } from "@express/src/storage/storage.adapter";
+import { MAX_FILE_SIZE_BYTES } from "@domain/file/file.policy";
 
 export const fileRouter = Router();
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_FILE_SIZE_BYTES } });
 
 const createFileSchema = z.object({
     name: z.string().min(1),
@@ -81,6 +86,41 @@ fileRouter.post("/files", ...authed(async (req, res) => {
         file_created: (r) => ({ status: 201, body: r.file }),
     });
 }, createFileSchema));
+
+fileRouter.post("/files/upload", requireAuth, upload.single("file"), ...authed(async (req, res) => {
+    const uploaded = (req as unknown as { file?: Express.Multer.File }).file;
+    if (!uploaded) return void send(res, { status: 400, error: "No file provided (expected multipart field \"file\")" });
+
+    const result = await fileUseCases.create({
+        name: uploaded.originalname,
+        originalName: uploaded.originalname,
+        mimeType: uploaded.mimetype,
+        sizeBytes: uploaded.size,
+        uploadedBy: req.auth.userId,
+    });
+    if (result.kind === "file_created") await storageService.save(result.file.storagePath, uploaded.buffer);
+    respond(res, result, {
+        invalid_size: { status: 400, error: "sizeBytes must be a positive integer" },
+        file_too_large: { status: 400, error: "File exceeds the maximum allowed size" },
+        mime_type_not_allowed: { status: 400, error: "This file type is not allowed" },
+        file_created: (r) => ({ status: 201, body: r.file }),
+    });
+}));
+
+fileRouter.get("/files/:id/download", ...authed(async (req, res) => {
+    const result = await fileUseCases.findById(String(req.params.id), getAuthFlags(req.auth));
+    if (result.kind === "not_found") return void send(res, { status: 404, error: "File not found" });
+
+    let content: Buffer;
+    try {
+        content = await storageService.read(result.file.storagePath);
+    } catch {
+        return void send(res, { status: 404, error: "File content not found in storage" });
+    }
+    res.setHeader("Content-Type", result.file.mimeType);
+    res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(result.file.originalName)}"`);
+    res.send(content);
+}));
 
 fileRouter.delete("/files/:id", ...authed(async (req, res) => {
     const auth = getAuthFlags(req.auth);

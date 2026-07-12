@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { FileText, Trash2, Search } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { FileText, Trash2, Search, Upload, Download, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api, ApiError } from "@/lib/api";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -9,6 +9,7 @@ import { useToast } from "@/components/ui/toast";
 
 type SupportFile = {
     id: string; // FileCourse id
+    fileId: string;
     name: string;
     moduleName: string;
     fileName: string;
@@ -16,16 +17,19 @@ type SupportFile = {
     uploadedAt: string;
 };
 
+type CourseOption = { id: string; moduleName: string };
+
 function formatSize(bytes: number): string {
     if (bytes < 1024) return `${bytes} o`;
     if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} Ko`;
     return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`;
 }
 
-async function loadSupports(): Promise<SupportFile[]> {
+async function loadSupports(): Promise<{ supports: SupportFile[]; courses: CourseOption[] }> {
     const courses = await api.get<{ id: string; moduleId: string }[]>("/courses/mine");
     const moduleCache = new Map<string, string>();
     const supports: SupportFile[] = [];
+    const courseOptions: CourseOption[] = [];
 
     for (const course of courses) {
         if (!moduleCache.has(course.moduleId)) {
@@ -33,6 +37,7 @@ async function loadSupports(): Promise<SupportFile[]> {
             moduleCache.set(course.moduleId, moduleData.name);
         }
         const moduleName = moduleCache.get(course.moduleId)!;
+        courseOptions.push({ id: course.id, moduleName });
 
         const fileCourses = await api.get<{ id: string; name: string; fileId: string }[]>(
             `/file-courses/course/${course.id}`,
@@ -43,6 +48,7 @@ async function loadSupports(): Promise<SupportFile[]> {
             );
             supports.push({
                 id: fc.id,
+                fileId: fc.fileId,
                 name: fc.name,
                 moduleName,
                 fileName: file.originalName,
@@ -52,31 +58,40 @@ async function loadSupports(): Promise<SupportFile[]> {
         }
     }
 
-    return supports.sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime());
+    return {
+        supports: supports.sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()),
+        courses: courseOptions,
+    };
 }
 
 export default function SupportsIntervenant() {
     const [supports, setSupports] = useState<SupportFile[]>([]);
+    const [courses, setCourses] = useState<CourseOption[]>([]);
     const [search, setSearch] = useState("");
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [deletingId, setDeletingId] = useState<string | null>(null);
     const [deleteTarget, setDeleteTarget] = useState<SupportFile | null>(null);
+    const [showUpload, setShowUpload] = useState(false);
     const toast = useToast();
 
+    const refresh = async () => {
+        setLoading(true);
+        setError("");
+        try {
+            const { supports, courses } = await loadSupports();
+            setSupports(supports);
+            setCourses(courses);
+        } catch (e) {
+            setError(e instanceof ApiError ? e.message : "Impossible de charger les supports.");
+        } finally {
+            setLoading(false);
+        }
+    };
+
     useEffect(() => {
-        const refresh = async () => {
-            setLoading(true);
-            setError("");
-            try {
-                setSupports(await loadSupports());
-            } catch (e) {
-                setError(e instanceof ApiError ? e.message : "Impossible de charger les supports.");
-            } finally {
-                setLoading(false);
-            }
-        };
         void refresh();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const filtered = useMemo(
@@ -108,11 +123,6 @@ export default function SupportsIntervenant() {
         <div className="space-y-6 max-w-5xl">
             {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl p-4">{error}</div>}
 
-            <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-xs text-blue-800">
-                Le dépôt de nouveaux fichiers dépend d&apos;un stockage réel côté backend, pas encore implémenté (voir
-                CLAUDE.md) — cette page liste et permet de supprimer les supports déjà enregistrés.
-            </div>
-
             <div className="grid grid-cols-2 gap-4 max-w-md">
                 <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
                     <div className="text-2xl font-black text-gray-900">{supports.length}</div>
@@ -124,6 +134,13 @@ export default function SupportsIntervenant() {
                 <div className="p-5 border-b border-gray-100">
                     <div className="flex items-center justify-between mb-4">
                         <h3 className="font-bold text-gray-900 text-sm">Mes supports de cours</h3>
+                        <button
+                            onClick={() => setShowUpload(true)}
+                            disabled={courses.length === 0}
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-[#001944] rounded-lg hover:bg-[#002C6E] disabled:opacity-50"
+                        >
+                            <Upload size={13} /> Ajouter un support
+                        </button>
                     </div>
                     <div className="relative max-w-xs">
                         <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -170,6 +187,13 @@ export default function SupportsIntervenant() {
                                             {new Date(s.uploadedAt).toLocaleDateString("fr-FR")}
                                         </td>
                                         <td className="px-3 py-3">
+                                            <a
+                                                href={`/api/files/${s.fileId}/download`}
+                                                className="inline-flex p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                                title="Télécharger"
+                                            >
+                                                <Download size={13} />
+                                            </a>
                                             <button
                                                 onClick={() => setDeleteTarget(s)}
                                                 disabled={deletingId === s.id}
@@ -203,6 +227,113 @@ export default function SupportsIntervenant() {
                 onConfirm={() => void handleDelete()}
                 onCancel={() => setDeleteTarget(null)}
             />
+
+            {showUpload && (
+                <UploadModal
+                    courses={courses}
+                    onClose={() => setShowUpload(false)}
+                    onUploaded={() => {
+                        setShowUpload(false);
+                        toast.success("Support déposé.");
+                        void refresh();
+                    }}
+                />
+            )}
+        </div>
+    );
+}
+
+function UploadModal({
+    courses,
+    onClose,
+    onUploaded,
+}: {
+    courses: CourseOption[];
+    onClose: () => void;
+    onUploaded: () => void;
+}) {
+    const [courseId, setCourseId] = useState(courses[0]?.id ?? "");
+    const [name, setName] = useState("");
+    const [submitting, setSubmitting] = useState(false);
+    const [error, setError] = useState("");
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const handleSubmit = async () => {
+        const file = fileInputRef.current?.files?.[0];
+        if (!courseId || !file) {
+            setError("Choisissez un cours et un fichier.");
+            return;
+        }
+        setSubmitting(true);
+        setError("");
+        try {
+            const uploaded = await api.upload<{ id: string }>("/files/upload", file);
+            await api.post("/file-courses", { name: name.trim() || file.name, fileId: uploaded.id, courseId });
+            onUploaded();
+        } catch (e) {
+            setError(e instanceof ApiError ? e.message : "Le dépôt a échoué.");
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4" onClick={onClose}>
+            <div className="bg-white rounded-2xl p-6 w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-bold text-gray-900">Ajouter un support</h3>
+                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+                        <X size={18} />
+                    </button>
+                </div>
+
+                <div className="space-y-3">
+                    <div>
+                        <label className="text-xs font-medium text-gray-700 block mb-1">Cours</label>
+                        <select
+                            value={courseId}
+                            onChange={(e) => setCourseId(e.target.value)}
+                            className="w-full px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500/20"
+                        >
+                            {courses.map((c) => (
+                                <option key={c.id} value={c.id}>
+                                    {c.moduleName}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label className="text-xs font-medium text-gray-700 block mb-1">Nom (optionnel)</label>
+                        <input
+                            type="text"
+                            value={name}
+                            onChange={(e) => setName(e.target.value)}
+                            placeholder="Support de cours - Chapitre 1"
+                            className="w-full px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500/20"
+                        />
+                    </div>
+
+                    <div>
+                        <label className="text-xs font-medium text-gray-700 block mb-1">Fichier</label>
+                        <input
+                            ref={fileInputRef}
+                            type="file"
+                            className="w-full text-xs text-gray-600 file:mr-3 file:px-3 file:py-1.5 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200"
+                        />
+                    </div>
+                </div>
+
+                {error && <p className="text-xs text-red-600 mt-3">{error}</p>}
+
+                <button
+                    onClick={() => void handleSubmit()}
+                    disabled={submitting}
+                    className="w-full mt-4 py-2.5 rounded-xl font-semibold text-sm text-white bg-[#001944] hover:bg-[#002C6E] disabled:opacity-50"
+                >
+                    {submitting ? "Dépôt en cours…" : "Déposer"}
+                </button>
+            </div>
         </div>
     );
 }
