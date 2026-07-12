@@ -25,6 +25,7 @@ import { messageRepository } from "@express/src/postgres/message/message.adapter
 import { companyRepository } from "@express/src/postgres/company/company.adapter";
 import { externalRepository } from "@express/src/postgres/external/external.adapter";
 import { auditLogRepository } from "@express/src/postgres/audit-log/audit-log.adapter";
+import { notificationRepository } from "@express/src/postgres/notification/notification.adapter";
 import { sessionExamRepository } from "@express/src/postgres/session/session-exam/session-exam.adapter";
 import { sessionExamStudentRepository } from "@express/src/postgres/session/session-exam/session-exam-student/session-exam-student.adapter";
 import { sessionExamInstructorRepository } from "@express/src/postgres/session/session-exam/session-exam-instructor/session-exam-instructor.adapter";
@@ -75,6 +76,7 @@ import { MessageUseCases } from "@application/message/message.use-cases";
 import { CompanyUseCases } from "@application/company/company.use-cases";
 import { ExternalUseCases } from "@application/external/external.use-cases";
 import { AuditLogUseCases } from "@application/audit-log/audit-log.use-cases";
+import { NotificationUseCases } from "@application/notification/notification.use-cases";
 import { SessionExamUseCases } from "@application/session/session-exam/session-exam.use-cases";
 import { FileUseCases } from "@application/file/file.use-cases";
 import { DocumentUseCases } from "@application/document/document.use-cases";
@@ -99,7 +101,7 @@ export const authUseCases = new AuthUseCases(
 );
 
 export const adminUseCases = new AdminUseCases(adminRepository, userRepository);
-export const studentUseCases = new StudentUseCases(studentRepository, studentGroupRepository, absenceRepository, sessionExamStudentRepository, assessmentGroupMemberRepository, fileDocumentRepository, userRepository, programRepository);
+export const studentUseCases = new StudentUseCases(studentRepository, studentGroupRepository, absenceRepository, sessionExamStudentRepository, assessmentGroupMemberRepository, fileDocumentRepository, userRepository, programRepository, courseRepository, instructorRepository);
 export const instructorUseCases = new InstructorUseCases(instructorRepository, courseRepository, sessionExamInstructorRepository, userRepository);
 export const campusUseCases = new CampusUseCases(campusRepository, classroomRepository);
 export const classroomUseCases = new ClassroomUseCases(classroomRepository, sessionRepository, campusRepository);
@@ -129,6 +131,7 @@ export const assessmentUseCases = new AssessmentUseCases(
     sessionRepository,
     unitOfWork,
 );
+export const notificationUseCases = new NotificationUseCases(notificationRepository);
 export const gradeUseCases = new GradeUseCases(
     gradeRepository,
     gradeAssessmentRepository,
@@ -143,6 +146,7 @@ export const gradeUseCases = new GradeUseCases(
     sessionRepository,
     sessionExamStudentRepository,
     moduleRepository,
+    notificationUseCases,
 );
 export const absenceUseCases = new AbsenceUseCases(
     absenceRepository,
@@ -155,6 +159,7 @@ export const absenceUseCases = new AbsenceUseCases(
     courseRepository,
     instructorRepository,
     studentGroupRepository,
+    notificationUseCases,
 );
 export const conversationUseCases = new ConversationUseCases(
     conversationRepository,
@@ -167,7 +172,7 @@ export const conversationUseCases = new ConversationUseCases(
     groupRepository,
     userRepository,
 );
-export const messageUseCases = new MessageUseCases(messageRepository, messageReadRepository, conversationPrivateRepository, courseRepository, classRepository, groupRepository, studentGroupRepository, studentRepository, instructorRepository);
+export const messageUseCases = new MessageUseCases(messageRepository, messageReadRepository, conversationPrivateRepository, courseRepository, classRepository, groupRepository, studentGroupRepository, studentRepository, instructorRepository, notificationUseCases);
 export const companyUseCases = new CompanyUseCases(companyRepository, documentApprenticeshipContractRepository);
 export const externalUseCases = new ExternalUseCases(externalRepository, sessionExamExternalRepository);
 export const auditLogUseCases = new AuditLogUseCases(auditLogRepository);
@@ -216,6 +221,8 @@ export const fileUseCases = new FileUseCases(
     courseRepository,
     instructorRepository,
     sessionRepository,
+    studentGroupRepository,
+    notificationUseCases,
 );
 export const documentUseCases = new DocumentUseCases(
     documentAdministrativeRepository,

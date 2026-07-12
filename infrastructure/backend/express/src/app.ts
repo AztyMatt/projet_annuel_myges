@@ -27,6 +27,7 @@ import { externalRouter } from "@express/src/external/routes";
 import { fileRouter } from "@express/src/file/routes";
 import { documentRouter } from "@express/src/document/routes";
 import { auditLogRouter } from "@express/src/audit-log/routes";
+import { notificationRouter } from "@express/src/notification/routes";
 import { send } from "@express/src/http/responses";
 
 const routers = [
@@ -57,6 +58,7 @@ const routers = [
     documentRouter,
     auditLogRouter,
     planningRouter,
+    notificationRouter,
 ];
 
 export const app = express();
@@ -67,16 +69,16 @@ app.use(express.json());
 routers.forEach((router) => app.use("/api", router));
 
 app.get("/api/hello", (_request, response) => {
-    send(response, { status: 200, body: { message: "Hello from Express!" } });
+    send(response, { status: 200, body: { message: "Bonjour depuis Express !" } });
 });
 
 app.use((err: { code?: string; detail?: string }, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-    if (err.code === "23505") return void send(res, { blocked: { type: "Creation", reason: "This entry already exists" } });
+    if (err.code === "23505") return void send(res, { blocked: { type: "Creation", reason: "Cette entrée existe déjà" } });
     if (err.code === "23503") {
         const stillReferenced = typeof err.detail === "string" && err.detail.includes("still referenced");
         return void send(res, stillReferenced
-            ? { blocked: { type: "Deletion", reason: "This record is still referenced by other data" } }
-            : { blocked: { type: "Creation", reason: "A referenced record does not exist" } });
+            ? { blocked: { type: "Deletion", reason: "Cet enregistrement est encore référencé par d'autres données" } }
+            : { blocked: { type: "Creation", reason: "Un enregistrement référencé n'existe pas" } });
     }
 
     console.error(err);

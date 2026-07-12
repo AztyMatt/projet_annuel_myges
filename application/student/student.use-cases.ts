@@ -8,6 +8,8 @@ import { type AssessmentGroupMemberRepository } from "@application/assessment/as
 import { type FileDocumentRepository } from "@application/file/file-document/file-document.repository";
 import { type UserRepository } from "@application/auth/user.repository";
 import { type ProgramRepository } from "@application/program/program.repository";
+import { type CourseRepository } from "@application/course/course.repository";
+import { type InstructorRepository } from "@application/instructor/instructor.repository";
 import { NotFound, Forbidden } from "@application/types/results";
 import { type AuthContext } from "@application/types/auth-context";
 
@@ -52,6 +54,8 @@ export class StudentUseCases {
         private readonly fileDocuments: FileDocumentRepository,
         private readonly users: UserRepository,
         private readonly programs: ProgramRepository,
+        private readonly courses: CourseRepository,
+        private readonly instructors: InstructorRepository,
     ) {}
 
     async create(input: { userId?: string; programId?: string }, auth: AuthContext): Promise<CreateStudentResult> {
@@ -108,10 +112,23 @@ export class StudentUseCases {
     }
 
     async findById(id: string, auth: AuthContext): Promise<GetStudentResult> {
-        if (!auth.isAdmin) return Forbidden;
         const student = await this.students.findById(id);
         if (!student) return NotFound;
+        if (!auth.isAdmin && student.userId !== auth.requesterId && !(await this.isInstructorOfStudent(id, auth.requesterId))) {
+            return Forbidden;
+        }
         return { kind: "student_found", student: toView(student) };
+    }
+
+    private async isInstructorOfStudent(studentId: string, requesterId: string): Promise<boolean> {
+        const instructor = await this.instructors.findByUserId(requesterId);
+        if (!instructor) return false;
+        const [groups, courses] = await Promise.all([
+            this.studentGroups.findByStudentId(studentId),
+            this.courses.findByInstructorId(instructor.id),
+        ]);
+        const groupIds = new Set(groups.map((g) => g.groupId));
+        return courses.some((c) => groupIds.has(c.groupId));
     }
 
     async findByUserId(userId: string): Promise<GetStudentResult> {

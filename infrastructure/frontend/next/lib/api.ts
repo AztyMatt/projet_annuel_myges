@@ -17,9 +17,32 @@ async function request<T>(path: string, options: ApiOptions = {}): Promise<T> {
 
     const response = await fetch(`/api${path}`, {
         ...rest,
+        credentials: "include",
         headers: { "Content-Type": "application/json", ...headers },
         body: body !== undefined ? JSON.stringify(body) : undefined,
     });
+
+    if (response.status === 401) {
+        if (typeof window !== "undefined") window.location.href = "/login";
+        throw new ApiError(401, "Session expirée, veuillez vous reconnecter.");
+    }
+
+    const payload = await response.json().catch(() => null);
+
+    if (!response.ok) {
+        const message = payload && typeof payload.error === "string" ? payload.error : "Une erreur est survenue.";
+        throw new ApiError(response.status, message);
+    }
+
+    return payload as T;
+}
+
+async function upload<T>(path: string, file: File): Promise<T> {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    // Pas de Content-Type manuel : le navigateur doit poser lui-même le boundary multipart.
+    const response = await fetch(`/api${path}`, { method: "POST", credentials: "include", body: formData });
 
     if (response.status === 401) {
         if (typeof window !== "undefined") window.location.href = "/login";
@@ -41,4 +64,5 @@ export const api = {
     post: <T>(path: string, body?: unknown) => request<T>(path, { method: "POST", body }),
     patch: <T>(path: string, body?: unknown) => request<T>(path, { method: "PATCH", body }),
     delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),
+    upload,
 };

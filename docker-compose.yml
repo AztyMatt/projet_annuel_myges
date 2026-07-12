@@ -25,6 +25,7 @@ services:
     volumes:
       - .:/app
       - node_modules_backend:/app/node_modules
+      - uploads_data:/app/uploads
     ports:
       - "${BACKEND_PORT:?}:3001"
     environment:
@@ -38,6 +39,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:?}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
       FRONTEND_PUBLIC_URL: ${FRONTEND_PUBLIC_URL:-http://localhost:3000}
+      UPLOADS_DIR: /app/uploads
     depends_on:
       postgres:
         condition: service_healthy
@@ -65,3 +67,4 @@ volumes:
   node_modules_backend:
   node_modules_frontend:
   next_build:
+  uploads_data:

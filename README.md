@@ -164,6 +164,23 @@ If `SEED_ON_START=true` and `SEED_PASSWORD` passes the strong password policy, t
 
 Password for both accounts: value of `SEED_PASSWORD` in `.env`.
 
+### Dev fixtures
+
+`fixtures/dev-fixtures.sql` seeds the database with a realistic dataset (students, instructors, classes, courses, sessions, grades, absences, exams, companies...) so every page has data to render without manual setup. Truncates all business tables and reloads them — safe to re-run at any time.
+
+```bash
+docker compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" < fixtures/dev-fixtures.sql
+```
+
+All fixture accounts share the password `MotDePasse1234$`:
+
+| Email | Role | Notes |
+|-------|------|-------|
+| `superadmin.seed@myges.fr` | Super admin | 2FA required — TOTP secret in the file header |
+| `admin.seed@myges.fr` | Admin | |
+| e.g. `julien.girard@myges.fr` | Instructor | 4 instructors, see `users` table (`*@myges.fr`) |
+| e.g. `lucas.martin@myges-etu.fr` | Student | 16 students, see `users` table (`*@myges-etu.fr`) |
+
 ### Adding a dependency
 
 The project mounts the root directory into containers (`.:/app`), but `node_modules` lives in a **named Docker volume** (`node_modules_backend`, `node_modules_frontend`). That volume takes precedence over the host's `node_modules` — the two are fully independent.
@@ -236,6 +253,21 @@ pull_request               │
 
 Docker images are built for `linux/amd64`.
 ARM-based environments (Apple Silicon, AWS Graviton etc.) must enable QEMU binfmt support or equivalent (e.g. Rosetta 2 on macOS) to run these images.
+
+### Path alias resolution (backend)
+
+The backend uses TypeScript path aliases (`@express/*`, `@application/*`, `@domain/*` — see the `paths` in `tsconfig.json`). `tsc` type-checks against them but does **not** rewrite them in the emitted JavaScript, so the compiled `dist/` still contains `require("@express/...")` that Node cannot resolve on its own.
+
+- **Dev** — `tsx` resolves the aliases natively from `tsconfig.json`, nothing to configure.
+- **Prod** — the compiled app is started through [`module-alias`](https://www.npmjs.com/package/module-alias). The prod `CMD` is `node -r module-alias/register .../server.js`, and the aliases are mapped to their runtime locations in the `_moduleAliases` block of the **root** `package.json`:
+
+  | Alias | Runtime path (in the image) |
+  |-------|-----------------------------|
+  | `@express` | `infrastructure/backend/express/dist` |
+  | `@application` | `infrastructure/application` |
+  | `@domain` | `infrastructure/domain` |
+
+  These paths match where the backend Dockerfile copies each compiled project (`application/dist` → `infrastructure/application`, `domain/dist` → `infrastructure/domain`). `module-alias` is a **runtime** dependency (not `devDependencies`), so it survives `npm ci --omit=dev` in the prod stage.
 
 ### Docker layer cache
 

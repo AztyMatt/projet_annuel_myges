@@ -1,9 +1,9 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { Bell, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCurrentUser } from "@/lib/use-current-user";
+import { NotificationBell } from "@/components/layout/NotificationBell";
 
 type Role = "etudiant" | "intervenant" | "scolarite" | "superadmin";
 
@@ -62,7 +62,7 @@ const roleBadge: Record<Role, { label: string; className: string }> = {
 
 export function TopBar() {
     const pathname = usePathname();
-    const me = useCurrentUser();
+    const { user: me } = useCurrentUser();
     const title = pageTitles[pathname] ?? "MyGES 2.0";
     const role = getRole(pathname, me?.role);
     const badge = roleBadge[role];
@@ -75,26 +75,13 @@ export function TopBar() {
             </div>
 
             <div className="flex items-center gap-3">
-                {/* Search */}
-                <div className="relative w-52">
-                    <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                    <input
-                        type="text"
-                        placeholder="Rechercher..."
-                        className="w-full pl-8 pr-3 h-9 text-sm bg-gray-50 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
-                    />
-                </div>
-
                 {/* Role badge */}
                 <span className={cn("text-xs font-medium px-2.5 py-1 rounded-full", badge.className)}>
                     {badge.label}
                 </span>
 
                 {/* Notifications */}
-                <button className="relative w-9 h-9 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-colors">
-                    <Bell size={17} className="text-gray-600" />
-                    <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full" />
-                </button>
+                <NotificationBell />
             </div>
         </header>
     );

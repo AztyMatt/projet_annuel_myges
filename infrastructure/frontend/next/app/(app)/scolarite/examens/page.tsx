@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Plus, ChevronDown, ChevronUp, X, Trash2 } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
+import { buildNameMap, resolveUserName } from "@/lib/user-names";
 import { useToast } from "@/components/ui/toast";
 
 type SessionExam = { id: string; sessionId: string; type: "WRITTEN" | "DEFENSE"; isRetake: boolean; assessmentId: string | null };
@@ -12,8 +13,8 @@ type SEStudent = { id: string; studentId: string };
 type SEInstructor = { id: string; instructorId: string };
 type SEExternal = { id: string; externalId: string };
 type ExternalPerson = { id: string; firstname: string; lastname: string };
-type Student = { id: string };
-type Instructor = { id: string };
+type Student = { id: string; userId: string };
+type Instructor = { id: string; userId: string };
 
 export default function ExamensPage() {
     const [sessionExams, setSessionExams] = useState<SessionExam[]>([]);
@@ -21,6 +22,8 @@ export default function ExamensPage() {
     const [externals, setExternals] = useState<ExternalPerson[]>([]);
     const [students, setStudents] = useState<Student[]>([]);
     const [instructors, setInstructors] = useState<Instructor[]>([]);
+    const [studentNames, setStudentNames] = useState<Record<string, string>>({});
+    const [instructorNames, setInstructorNames] = useState<Record<string, string>>({});
     const [expanded, setExpanded] = useState<string | null>(null);
     const [seStudents, setSeStudents] = useState<Record<string, SEStudent[]>>({});
     const [seInstructors, setSeInstructors] = useState<Record<string, SEInstructor[]>>({});
@@ -40,6 +43,9 @@ export default function ExamensPage() {
         return e ? `${e.firstname} ${e.lastname}` : id.slice(0, 8);
     };
 
+    const studentName = (id: string) => studentNames[id] ?? `Étudiant #${id.slice(0, 8)}`;
+    const instructorName = (id: string) => instructorNames[id] ?? `Intervenant #${id.slice(0, 8)}`;
+
     const refresh = async () => {
         setLoading(true);
         setError("");
@@ -56,6 +62,12 @@ export default function ExamensPage() {
             setExternals(ext);
             setStudents(stu);
             setInstructors(ins);
+            const [stuNames, insNames] = await Promise.all([
+                buildNameMap(stu, "Étudiant"),
+                buildNameMap(ins, "Intervenant"),
+            ]);
+            setStudentNames(stuNames);
+            setInstructorNames(insNames);
         } catch (e) {
             setError(e instanceof ApiError ? e.message : "Impossible de charger les sessions d'examen.");
         } finally {
@@ -74,6 +86,17 @@ export default function ExamensPage() {
         }
         setExpanded(id);
         try {
+            let studentList = students;
+            let instructorList = instructors;
+            if (studentList.length === 0 || instructorList.length === 0) {
+                [studentList, instructorList] = await Promise.all([
+                    api.get<Student[]>("/students"),
+                    api.get<Instructor[]>("/instructors"),
+                ]);
+                setStudents(studentList);
+                setInstructors(instructorList);
+            }
+
             const [st, ins, ext] = await Promise.all([
                 api.get<SEStudent[]>(`/session-exam-students/session-exam/${id}`),
                 api.get<SEInstructor[]>(`/session-exam-instructors/session-exam/${id}`),
@@ -82,6 +105,33 @@ export default function ExamensPage() {
             setSeStudents((prev) => ({ ...prev, [id]: st }));
             setSeInstructors((prev) => ({ ...prev, [id]: ins }));
             setSeExternals((prev) => ({ ...prev, [id]: ext }));
+
+            const studentById = new Map(studentList.map((s) => [s.id, s]));
+            const instructorById = new Map(instructorList.map((i) => [i.id, i]));
+            const stuNameUpdates: Record<string, string> = {};
+            const insNameUpdates: Record<string, string> = {};
+
+            await Promise.all([
+                ...st.map(async ({ studentId }) => {
+                    if (studentNames[studentId]) return;
+                    const student = studentById.get(studentId);
+                    if (!student?.userId) return;
+                    stuNameUpdates[studentId] = await resolveUserName(student.userId, "Étudiant");
+                }),
+                ...ins.map(async ({ instructorId }) => {
+                    if (instructorNames[instructorId]) return;
+                    const instructor = instructorById.get(instructorId);
+                    if (!instructor?.userId) return;
+                    insNameUpdates[instructorId] = await resolveUserName(instructor.userId, "Intervenant");
+                }),
+            ]);
+
+            if (Object.keys(stuNameUpdates).length > 0) {
+                setStudentNames((prev) => ({ ...prev, ...stuNameUpdates }));
+            }
+            if (Object.keys(insNameUpdates).length > 0) {
+                setInstructorNames((prev) => ({ ...prev, ...insNameUpdates }));
+            }
         } catch (e) {
             setError(e instanceof ApiError ? e.message : "Impossible de charger le détail.");
         }
@@ -133,8 +183,8 @@ export default function ExamensPage() {
                                 <div className="px-5 pb-4 pl-8 space-y-3">
                                     {(
                                         [
-                                            { kind: "student" as const, label: "Étudiants", items: seStudents[se.id] ?? [], render: (x: SEStudent) => `Étudiant #${x.studentId.slice(0, 8)}` },
-                                            { kind: "instructor" as const, label: "Jury / surveillants (intervenants)", items: seInstructors[se.id] ?? [], render: (x: SEInstructor) => `Intervenant #${x.instructorId.slice(0, 8)}` },
+                                            { kind: "student" as const, label: "Étudiants", items: seStudents[se.id] ?? [], render: (x: SEStudent) => studentName(x.studentId) },
+                                            { kind: "instructor" as const, label: "Jury / surveillants (intervenants)", items: seInstructors[se.id] ?? [], render: (x: SEInstructor) => instructorName(x.instructorId) },
                                             { kind: "external" as const, label: "Jury / surveillants externes", items: seExternals[se.id] ?? [], render: (x: SEExternal) => externalName(x.externalId) },
                                         ]
                                     ).map((section) => (
@@ -175,6 +225,8 @@ export default function ExamensPage() {
                     students={students}
                     instructors={instructors}
                     externals={externals}
+                    studentNames={studentNames}
+                    instructorNames={instructorNames}
                     onClose={() => setAddFor(null)}
                     onSaved={() => {
                         const id = addFor.sessionExamId;
@@ -267,6 +319,8 @@ function AddParticipantModal({
     students,
     instructors,
     externals,
+    studentNames,
+    instructorNames,
     onClose,
     onSaved,
 }: {
@@ -275,6 +329,8 @@ function AddParticipantModal({
     students: Student[];
     instructors: Instructor[];
     externals: ExternalPerson[];
+    studentNames: Record<string, string>;
+    instructorNames: Record<string, string>;
     onClose: () => void;
     onSaved: () => void;
 }) {
@@ -285,7 +341,8 @@ function AddParticipantModal({
 
     const labelFor = (item: Student | Instructor | ExternalPerson) => {
         if (kind === "external") return `${(item as ExternalPerson).firstname} ${(item as ExternalPerson).lastname}`;
-        return `${kind === "student" ? "Étudiant" : "Intervenant"} #${item.id.slice(0, 8)}`;
+        if (kind === "student") return studentNames[item.id] ?? `Étudiant #${item.id.slice(0, 8)}`;
+        return instructorNames[item.id] ?? `Intervenant #${item.id.slice(0, 8)}`;
     };
 
     const handleSubmit = async () => {

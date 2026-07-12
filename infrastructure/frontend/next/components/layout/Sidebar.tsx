@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { useCurrentUser } from "@/lib/use-current-user";
+import { useCurrentUser, clearCachedUser } from "@/lib/use-current-user";
 import {
     LayoutDashboard,
     Calendar,
@@ -136,19 +136,20 @@ function isNavActive(pathname: string, href: string): boolean {
 export function Sidebar() {
     const pathname = usePathname();
     const router = useRouter();
-    const me = useCurrentUser();
+    const { user: me, hydrated } = useCurrentUser();
     const role = getRole(pathname, me?.role);
     const navItems = navConfig[role];
     const user = roleConfig[role];
     const RoleIcon = user.icon;
 
-    const initials = me ? `${me.firstname[0]}${me.lastname[0]}`.toUpperCase() : "…";
-    const displayName = me ? `${me.firstname} ${me.lastname}` : "Chargement…";
+    const initials = hydrated && me ? `${me.firstname[0]}${me.lastname[0]}`.toUpperCase() : "…";
+    const displayName = hydrated && me ? `${me.firstname} ${me.lastname}` : "Chargement…";
 
     const handleLogout = async () => {
         try {
             await fetch("/api/auth/logout", { method: "POST" });
         } finally {
+            clearCachedUser();
             router.push("/login");
         }
     };
@@ -214,11 +215,14 @@ export function Sidebar() {
                             "w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0",
                             user.color,
                         )}
+                        suppressHydrationWarning
                     >
                         {initials}
                     </div>
                     <div className="flex-1 min-w-0">
-                        <div className="text-white text-xs font-semibold truncate">{displayName}</div>
+                        <div className="text-white text-xs font-semibold truncate" suppressHydrationWarning>
+                            {displayName}
+                        </div>
                         <div className="text-white/40 text-xs">{user.label}</div>
                     </div>
                 </div>

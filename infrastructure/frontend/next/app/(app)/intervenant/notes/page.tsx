@@ -7,7 +7,7 @@ import { api, ApiError } from "@/lib/api";
 
 type Course = { id: string; moduleId: string; groupId: string; moduleName: string };
 type Assessment = { id: string; title: string; type: "CONTINUOUS" | "EXAM"; isPublished: boolean; dueDate: string };
-type StudentRow = { studentId: string; gradeId: string | null; value: number | null; isLocked: boolean };
+type StudentRow = { studentId: string; studentName: string; gradeId: string | null; value: number | null; isLocked: boolean };
 
 function mentionOf(value: number): { label: string; className: string } {
     if (value >= 16) return { label: "TB", className: "bg-green-100 text-green-700" };
@@ -42,15 +42,23 @@ async function loadRoster(course: Course, assessmentId: string): Promise<Student
     );
     const gradeByStudent = new Map(grades.map((g) => [g.studentId, g]));
 
-    return studentGroups.map((sg) => {
-        const grade = gradeByStudent.get(sg.studentId);
-        return {
-            studentId: sg.studentId,
-            gradeId: grade?.id ?? null,
-            value: grade?.value ?? null,
-            isLocked: grade?.isLocked ?? false,
-        };
-    });
+    return Promise.all(
+        studentGroups.map(async (sg) => {
+            const grade = gradeByStudent.get(sg.studentId);
+            const studentName = await api
+                .get<{ userId: string }>(`/students/${sg.studentId}`)
+                .then((student) => api.get<{ firstname: string; lastname: string }>(`/users/${student.userId}`))
+                .then((user) => `${user.firstname} ${user.lastname}`)
+                .catch(() => `Étudiant #${sg.studentId.slice(0, 8)}`);
+            return {
+                studentId: sg.studentId,
+                studentName,
+                gradeId: grade?.id ?? null,
+                value: grade?.value ?? null,
+                isLocked: grade?.isLocked ?? false,
+            };
+        }),
+    );
 }
 
 export default function SaisieNotes() {
@@ -132,7 +140,7 @@ export default function SaisieNotes() {
     };
 
     const handleExportCsv = () => {
-        const rows = [["Étudiant", "Note /20"], ...roster.map((r) => [`Étudiant #${r.studentId.slice(0, 8)}`, r.value?.toString() ?? ""])];
+        const rows = [["Étudiant", "Note /20"], ...roster.map((r) => [r.studentName, r.value?.toString() ?? ""])];
         const csv = rows.map((row) => row.join(";")).join("\n");
         const blob = new Blob([csv], { type: "text/csv" });
         const url = URL.createObjectURL(blob);
@@ -231,7 +239,7 @@ export default function SaisieNotes() {
                                 return (
                                     <tr key={row.studentId}>
                                         <td className="px-5 py-3 font-medium text-gray-800">
-                                            Étudiant #{row.studentId.slice(0, 8)}
+                                            {row.studentName}
                                         </td>
                                         <td className="px-5 py-3">
                                             {isEditing ? (

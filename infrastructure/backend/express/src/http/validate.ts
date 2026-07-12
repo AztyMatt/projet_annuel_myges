@@ -10,7 +10,7 @@ export const validateBody =
             const details = result.error.issues
                 .map((issue) => `${issue.path.join(".") || "(body)"}: ${issue.message}`)
                 .join("; ");
-            return void send(res, { status: 400, error: `Invalid request body: ${details}` });
+            return void send(res, { status: 400, error: `Corps de requête invalide : ${details}` });
         }
         req.body = result.data;
         next();

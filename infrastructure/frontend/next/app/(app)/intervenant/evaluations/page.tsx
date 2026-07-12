@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ChevronDown, ChevronRight, Plus, Trash2, Send, ExternalLink } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus, Trash2, Send, ExternalLink, Download } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
@@ -23,9 +23,23 @@ type Row = Assessment & { courseLabel: string; groupsCount: number; submissionsC
 
 type GroupDetail = {
     id: string;
-    members: { id: string; studentId: string }[];
-    submitted: boolean;
+    members: { id: string; studentId: string; studentName: string }[];
+    submissions: { id: string; fileId: string }[];
 };
+
+const studentNameCache = new Map<string, string>();
+
+async function resolveStudentName(studentId: string): Promise<string> {
+    const cached = studentNameCache.get(studentId);
+    if (cached) return cached;
+    const name = await api
+        .get<{ userId: string }>(`/students/${studentId}`)
+        .then((student) => api.get<{ firstname: string; lastname: string }>(`/users/${student.userId}`))
+        .then((user) => `${user.firstname} ${user.lastname}`)
+        .catch(() => `Étudiant #${studentId.slice(0, 8)}`);
+    studentNameCache.set(studentId, name);
+    return name;
+}
 
 async function loadCourseOptions(): Promise<CourseOption[]> {
     const courses = await api.get<{ id: string; moduleId: string; groupId: string }[]>("/courses/mine");
@@ -69,9 +83,12 @@ async function loadGroupDetails(assessmentId: string): Promise<GroupDetail[]> {
     const groups = await api.get<{ id: string }[]>(`/assessment-groups/assessment/${assessmentId}`);
     const details: GroupDetail[] = [];
     for (const g of groups) {
-        const members = await api.get<{ id: string; studentId: string }[]>(`/assessment-group-members/group/${g.id}`);
-        const submissions = await api.get<unknown[]>(`/file-assessments/group/${g.id}`);
-        details.push({ id: g.id, members, submitted: submissions.length > 0 });
+        const rawMembers = await api.get<{ id: string; studentId: string }[]>(`/assessment-group-members/group/${g.id}`);
+        const members = await Promise.all(
+            rawMembers.map(async (m) => ({ ...m, studentName: await resolveStudentName(m.studentId) })),
+        );
+        const submissions = await api.get<{ id: string; fileId: string }[]>(`/file-assessments/group/${g.id}`);
+        details.push({ id: g.id, members, submissions });
     }
     return details;
 }
@@ -221,12 +238,6 @@ export default function EvaluationsIntervenant() {
 
             {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl p-4">{error}</div>}
 
-            <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-xs text-blue-800">
-                Le dépôt de rendu par les étudiants dépend de l&apos;upload de fichiers, pas encore implémenté côté
-                backend (voir CLAUDE.md) — cette page permet de créer/publier des évaluations et de suivre la formation
-                des groupes et les rendus déjà enregistrés.
-            </div>
-
             {showForm && (
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 space-y-4">
                     <h3 className="font-bold text-sm text-gray-900">{editingId ? "Modifier l'évaluation" : "Nouvelle évaluation"}</h3>
@@ -369,10 +380,23 @@ export default function EvaluationsIntervenant() {
                                             <div key={g.id} className="flex items-center gap-3 text-xs bg-gray-50 rounded-lg px-3 py-2">
                                                 <span className="font-medium text-gray-700">Groupe {i + 1}</span>
                                                 <span className="text-gray-500">
-                                                    {g.members.map((m) => `Étudiant #${m.studentId.slice(0, 8)}`).join(", ")}
+                                                    {g.members.map((m) => m.studentName).join(", ")}
                                                 </span>
-                                                <StatusBadge tone={g.submitted ? "green" : "orange"} className="ml-auto">
-                                                    {g.submitted ? "Rendu déposé" : "Aucun rendu"}
+                                                {g.submissions.length > 0 && (
+                                                    <div className="flex items-center gap-2 ml-auto">
+                                                        {g.submissions.map((s, j) => (
+                                                            <a
+                                                                key={s.id}
+                                                                href={`/api/files/${s.fileId}/download`}
+                                                                className="flex items-center gap-1 text-blue-600 hover:underline font-medium"
+                                                            >
+                                                                <Download size={11} /> Rendu {j + 1}
+                                                            </a>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                                <StatusBadge tone={g.submissions.length > 0 ? "green" : "orange"} className={g.submissions.length > 0 ? "" : "ml-auto"}>
+                                                    {g.submissions.length > 0 ? "Rendu déposé" : "Aucun rendu"}
                                                 </StatusBadge>
                                             </div>
                                         ))}

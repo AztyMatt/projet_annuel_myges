@@ -13,6 +13,7 @@ import { type InstructorRepository } from "@application/instructor/instructor.re
 import { GENERAL_GROUP_NAME } from "@domain/group/group.entity";
 import { type AuthContext } from "@application/types/auth-context";
 import { NotFound, Forbidden, ForbiddenOwnership } from "@application/types/results";
+import { type NotificationUseCases } from "@application/notification/notification.use-cases";
 
 export type MessageView = {
     id: string;
@@ -73,7 +74,42 @@ export class MessageUseCases {
         private readonly studentGroups: StudentGroupRepository,
         private readonly students: StudentRepository,
         private readonly instructors: InstructorRepository,
+        private readonly notifications: NotificationUseCases,
     ) {}
+
+    private async recipientUserIds(conversationId: string, senderId: string): Promise<string[]> {
+        const priv = await this.conversationPrivates.findByConversationId(conversationId);
+        if (priv) {
+            const other = [priv.userAId, priv.userBId].find((id) => id && id !== senderId);
+            return other ? [other] : [];
+        }
+
+        const course = await this.courses.findByConversationId(conversationId);
+        if (course) {
+            const [instructor, members] = await Promise.all([
+                this.instructors.findById(course.instructorId),
+                this.studentGroups.findByGroupId(course.groupId),
+            ]);
+            const studentUserIds = await Promise.all(
+                members.map(async (m) => (await this.students.findById(m.studentId))?.userId),
+            );
+            const userIds = [instructor?.userId, ...studentUserIds].filter((id): id is string => !!id);
+            return userIds.filter((id) => id !== senderId);
+        }
+
+        const cls = await this.classes.findByConversationId(conversationId);
+        if (cls) {
+            const general = await this.groups.findByClassAndName(cls.id, GENERAL_GROUP_NAME);
+            if (!general) return [];
+            const members = await this.studentGroups.findByGroupId(general.id);
+            const studentUserIds = await Promise.all(
+                members.map(async (m) => (await this.students.findById(m.studentId))?.userId),
+            );
+            return studentUserIds.filter((id): id is string => !!id && id !== senderId);
+        }
+
+        return [];
+    }
 
     private async isParticipant(userId: string, conversationId: string): Promise<boolean> {
         const priv = await this.conversationPrivates.findByConversationId(conversationId);
@@ -114,6 +150,21 @@ export class MessageUseCases {
             createdAt: new Date(),
         };
         await this.messages.save(message);
+
+        const recipients = await this.recipientUserIds(conversationId, senderId);
+        await Promise.all(
+            recipients.map((userId) =>
+                this.notifications.notify({
+                    userId,
+                    type: "NEW_MESSAGE",
+                    title: "Nouveau message",
+                    body: content.length > 80 ? `${content.slice(0, 80)}…` : content,
+                    entityName: "conversation",
+                    entityId: conversationId,
+                }),
+            ),
+        );
+
         return { kind: "message_sent", message: toMessageView(message) };
     }
 

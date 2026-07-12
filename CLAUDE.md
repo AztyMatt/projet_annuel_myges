@@ -28,15 +28,20 @@ Il a été construit en confrontant ces deux documents au **code réel** (backen
 
 ## Bugs connus à corriger en priorité (détail et IDs dans `PROJECT_AUDIT_AND_ROADMAP.md` §9.0)
 
-- [ ] **Suppression de compte RGPD cassée** — le front appelle `DELETE /users/me` (`parametres/page.tsx`) mais le backend n'expose plus que `DELETE /users/:id` réservé `SUPER_ADMIN` (régression du refactor `e91555b`) → `DEL-001…005`
-- [ ] **CronJob 2FA en 404** — `k8s/backend/cleanup-cronjob.yml` appelle l'URL sans le préfixe `/api` (les routeurs sont montés sous `/api`, `app.ts:65`) → `K8S-001`
+- [x] **Suppression de compte RGPD rétablie (2026-07-12)** — `DELETE /users/me` réintroduit (`auth/routes.ts`), `deleteAccount` autorise l'auto-suppression (`auth.requesterId === userId`) → `DEL-001…005` corrigé
+- [x] **CronJob 2FA corrigé (2026-07-12)** — `k8s/backend/cleanup-cronjob.yml` appelle désormais `/api/admin/auth/cleanup-sessions` → `K8S-001`
 - [ ] **Journal d'audit jamais alimenté** — l'API `GET /audit-logs` et les pages `/superadmin/*` existent mais aucun code n'écrit dans la table `audit_log` → `AUD-001…010`
 - [ ] Dépôt git imbriqué `infrastructure/frontend/next/.git` à supprimer (les fichiers sont bien suivis par le dépôt parent) → `TECH-001`
-- [ ] Barre de recherche décorative dans `TopBar.tsx` (placeholder sans action) → `UI-001`
+- [x] **`NOTE-002` corrigé (2026-07-12)** — `/etudiant/notes` plantait pour toute note liée via `manual_notation` : `GET /manual-notations/:id` était réservé admin/intervenant-du-module (`canManageModuleNotations`), l'étudiant se prenait un 403 et ne voyait plus aucune note. `findManualNotationById` (`grade.use-cases.ts`) autorise désormais aussi l'étudiant propriétaire de la note (via `grade-manual-notations` → `canReadGrade`, même pattern que les fixes `findById`/`findAdministrativeByFileDocument` du même jour)
+- [ ] **Migration Drizzle `0006_abnormal_nemesis.sql` éditée après application** — son timestamp dans `meta/_journal.json` ne correspond plus à celui enregistré dans `drizzle.__drizzle_migrations` sur les bases déjà migrées, donc le backend **replante au démarrage** dès qu'on `docker compose restart backend` (Drizzle rejoue tout le fichier et échoue sur `CREATE TABLE password_reset_tokens` déjà existante). Corrigé uniquement sur la base locale de cette session (ALTER TABLE manquants rejoués à la main + `created_at` resynchronisé) ; **chaque poste de l'équipe qui a déjà cette migration appliquée percutera le même crash** à son prochain restart tant que ce n'est pas corrigé chez lui de la même façon. Ne plus jamais éditer un fichier de migration déjà appliqué — toujours en générer un nouveau → `TECH-002`
 
 ## Stack (rappel, voir `README.md` pour le détail)
 
 Next.js (frontend) · Express.js (backend) · PostgreSQL + Drizzle (ORM) · Docker Compose (dev) / Kubernetes (prod) · Traefik (prod) / Nginx (dev) · Infisical (secrets) · GHCR (registre Docker).
+
+**Fixtures de dev** : `fixtures/dev-fixtures.sql` — jeu de données réaliste (16 étudiants, 4 intervenants, 2 filières, notes, absences, examens...) à charger via `docker compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" < fixtures/dev-fixtures.sql` (voir l'en-tête du fichier pour les identifiants de test). Les sessions sont ancrées sur `date_trunc('week', now())` (lundi de la semaine en cours/prochaine) plutôt que sur un décalage fixe en jours — corrigé le 2026-07-12 après qu'un décalage fixe soit tombé un dimanche, rendant `/etudiant/planning` vide par défaut (aucun bug applicatif, juste des données de test mal calées). Chaque cours alterne présentiel/distanciel entre sa séance passée et sa séance future (6 `ON_SITE` / 6 `REMOTE` au total) plutôt qu'un mode figé par cours, pour que le filtre "Distanciel" ait toujours quelque chose à montrer.
+
+**Messages API en français (2026-07-12)** : tous les messages renvoyés par le backend (`error`/`reason`/`message` dans les 27 fichiers `routes.ts`, plus les constantes centrales `FORBIDDEN_MESSAGE`/`UNAUTHORIZED_MESSAGE`/`FORBIDDEN_OWNERSHIP_MESSAGE` dans `http/responses.ts`, le message générique de `http/validate.ts`, `auth/middleware.ts`, et le handler d'erreur Postgres dans `app.ts`) sont désormais en français — plus aucun texte anglais brut ne doit remonter à l'écran (cf. les bugs `NOTE-002`/documents/messagerie trouvés plus tôt qui affichaient du texte anglais tel quel). Les messages de validation générés automatiquement par **Zod** (ex. champ manquant/type invalide) sont aussi en français via `z.config(fr())` (locale intégrée `zod/locales`, configuré au tout début de `server.ts`, avant tout import de schéma). Les tags internes (`not_found`, `grade_created`, `type: "Creation"/"Deletion"/"Operation"`, etc.) restent en anglais — ce sont des identifiants techniques, jamais affichés tels quels.
 
 ---
 
@@ -53,18 +58,18 @@ Next.js (frontend) · Express.js (backend) · PostgreSQL + Drizzle (ORM) · Dock
 - [x] Blocage après tentatives infructueuses — 5 tentatives (`MAX_FAILED_ATTEMPTS`) → verrouillage 15 min (`LOCK_DURATION_MS`), déverrouillage automatique après délai (pas d'action admin nécessaire)
 - [x] Authentification à deux facteurs (TOTP) — fonctionne à l'inscription (`enable2FA`), au login (`totp-provider.adapter.ts`) et à l'activation sur compte existant (`POST /auth/2fa/enable`), **obligatoire pour `SUPER_ADMIN`**
   - [x] Endpoint pour activer la 2FA sur un compte déjà existant — `POST /auth/2fa/enable` + page `/2fa/setup`
-  - [ ] Purge des sessions 2FA expirées **en échec silencieux** : le CronJob k8s appelle l'URL sans `/api` → 404 chaque nuit → `K8S-001`
+  - [x] Purge des sessions 2FA expirées — CronJob k8s corrigé (`K8S-001`, 2026-07-12)
 - [ ] Confirmation par SMS (Twilio) en alternative au TOTP — non implémenté (non bloquant : un seul moyen de 2FA suffit)
 - [ ] OIDC/OAuth2 (Google, Facebook...) — non implémenté. `cahierDesCharges.md` §5.1 le marque explicitement **"(optionnel)"** → à confirmer à l'oral si un seul mode d'authentification (email/mdp) suffit pour la partie "Authentification Avancée" du sujet
 - [ ] Lien magique — non implémenté (idem, marqué optionnel dans le cahier des charges interne)
 - [x] Hachage sécurisé des mots de passe — Argon2 (`password-hasher.adapter.ts`)
 - [x] Gestion des secrets via variables d'environnement — Infisical (CLI en dev, opérateur Kubernetes en prod)
 - [~] Séparation stricte des rôles — depuis le refactor `e91555b`, plus de middleware `requireRole` : l'autorisation se fait par **capacités** (`domain/auth/authorization-policy.ts` → `capabilitiesForRole` → `AuthContext` passé aux use cases, qui retournent `Forbidden`). Le HTTP ne fait que l'authentification (`authed()` dans `auth/middleware.ts`)
-  - [ ] Revue systématique des autorisations post-refactor (une régression avérée : suppression de compte, voir bugs connus) → `SEC-101`
+  - [ ] Revue systématique des autorisations post-refactor → `SEC-101` (la régression suppression de compte est corrigée, 2026-07-12)
 - [~] Conformité RGPD/CNIL
   - [x] Consentement RGPD stocké à l'inscription (`gdprConsentAt`)
   - [x] Export des données personnelles — `GET /gdpr/export`
-  - [ ] Suppression de compte — **cassée** : le front appelle `DELETE /users/me` mais seul `DELETE /users/:id` existe, réservé `SUPER_ADMIN` (`auth.use-cases.ts` `deleteAccount`) → `DEL-001…005`
+  - [x] Suppression de compte — `DELETE /users/me` réintroduit, auto-suppression autorisée (`DEL-001…005`, 2026-07-12)
   - [ ] Pages légales (CGU/CGV/politique de cookies) — bonus, voir section 9
 - [x] **Garde des routes front par rôle** — le token est désormais un cookie `httpOnly` posé par `app/api/auth/login/route.ts` / `login/2fa/route.ts` (jamais exposé au JS) ; `middleware.ts` vérifie sa signature (`jose`) et bloque/redirige avant le rendu de toute page sous `/etudiant`, `/intervenant`, `/scolarite`, `/superadmin`, `/parametres`, `/messagerie` si absent ou si le rôle ne correspond pas
 
@@ -73,7 +78,7 @@ Next.js (frontend) · Express.js (backend) · PostgreSQL + Drizzle (ORM) · Dock
 - [x] Conteneurs Docker — `docker-compose.yml` (dev), Dockerfiles multi-stage (`docker/backend`, `docker/frontend`)
 - [ ] Serveur VPS — non vérifiable depuis le repo (dépend de l'hébergement réel) → à confirmer avec l'équipe
 - [x] Serveur Web — Next.js (frontend) + Express (backend)
-- [ ] WebSocket (notifications temps réel) — requis par `cahierDesCharges.md` §3.1/§3.5 ("Notifications automatiques", "Notifications en temps réel") — **aucune implémentation trouvée**, ni côté backend ni côté front
+- [~] WebSocket (notifications temps réel) — requis par `cahierDesCharges.md` §3.1/§3.5 ("Notifications automatiques", "Notifications en temps réel"). **Décision d'équipe (2026-07-12)** : implémenté en polling (30s) plutôt qu'en WebSocket, pour éviter le chantier d'infra temps réel (auth sur connexion persistante, scalabilité avec 2 réplicas backend). Couvre l'exigence fonctionnelle ("être notifié") mais pas la lettre exacte ("temps réel") — à assumer à l'oral si demandé. Voir section 10 pour le détail
 - [ ] WebRTC — non mentionné dans `cahierDesCharges.md` (uniquement une option générique du sujet type), aucun besoin métier identifié (pas de visio dans le projet) → à ignorer sauf décision contraire de l'équipe
 - [x] Registre Docker — GHCR (`ghcr.io/<owner>/<repo>-<service>`), push automatique en CI/CD sur `main`
 - [x] Clients Web — Next.js
@@ -85,7 +90,7 @@ Next.js (frontend) · Express.js (backend) · PostgreSQL + Drizzle (ORM) · Dock
 - [~] Ingress Controller — le cahier des charges interne mentionne "Nginx" mais l'implémentation réelle utilise **Traefik** (choix différent mais valide techniquement) → documenter/justifier ce choix si demandé à l'oral
 - [x] Au moins 2 réplicas par service (hors base de données) — backend : 2, frontend : 3, postgres : 1 (normal pour une base de données)
 - [x] PostgreSQL avec volumes persistants — PVC 5Gi (`k8s/postgres/pvc.yml`)
-- [ ] **Stockage réel des fichiers uploadés** (justificatifs, documents administratifs, supports de cours, rendus d'évaluation, contrats) — le module `file` ne stocke que des **métadonnées** (`storagePath`, `mimeType`, `sizeBytes`...) ; **aucun upload multipart, aucun volume/bucket dédié** dans `docker-compose.yml` ni dans `k8s/`. Un port `StorageService` existe (`application/file/storage.service.ts`) mais son adaptateur est un **stub no-op** (`src/storage/storage.adapter.ts` : `delete()` au corps vide). Bloquant pour toutes les pages de dépôt de fichiers listées en section 11 → `FILE-001…024`
+- [~] **Stockage réel des fichiers uploadés** — `StorageService` (`application/file/storage.service.ts`) implémenté en dev (`save`/`read`/`delete` sur disque, `infrastructure/backend/express/src/storage/storage.adapter.ts`, volume dédié `uploads_data:/app/uploads` dans `docker-compose.yml`) ; endpoints `POST /files/upload` (multipart via `multer`) et `GET /files/:id/download` fonctionnels et vérifiés (round-trip réel testé) → `FILE-002…006` faits. Câblées sur du réel : `/etudiant/documents` (dépôt + téléchargement), `/etudiant/cours` (téléchargement), `/intervenant/supports` (dépôt + téléchargement), `/etudiant/evaluations` (dépôt de rendu) et `/intervenant/evaluations` (téléchargement du rendu) → `FILE-014…017` faits. Reste `FILE-013`/`018`/`019` (justificatif d'absence, contrat d'entreprise, quelques liens de téléchargement isolés). **Reste à faire** : PVC k8s pour la prod (`FILE-010`, ⚠️ un PVC `local-path` RWO ne supporte pas les 2 réplicas backend — décision S3/MinIO ou RWX à prendre), sauvegarde du volume (`FILE-011`), tests (`FILE-020…024`).
 
 ## 3. Réponse métier et architecture
 
@@ -146,14 +151,14 @@ Ces gaps backend conditionnent des pages listées en section 11 — à traiter e
 - [x] Endpoint mot de passe oublié par email (token à usage unique)
 - [x] Endpoint d'activation de la 2FA sur un compte existant (`POST /auth/2fa/enable`)
 - [x] Endpoint de dégel des notes — `POST /grades/:id/unlock` exposé côté front sur `/scolarite/notes` (bouton "Dégeler") → `NOTE-001` fait
-- [ ] Rétablir l'auto-suppression de compte (`DELETE /users/me` ou équivalent, sans exiger `SUPER_ADMIN`) → `DEL-002/003`
+- [x] Rétablir l'auto-suppression de compte (`DELETE /users/me`) → `DEL-002/003` (2026-07-12)
 - [ ] **Écriture des journaux d'audit** — la table, l'API de lecture et les pages existent, mais aucun use case n'écrit jamais d'entrée : brancher un `audit-recorder` sur les actions sensibles (login, notes lock/unlock, absences validate/reject, documents, attributions de rôle) → `AUD-001…010`
-- [ ] Upload réel de fichiers (multipart + stockage disque/S3), au-delà de la simple création de métadonnées `POST /files` → `FILE-*`
-- [ ] Mécanisme de notifications temps réel (WebSocket) pour planning/notes/documents → `NOTIF-*`
+- [x] Upload réel de fichiers (multipart + stockage disque en dev) fait le 2026-07-12 → voir section 2 ; reste le câblage des pages restantes et l'infra prod (`FILE-*`)
+- [x] **Notifications (2026-07-12)** — version simplifiée **sans WebSocket** (choix assumé : décision d'équipe, cf. section 11.2) : nouvelle table `notification` (`domain/notification`, `application/notification`, `infrastructure/backend/express/src/notification`), déclenchée sur 4 évènements (`GRADE_PUBLISHED` à la création d'une note, `ABSENCE_VALIDATED`/`ABSENCE_REJECTED`, `NEW_MESSAGE` à l'envoi d'un message — résout tous les destinataires réels d'une conversation privée/cours/classe —, `DOCUMENT_VALIDATED`). Routes `GET /notifications/mine`, `GET /notifications/mine/unread-count`, `POST /notifications/:id/read`, `POST /notifications/read-all`. Front : `components/layout/NotificationBell.tsx`, polling toutes les 30s, remplace l'ancienne cloche décorative (point rouge codé en dur) de `TopBar.tsx`. **Non couvert par ce premier passage** : aucun déclencheur sur évaluation publiée/support de cours déposé/contrat expirant — à étendre au fil de l'eau via `notificationUseCases.notify(...)` (même pattern que les 4 déclencheurs existants) → reste de `NOTIF-*`
 - [ ] Endpoint agrégé `GET /conversations/mine` (la messagerie reconstruit tout côté client en N appels) → `API-001`
-- [ ] Permettre à un `ADMIN` simple de retrouver son `adminId` (`GET /admins/me` ou ouverture de `GET /admins/user/:userId` à l'intéressé) — débloque la messagerie ciblée pour les admins → `API-002`
+- [x] Permettre à un `ADMIN` simple de retrouver son profil admin — `GET /admins/me` (`admin/routes.ts`, `resolveOwnAdmin`) débloque la messagerie ciblée → `API-002` (2026-07-12)
 - [ ] Un moyen de lister les comptes en attente d'attribution de rôle (`pending_role_assignment`) — aujourd'hui `GET /admin/security/users` retourne tous les comptes mais ne distingue pas explicitement "sans rôle" des autres
-- [ ] **Résolution nom/prénom à partir d'un `userId`** — vérifié dans le code (`student.adapter.ts`, `instructor.adapter.ts`, `course.use-cases.ts`, `message.use-cases.ts`) : `GET /students`, `/students/:id`, `/instructors/:id`, `/courses/*`, les messages, etc. ne renvoient que des IDs bruts, jamais de nom joint. Seuls `/users/me`, `/students/me`, `/instructors/me` (soi-même) et `/admin/security/users` (`SUPER_ADMIN` uniquement, tous les comptes) exposent un nom. Bloque l'affichage de "qui" sur `/messagerie`, les dashboards (nom de l'intervenant), `/scolarite/etudiants`, la gestion des intervenants, etc. — à corriger en joignant `firstname`/`lastname` dans les réponses `students`/`instructors`/`courses` concernées, ou via un endpoint restreint `GET /users/:id` (nom uniquement, pas de données sensibles). **Décision d'équipe : en attendant, le front affiche des libellés génériques ("Intervenant", "Administration") ou l'ID plutôt que de bloquer les pages.**
+- [~] **Résolution nom/prénom à partir d'un `userId`** — `GET /users/:id` existe (2026-07-12). Appliqué sur `/intervenant/notes`, `/messagerie` (expéditeur, liste des conversations privées admin, sélecteur "Nouvelle conversation") et `/scolarite/etudiants` (2026-07-12). Reste à appliquer page par page : `/students/:id` (roster hors instructeur concerné), `/instructors/:id`, `/courses/*`, etc.
 
 ---
 
@@ -216,12 +221,12 @@ Seulement 4 rôles (pas les 6-7 décrits dans `cahierDesCharges.md` §2, l'admin
 - [x] **`/messagerie`** — reconnectée
   - Liste des conversations reconstruite côté client (pas d'endpoint agrégé) : classe (étudiant → groupe → classe → `conversationId`), cours (groupe → cours → `conversationId`), privées (`conversation-private`)
   - Fil de messages, envoi (`POST /messages`), marquage lu best-effort (`POST /message-reads`)
+  - **Nom de l'expéditeur affiché sur chaque message (2026-07-12)** : `Message.senderId` est directement un `userId` (posé par le backend depuis `req.auth.userId`, pas un id d'entité métier) — résolution directe via `GET /users/:id`, sans hop intermédiaire ni élargissement d'autorisation nécessaire, contrairement aux autres pages de cette session. Répond au signalement "pour les messages de cours on ne peut pas savoir qui a envoyé les messages" : dans une conversation de classe/cours à plusieurs participants, chaque bulle reçue affiche désormais `Prénom Nom` au-dessus (mise en cache par `senderId` le temps de la session de page)
   - **Bug corrigé (smoke test du 2026-07-10)** : la page appelait `GET /conversation-privates/student/:studentId` et `GET /conversation-privates/admin/:adminId`, deux routes qui **n'existent pas** côté backend (seules `/conversation-privates/mine`, `/conversation/:id`, `/:id` existent) → chez tout étudiant, l'appel non catché plantait toute la messagerie ("Une erreur est survenue.", même les conversations de classe/cours disparaissaient). Corrigé en utilisant `GET /conversation-privates/mine` (self-service, filtre déjà par l'utilisateur authentifié) pour étudiants et admins — au passage, l'admin n'a plus besoin de connaître son `adminId` pour *voir* ses conversations privées (seule la *création* en a encore besoin, cf. limitation ci-dessous)
-  - "Nouvelle conversation" (ADMIN/SUPER_ADMIN) fonctionnelle mais dégradée : pas de nom d'étudiant à afficher (gap section 10), sélection par ID tronqué
-  - **Limitation connue** : `ADMIN` (non `SUPER_ADMIN`) ne peut pas *démarrer* une messagerie ciblée — `GET /admins/user/:userId` est réservé à `SUPER_ADMIN`, un simple admin ne peut donc pas retrouver son propre `adminId`. Affiché comme "fonctionnalité limitée pour votre rôle" plutôt que planté (voir `API-002`)
-  - [ ] **Bug non corrigé découvert au passage** : la modal "Nouvelle conversation" envoie `POST /conversation-privates` avec `{ adminId, studentId, conversationId }`, mais le backend attend `{ userAId, userBId }` (`conversation/routes.ts`, message d'erreur `"userAId and userBId are required"`) — la création échoue donc systématiquement en 400, même quand `adminId` a pu être résolu. À corriger en envoyant l'userId de l'admin (déjà récupéré via `GET /users/me`) et l'userId de l'étudiant ciblé (`student.userId`, présent dans `GET /students`) plutôt que les IDs d'entité métier → `MSG-001`
+  - "Nouvelle conversation" (ADMIN/SUPER_ADMIN) fonctionnelle : envoie `{ userAId, userBId }` via `POST /conversation-privates` (corrigé `MSG-001`, 2026-07-12), noms d'étudiants résolus via `GET /users/:id`, `GET /admins/me` pour débloquer les admins simples (`API-002`)
+  - Liste des conversations privées admin : nom de l'autre participant résolu via `conversation-privates/mine` + `GET /users/:id` (2026-07-12)
 
-- [ ] Notifications temps réel (bandeau/cloche globale, pas une page à part) — dépend du WebSocket backend (section 10), requis par §3.1/§3.5
+- [x] Notifications (cloche globale, pas une page à part) — fait le 2026-07-12 en version polling (30s), pas de WebSocket ; voir section 10 pour le détail et les évènements couverts
 
 ### 11.3 Étudiant (`/etudiant`)
 
@@ -233,6 +238,7 @@ Seulement 4 rôles (pas les 6-7 décrits dans `cahierDesCharges.md` §2, l'admin
 - [x] **`/etudiant/planning`** — emploi du temps §3.1, reconnecté
   - Chaîne réelle : `students/me` → `student-groups` → `groups/:id/courses` → `courses/:id/sessions`, grille semaine avec navigation
   - Seuls deux modes existent réellement côté backend (`ON_SITE`/`REMOTE`) — pas de mode "entreprise" dédié dans `SessionMode`, retiré du filtre/légende (une journée entreprise = simplement l'absence de session)
+  - **Bug corrigé (2026-07-12)** : le lieu affiché n'était que le nom court de la salle (ex. `P101`), sans le campus — impossible de savoir où se rendre si l'école a plusieurs campus. Résolution de `classroom.campusId` → `campus.name` ajoutée, affichage désormais `Campus Paris — P101` (+ `title` avec le nom complet du module en cas de troncature)
 
 - [x] **`/etudiant/notes`** — notes et moyennes §3.2, reconnecté
   - Chaque note (`Grade`) n'est liée à un module qu'indirectement (`grade-assessment` / `grade-session-exam` / `grade-manual-notation` → remonter jusqu'au module) — logique de résolution écrite dans la page
@@ -245,16 +251,17 @@ Seulement 4 rôles (pas les 6-7 décrits dans `cahierDesCharges.md` §2, l'admin
 
 - [x] **`/etudiant/documents`** — dossier centralisé §3.4, reconnecté
   - `file-documents/mine` (self-service ; corrigé le 2026-07-10, appelait auparavant `file-documents/student/:id` réservé admin, cf. bug ci-dessus sur `/etudiant`) réparti en 3 sections via `document-administratives/file-document/:id` et `document-apprenticeship-contracts/file-document/:id` (déterminent si un `FileDocument` est un document officiel, un contrat, ou un document personnel)
-  - Dépôt/téléchargement **désactivés avec message explicite** : même gap upload/stockage réel
+  - Dépôt et téléchargement **réels et fonctionnels** depuis le 2026-07-12 : modal "Déposer un document" avec **sélection obligatoire d'un type** (`DocumentType`) → `POST /files/upload` puis `POST /file-documents` puis `POST /document-administratives`. Sans type, un document reste bloqué en `PENDING` à vie (`validateDocument` renvoie `file_document_has_no_doc_type` si aucun `document_administrative`/contrat n'est lié, non rattrapable depuis l'UI ensuite)
+  - **Bug corrigé (2026-07-12)** : `findAdministrativeByFileDocument` et `findApprenticeshipContractByFileDocument` (`application/document/document.use-cases.ts`) étaient réservés admin (`if (!auth.isAdmin) return NotFound`), alors qu'un helper `canReadOwnFileDocument` existant dans la même classe et déjà utilisé ailleurs faisait exactement ce qu'il fallait — jamais branché sur ces deux méthodes. Conséquence concrète : **même un document correctement typé retombait toujours dans "Mes documents personnels"** pour l'étudiant (les 2 probes de classification 404 systématiquement pour un non-admin), y compris les documents de fixtures. Appliqué le même helper aux deux méthodes — aucune régression possible côté admin (`canReadOwnFileDocument` retourne `true` immédiatement si `auth.isAdmin`)
 
 - [x] **`/etudiant/cours`** — bibliothèque de supports §3.6, construite
   - Liste des modules suivis résolue via `students/me` → `student-groups` → `groups/:id/courses` → `modules/:id`, fichiers `FileCourse` par module (`file-courses/course/:id`, nom/taille/date)
-  - Lecture seule (pas de dépôt, ni de téléchargement réel) : cohérent avec le rôle de l'intervenant côté dépôt, et bloqué par le même gap d'upload/stockage réel (section 2/10) pour le téléchargement
+  - Téléchargement réel fonctionnel depuis le 2026-07-12. Toujours lecture seule côté dépôt (cohérent avec le rôle de l'intervenant)
 
 - [x] **`/etudiant/evaluations`** — évaluations et rendus §3.6, construite
   - Liste des évaluations publiées de ses cours (titre, module, type continu/examen, échéance), statut calculé "Rendu"/"En retard"/"À rendre" (`file-assessments/group/:id`)
   - "Former mon groupe" **fonctionnel** quand `maxGroupSize > 1` (`POST /assessment-groups` puis `POST /assessment-group-members`)
-  - Dépôt de fichier **désactivé avec message explicite** : bloqué par le gap d'upload réel (section 2/10), `POST /file-assessments` exige un `fileId` déjà existant
+  - **Dépôt de rendu réel et fonctionnel (2026-07-12)** : bouton "Déposer un rendu" par évaluation (visible tant que non déjà rendu et avant échéance) → `POST /files/upload` puis `POST /file-assessments`. Le backend (`submitForAssessment` dans `application/file/file.use-cases.ts`) gérait déjà toute la logique métier (appartenance au groupe, publication, échéance, limite de 5 fichiers/groupe, anti-doublon) — seul le câblage frontend manquait. Cas particulier géré : pour une évaluation individuelle (`maxGroupSize === 1`), aucun groupe n'est jamais formé explicitement par l'étudiant (le bouton "Former mon groupe" n'apparaît que si `maxGroupSize > 1`) ; le dépôt crée donc silencieusement un groupe solo (`POST /assessment-groups` avec le seul `assessmentId`, déjà supporté côté backend) juste avant l'upload si `myGroupId` est encore `null`
   - Pas d'affichage des notes ici (déjà sur `/etudiant/notes`, évite la duplication)
 
 ### 11.4 Intervenant (`/intervenant`)
@@ -264,22 +271,25 @@ Seulement 4 rôles (pas les 6-7 décrits dans `cahierDesCharges.md` §2, l'admin
 
 - [x] **`/intervenant/planning`** — mon planning §3.1, reconnecté (`courses/mine` → `courses/:id/sessions`, avec nom de groupe et effectif réels)
   - Non fait : détail session avec présence/absent en un clic (nécessite `/intervenant/notes`-like UI, laissé pour une prochaine itération)
+  - **Bug corrigé (2026-07-12)** : même gap de lieu que `/etudiant/planning` (campus manquant) ; en plus, le lieu ne s'affichait que si la carte dépassait 90px de haut (~1h36 de cours), donc quasiment jamais visible pour une séance standard de 1h30. Seuil abaissé à 40px (même règle que côté étudiant) et lieu affiché avant le groupe/effectif
 
 - [x] **`/intervenant/notes`** — régression corrigée, reconnectée
   - Sélecteur cours (`courses/mine`) → évaluation (`courses/:id/assessments`) → roster du groupe (`groups/:id/students`), notes résolues via `grade-assessments/assessment/:id` + `grades/:id`
   - Saisie inline (création `POST /grades` + `POST /grade-assessments`, ou `PATCH /grades/:id` si déjà notée), mention calculée, export CSV
   - Lien de navigation ajouté dans `Sidebar.tsx` (existait pour la page, mais l'entrée de menu manquait)
   - Pas de champ "commentaire" (n'existe pas sur `Grade`) ni de bouton "Geler" : `POST /grades/:id/lock` est réservé à `ADMIN`/`SUPER_ADMIN` côté backend, un intervenant ne peut pas geler lui-même (le gel se fait depuis `/scolarite/notes`)
+  - **Noms d'étudiants réels affichés (2026-07-12)** : la ligne d'étudiant affiche désormais `Prénom Nom` au lieu d'un libellé générique. Ajout d'un endpoint `GET /users/:id` (`findPublicProfile` dans `auth.use-cases.ts` — ne renvoie que `id`/`firstname`/`lastname`, aucune donnée sensible), et élargissement de `StudentUseCases.findById` (`application/student/student.use-cases.ts`), auparavant réservé `ADMIN`, pour autoriser aussi l'étudiant lui-même et un intervenant enseignant un cours dont le groupe contient cet étudiant (`isInstructorOfStudent`, même pattern additif que les autres corrections d'autorisation de cette session). Le front chaîne `GET /students/:id` → `GET /users/:userId`, avec repli sur `Étudiant #{id}` en cas d'erreur. **Le même gap (libellés génériques) reste présent sur les ~15 autres pages listées en section 10 — pas encore traité, à faire au cas par cas si demandé**
 
 - [x] **`/intervenant/supports`** — reconnecté
   - Liste réelle (`file-courses/course/:id` par cours, taille/date via `files/:id`), suppression fonctionnelle
-  - Dépôt de nouveau fichier **retiré avec message explicite** (même gap upload réel) ; les onglets/statuts publié-brouillon/compteur de téléchargements de la maquette retirés : `FileCourse` n'a ni statut de publication ni compteur de téléchargements
+  - Dépôt et téléchargement **réels et fonctionnels** depuis le 2026-07-12 (`FILE-016` fait) : modal "Ajouter un support" (sélection du cours + fichier → `POST /files/upload` puis `POST /file-courses`), lien de téléchargement par ligne. Les onglets/statuts publié-brouillon/compteur de téléchargements de la maquette restent retirés : `FileCourse` n'a ni statut de publication ni compteur de téléchargements
 
 - [x] **`/intervenant/evaluations`** — création et suivi des évaluations §3.6, construite
   - Liste par cours (`courses/mine`) avec statut publié/brouillon, échéance, nombre de groupes formés et de rendus déposés (`assessment-groups/assessment/:id`, `file-assessments/assessment/:id`)
   - Création/édition (`POST`/`PATCH /assessments` avec `isPublished`) + bouton "Publier" séparé (`POST /assessments/:id/publish`) pour les brouillons déjà créés, suppression (`DELETE /assessments/:id`)
-  - Détail dépliable par groupe : membres (libellés génériques, gap section 10) et statut de rendu (`file-assessments/group/:id`), lien direct vers `/intervenant/notes` pour noter
-  - Pas de lien de téléchargement du rendu : bloqué par le gap d'upload/stockage réel (section 2/10), aucun fichier réel n'est actuellement soumis
+  - Détail dépliable par groupe : membres et statut de rendu (`file-assessments/group/:id`), lien direct vers `/intervenant/notes` pour noter
+  - **Téléchargement réel du rendu (2026-07-12)** : chaque fichier soumis par un groupe a désormais un lien `/api/files/:id/download` direct dans le détail dépliable. Nécessitait d'élargir `FileUseCases.findById` (`application/file/file.use-cases.ts`) — auparavant, un fichier lié via `file_assessment` n'était accessible qu'à son uploadeur (l'étudiant) ou à un admin ; ajout d'une branche autorisant aussi l'intervenant du cours concerné et les autres membres du même groupe d'évaluation (même pattern additif que les autres corrections d'autorisation de cette session, ex. `file_course`)
+  - **Noms d'étudiants réels dans le détail par groupe (2026-07-12)** : même bug de collision que sur `/intervenant/notes` (`Étudiant #fx_stude` identique pour tous les membres, préfixe d'ID de fixtures partagé) — corrigé avec le même chaînage `GET /students/:id` → `GET /users/:id` (déjà ouvert à l'intervenant du cours concerné, cf. `findById` dans `application/student/student.use-cases.ts`), mis en cache par `studentId` le temps de la session de page pour éviter les doublons de requêtes entre groupes
 
 ### 11.5 Administration — `ADMIN` + `SUPER_ADMIN` (`/scolarite`)
 
@@ -291,7 +301,7 @@ Fusionne les responsabilités "Scolarité / Pédagogique / Relations Entreprises
 
 - [x] **`/scolarite/etudiants`** — dossiers étudiants, construite (le lien mort du `Sidebar` pointe maintenant vers une vraie page)
   - Filtre par filière, fiche détail dépliable (groupe(s), absences en attente, documents à régulariser)
-  - Sans nom d'étudiant (gap section 10) ; statut initial/alternant **non affiché dans la liste** (aurait demandé un aller-retour fichier/contrat par étudiant, trop coûteux pour une liste — resterait à faire dans la fiche détail individuelle)
+  - Noms affichés via chaînage `GET /students` → `GET /users/:userId` (2026-07-12) ; statut initial/alternant **non affiché dans la liste** (aurait demandé un aller-retour fichier/contrat par étudiant, trop coûteux pour une liste — resterait à faire dans la fiche détail individuelle)
 
 - [x] **`/scolarite/absences`** — validation des absences §3.3, construite
   - Tableau filtrable par statut (`PENDING` par défaut), Valider/Rejeter en un clic, indicateur de justificatif déposé
@@ -307,8 +317,9 @@ Fusionne les responsabilités "Scolarité / Pédagogique / Relations Entreprises
   - Section "Notations manuelles" pas encore ajoutée
 
 - [x] **`/scolarite/planning`** — gestion des sessions §3.1, §4, construite
-  - Sélection d'un cours → liste/création/édition/suppression de ses sessions (date, heure, mode, salle)
   - Pas de champ motif dédié pour tracer une annulation/déplacement exceptionnel (n'existe pas sur `Session` — modifier ou supprimer la session est le seul levier actuel, noté explicitement dans la page)
+  - **Refonte (2026-07-12)** : l'ancienne version listait un cours à la fois dans un tableau texte brut (dates `06/07/2026 11:00`, pas de vue d'ensemble). Remplacée par la même grille calendrier hebdomadaire que `/etudiant/planning`/`/intervenant/planning`, mais avec **tous les cours/groupes affichés simultanément** (pas de sélecteur de cours global) : clic sur une session pour l'éditer, icône corbeille au survol pour la supprimer directement, `GET /sessions` (admin, liste tout le système) au lieu d'un fetch par cours. La modale "Nouvelle session" embarque désormais le sélecteur de cours (`PATCH /sessions/:id` ne permet pas de changer le cours d'une session existante, donc verrouillé en édition). Vérifié en vrai : création, édition, suppression, navigation semaine précédente/suivante, filtres présentiel/distanciel
+  - **Bug corrigé (2026-07-12)** : une session de 30 min ne mesurait que 24px de haut sur la grille — insuffisant pour même afficher le nom du module sans le tronquer verticalement (padding + texte dépassaient la hauteur disponible). Même souci sur `/etudiant/planning` et `/intervenant/planning`. Corrigé sur les 3 pages : hauteur minimale de bloc (28px) + mise en page compacte sur une seule ligne (module + mode, tronqués proprement) en dessous d'un certain seuil, au lieu d'empiler plusieurs lignes qui débordaient
 
 - [x] **`/scolarite/examens`** — sessions d'examen §3.7, construite
   - Création (session existante, type écrit/soutenance, case rattrapage, évaluation liée optionnelle), affectation étudiants/intervenants/externes avec retrait
@@ -328,6 +339,7 @@ Fusionne les responsabilités "Scolarité / Pédagogique / Relations Entreprises
 - [x] **`/scolarite/intervenants`** — construite, en lecture/édition seule
   - Liste + modification (type de contrat, spécialités) + nombre de cours affectés
   - **Pas de création** : nécessiterait un `userId` d'un compte "en attente de rôle", information que seul `SUPER_ADMIN` peut voir (`/admin/security/users`) — la création d'un profil intervenant reste le rôle de `/superadmin/gestion`
+  - **Noms d'intervenants réels affichés (2026-07-12)** : même bug de collision que sur `/intervenant/notes`/`/intervenant/evaluations` (`Intervenant #fx_inst` identique pour tous, préfixe d'ID de fixtures partagé). Plus simple à corriger ici : `GET /instructors` renvoie déjà `userId` par ligne, donc résolution directe via `GET /users/:userId` sans étape intermédiaire (pas besoin d'élargir d'autorisation, `/scolarite` est déjà `ADMIN`)
 
 - [x] **`/scolarite/entreprises`** — construite
   - Liste + création d'entreprise, détail dépliable listant les contrats existants avec alerte "expire bientôt" (± 30 jours)
@@ -357,7 +369,7 @@ Fusionne les responsabilités "Scolarité / Pédagogique / Relations Entreprises
 
 ### 11.7 Points d'architecture transverses à traiter en même temps que les pages
 
-- [x] Client API centralisé (`lib/api.ts`) : `api.get/post/patch/delete` normalisent les erreurs (`ApiError`) et redirigent vers `/login` sur 401. Le header `Authorization` n'a plus besoin d'être posé par les pages : le cookie httpOnly suffit, le middleware l'attache lui-même en le relayant vers le backend. **Utilisé par toutes les pages reconnectées de la section 11** (auth mise à part, qui passe par ses propres route handlers)
+- [x] Client API centralisé (`lib/api.ts`) : `api.get/post/patch/delete` normalisent les erreurs (`ApiError`) et redirigent vers `/login` sur 401. Le header `Authorization` n'a plus besoin d'être posé par les pages : le cookie httpOnly suffit, le middleware l'attache lui-même en le relayant vers le backend. **Utilisé par toutes les pages reconnectées de la section 11** (auth mise à part, qui passe par ses propres route handlers). Depuis le 2026-07-12 : `api.upload(path, file)` (multipart `FormData`, pas de `Content-Type` manuel) pour `POST /files/upload` ; le téléchargement se fait par lien direct `<a href="/api/files/:id/download">` (cookie httpOnly transmis automatiquement, pas besoin de passer par le client JS)
 - [x] Garde de route par rôle — cookie `httpOnly` (`myges_token`) posé par `app/api/auth/login/route.ts` et `app/api/auth/login/2fa/route.ts`, vérifié par `middleware.ts` via `lib/auth.ts` (`jose`, vérification de signature, pas juste un décodage) ; déconnexion via `POST /api/auth/logout` (`Sidebar.tsx`)
   - [ ] À vérifier avant déploiement prod : `JWT_SECRET` doit être accessible au pod frontend k8s (les deux `InfisicalSecret` CRD `backend`/`frontend` pointent déjà sur le même `secretsPath: "/"`, donc a priori déjà synchronisé — à confirmer dans Infisical)
 - [~] Composants mutualisés — `components/ui/status-badge.tsx` (`StatusBadge`, tons vert/rouge/orange/bleu/violet/gris), `components/ui/confirm-dialog.tsx` (`ConfirmDialog`), `components/ui/toast.tsx` (`ToastProvider`/`useToast`, monté dans `(app)/layout.tsx`)
@@ -384,7 +396,7 @@ Fusionne les responsabilités "Scolarité / Pédagogique / Relations Entreprises
 
 Constats qui ne correspondent à aucune exigence des documents source — chacun nécessite une décision d'équipe explicite avant d'entrer au périmètre :
 
-- **Recherche globale** — la barre "Rechercher..." de `TopBar.tsx` n'a aucune portée fonctionnelle définie (cible : étudiants ? cours ? documents ?). En attendant : la retirer (`UI-001`).
+- **Recherche globale** — la barre "Rechercher..." de `TopBar.tsx` n'avait aucune portée fonctionnelle définie (cible : étudiants ? cours ? documents ?) → retirée le 2026-07-12 (`UI-001` fait). À réintroduire uniquement si une portée précise est définie.
 - **Internationalisation (i18n)** — aucune exigence multilingue dans les documents ; aucune infrastructure de traduction. À ignorer sauf décision contraire.
 - **Rate limiting réseau/IP** — non demandé par les documents (seul le blocage par compte l'est, et il est fait) ; recommandé néanmoins par l'audit → `SEC-103`.
 - **Confirmation SMS (Twilio)** — alternative au TOTP citée par le Sujet, non requise puisqu'un moyen de 2FA suffit.

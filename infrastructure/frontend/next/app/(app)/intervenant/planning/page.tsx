@@ -22,6 +22,7 @@ const DAYS = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi"];
 const HOURS = ["08:00", "09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00"];
 const GRID_START = 8;
 const ROW_HEIGHT = 56;
+const MIN_BLOCK_HEIGHT = 28;
 
 const typeConfig: Record<Mode, { bg: string; text: string; label: string; icon: typeof MapPin }> = {
     ON_SITE: { bg: "bg-emerald-100 border-emerald-300", text: "text-emerald-800", label: "Présentiel", icon: MapPin },
@@ -51,6 +52,7 @@ async function loadInstructorSessions(): Promise<CalendarSession[]> {
     const moduleCache = new Map<string, string>();
     const groupCache = new Map<string, { name: string; studentCount: number }>();
     const classroomCache = new Map<string, string>();
+    const campusCache = new Map<string, string>();
     const sessions: CalendarSession[] = [];
 
     for (const course of courses) {
@@ -76,8 +78,12 @@ async function loadInstructorSessions(): Promise<CalendarSession[]> {
             let room = "Distanciel";
             if (session.mode === "ON_SITE" && session.classroomId) {
                 if (!classroomCache.has(session.classroomId)) {
-                    const classroom = await api.get<{ name: string }>(`/classrooms/${session.classroomId}`);
-                    classroomCache.set(session.classroomId, classroom.name);
+                    const classroom = await api.get<{ name: string; campusId: string }>(`/classrooms/${session.classroomId}`);
+                    if (!campusCache.has(classroom.campusId)) {
+                        const campus = await api.get<{ name: string }>(`/campuses/${classroom.campusId}`);
+                        campusCache.set(classroom.campusId, campus.name);
+                    }
+                    classroomCache.set(session.classroomId, `${campusCache.get(classroom.campusId)} — ${classroom.name}`);
                 }
                 room = classroomCache.get(session.classroomId)!;
             }
@@ -219,29 +225,36 @@ export default function PlanningIntervenant() {
                                     const durationHours =
                                         (session.endTime.getTime() - session.startTime.getTime()) / 3600000;
                                     const top = (startHour - GRID_START) * ROW_HEIGHT;
-                                    const height = durationHours * ROW_HEIGHT - 4;
+                                    const height = Math.max(MIN_BLOCK_HEIGHT, durationHours * ROW_HEIGHT - 4);
+                                    const compact = height < 40;
                                     return (
                                         <div
                                             key={session.id}
+                                            title={`${session.moduleName} — ${session.groupName} · ${session.studentCount} étudiants — ${session.room}`}
                                             className={cn(
-                                                "absolute left-1 right-1 rounded-lg border px-2 py-1.5 overflow-hidden cursor-pointer hover:shadow-md transition-shadow",
+                                                "absolute left-1 right-1 rounded-lg border overflow-hidden cursor-pointer hover:shadow-md transition-shadow",
+                                                compact ? "px-1.5 py-0.5 flex items-center gap-1" : "px-2 py-1",
                                                 cfg.bg,
                                             )}
                                             style={{ top: top + 2, height }}
                                         >
-                                            <div className={cn("text-xs font-semibold leading-tight truncate", cfg.text)}>
+                                            <div className={cn("text-xs font-semibold leading-tight truncate min-w-0", cfg.text)}>
                                                 {session.moduleName}
                                             </div>
-                                            {height > 60 && (
+                                            {compact ? (
+                                                <span className={cn("text-[10px] truncate opacity-60 flex-shrink-0", cfg.text)}>
+                                                    · {session.room}
+                                                </span>
+                                            ) : (
                                                 <>
-                                                    <div className={cn("flex items-center gap-1 text-xs mt-0.5 opacity-70", cfg.text)}>
-                                                        <Users size={10} />
-                                                        {session.groupName} · {session.studentCount} étudiants
+                                                    <div className={cn("flex items-center gap-1 text-xs mt-0.5 opacity-60 truncate", cfg.text)}>
+                                                        <Icon size={10} />
+                                                        {session.room}
                                                     </div>
-                                                    {height > 90 && (
-                                                        <div className={cn("flex items-center gap-1 text-xs mt-0.5 opacity-60", cfg.text)}>
-                                                            <Icon size={10} />
-                                                            {session.room}
+                                                    {height > 60 && (
+                                                        <div className={cn("flex items-center gap-1 text-xs mt-0.5 opacity-70", cfg.text)}>
+                                                            <Users size={10} />
+                                                            {session.groupName} · {session.studentCount} étudiants
                                                         </div>
                                                     )}
                                                 </>

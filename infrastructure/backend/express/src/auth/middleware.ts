@@ -38,7 +38,7 @@ export const requireAuth = (request: AuthRequest, response: Response, nextFuncti
         request.auth = { userId: payload.sub, role: payload.role, email: payload.email };
         nextFunction();
     } catch {
-        sendUnauthorized(response, "Invalid token");
+        sendUnauthorized(response, "Jeton invalide");
     }
 };
 

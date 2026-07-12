@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FileText } from "lucide-react";
+import { FileText, Download } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 
-type SupportFile = { id: string; name: string; sizeBytes: number; uploadedAt: string };
+type SupportFile = { id: string; fileId: string; name: string; sizeBytes: number; uploadedAt: string };
 type ModuleSupports = { moduleId: string; moduleName: string; files: SupportFile[] };
 
 function formatSize(bytes: number): string {
@@ -30,7 +30,7 @@ async function loadModuleSupports(): Promise<ModuleSupports[]> {
             );
             for (const fc of fileCourses) {
                 const file = await api.get<{ sizeBytes: number; uploadedAt: string }>(`/files/${fc.fileId}`);
-                byModule.get(course.moduleId)!.files.push({ id: fc.id, name: fc.name, sizeBytes: file.sizeBytes, uploadedAt: file.uploadedAt });
+                byModule.get(course.moduleId)!.files.push({ id: fc.id, fileId: fc.fileId, name: fc.name, sizeBytes: file.sizeBytes, uploadedAt: file.uploadedAt });
             }
         }
     }
@@ -83,6 +83,13 @@ export default function CoursEtudiant() {
                                             {formatSize(f.sizeBytes)} · {new Date(f.uploadedAt).toLocaleDateString("fr-FR")}
                                         </div>
                                     </div>
+                                    <a
+                                        href={`/api/files/${f.fileId}/download`}
+                                        className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 flex-shrink-0"
+                                        title="Télécharger"
+                                    >
+                                        <Download size={15} />
+                                    </a>
                                 </div>
                             ))}
                         </div>

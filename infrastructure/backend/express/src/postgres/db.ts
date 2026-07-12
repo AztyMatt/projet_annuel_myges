@@ -23,6 +23,7 @@ import * as groupSchema from "@express/src/postgres/schema/group";
 import * as instructorSchema from "@express/src/postgres/schema/instructor";
 import * as messageSchema from "@express/src/postgres/schema/message";
 import * as moduleSchema from "@express/src/postgres/schema/module";
+import * as notificationSchema from "@express/src/postgres/schema/notification";
 import * as periodSchema from "@express/src/postgres/schema/period";
 import * as programSchema from "@express/src/postgres/schema/program";
 import * as programModuleSchema from "@express/src/postgres/schema/program-module";
@@ -61,6 +62,7 @@ export const rootDb = drizzle(pool, {
         ...instructorSchema,
         ...messageSchema,
         ...moduleSchema,
+        ...notificationSchema,
         ...periodSchema,
         ...programSchema,
         ...programModuleSchema,
