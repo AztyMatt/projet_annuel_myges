@@ -33,11 +33,17 @@ spec:
                   key: UMAMI_APP_SECRET
           resources:
             requests:
-              cpu: "100m"
-              memory: "128Mi"
-            limits:
-              cpu: "300m"
+              cpu: "150m"
               memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          startupProbe:
+            tcpSocket:
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 30
           readinessProbe:
             tcpSocket:
               port: 3000
@@ -48,7 +54,6 @@ spec:
           livenessProbe:
             tcpSocket:
               port: 3000
-            initialDelaySeconds: 15
             periodSeconds: 10
             failureThreshold: 3
             timeoutSeconds: 2
