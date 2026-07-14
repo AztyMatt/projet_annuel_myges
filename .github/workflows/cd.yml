@@ -28,12 +28,13 @@ jobs:
           sed -i "s|__BACKEND_IMAGE__|ghcr.io/${OWNER,,}/${REPO,,}-backend:${SHA}|" k8s/backend/deployment.yml
           sed -i "s|__FRONTEND_IMAGE__|ghcr.io/${OWNER,,}/${REPO,,}-frontend:${SHA}|" k8s/frontend/deployment.yml
 
-      - name: Set hostnames in IngressRoutes and Certificates
+      - name: Set hostnames in manifests
+        env:
+          FRONTEND_HOST: ${{ vars.FRONTEND_HOST }}
+          BACKEND_HOST: ${{ vars.BACKEND_HOST }}
         run: |
-          sed -i "s|__FRONTEND_HOST__|${{ vars.FRONTEND_HOST }}|g" k8s/frontend/ingressRoute.yml
-          sed -i "s|__BACKEND_HOST__|${{ vars.BACKEND_HOST }}|g" k8s/backend/ingressRoute.yml
-          sed -i "s|__FRONTEND_HOST__|${{ vars.FRONTEND_HOST }}|g" k8s/frontend/certificate.yml
-          sed -i "s|__BACKEND_HOST__|${{ vars.BACKEND_HOST }}|g" k8s/backend/certificate.yml
+          find k8s -name '*.yml' -exec sed -i \
+            "s|__FRONTEND_HOST__|$FRONTEND_HOST|g; s|__BACKEND_HOST__|$BACKEND_HOST|g" {} +
 
       - name: Configure kubeconfig
         run: |
@@ -60,6 +61,7 @@ jobs:
             [backend]="${{ secrets.INFISICAL_TOKEN_BACKEND }}"
             [frontend]="${{ secrets.INFISICAL_TOKEN_FRONTEND }}"
             [postgres]="${{ secrets.INFISICAL_TOKEN_POSTGRES }}"
+            [observability]="${{ secrets.INFISICAL_TOKEN_OBSERVABILITY }}"
           )
           for service in "${!tokens[@]}"; do
             kubectl create secret generic "${service}-infisical-auth" \
