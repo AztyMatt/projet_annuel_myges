@@ -61,7 +61,7 @@ jobs:
             [backend]="${{ secrets.INFISICAL_TOKEN_BACKEND }}"
             [frontend]="${{ secrets.INFISICAL_TOKEN_FRONTEND }}"
             [postgres]="${{ secrets.INFISICAL_TOKEN_POSTGRES }}"
-            [observability]="${{ secrets.INFISICAL_TOKEN_OBSERVABILITY }}"
+            [observability]="${{ secrets.INFISICAL_TOKEN_ROOT }}"
           )
           for service in "${!tokens[@]}"; do
             kubectl create secret generic "${service}-infisical-auth" \
