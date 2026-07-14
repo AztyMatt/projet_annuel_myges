@@ -1,0 +1,33 @@
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: umami-https
+  namespace: observability
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`analytics.__FRONTEND_HOST__`)
+      kind: Rule
+      services:
+        - name: umami
+          port: 3000
+  tls:
+    secretName: umami-tls
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: umami-http
+  namespace: observability
+spec:
+  entryPoints:
+    - web
+  routes:
+    - match: Host(`analytics.__FRONTEND_HOST__`)
+      kind: Rule
+      middlewares:
+        - name: redirect-umami-https
+      services:
+        - name: umami
+          port: 3000
