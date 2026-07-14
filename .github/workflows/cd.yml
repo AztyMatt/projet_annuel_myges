@@ -34,6 +34,8 @@ jobs:
           sed -i "s|__BACKEND_HOST__|${{ vars.BACKEND_HOST }}|g" k8s/backend/ingressRoute.yml
           sed -i "s|__FRONTEND_HOST__|${{ vars.FRONTEND_HOST }}|g" k8s/frontend/certificate.yml
           sed -i "s|__BACKEND_HOST__|${{ vars.BACKEND_HOST }}|g" k8s/backend/certificate.yml
+          sed -i "s|__FRONTEND_HOST__|${{ vars.FRONTEND_HOST }}|g" k8s/observability/uptime-kuma/ingressRoute.yml
+          sed -i "s|__FRONTEND_HOST__|${{ vars.FRONTEND_HOST }}|g" k8s/observability/uptime-kuma/certificate.yml
 
       - name: Configure kubeconfig
         run: |
