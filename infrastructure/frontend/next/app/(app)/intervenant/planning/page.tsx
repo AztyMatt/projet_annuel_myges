@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Users, MapPin, Monitor } from "lucide-react";
+import { ChevronLeft, ChevronRight, Users, MapPin, Monitor, X, UserX, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api, ApiError } from "@/lib/api";
 
@@ -9,6 +9,8 @@ type Mode = "ON_SITE" | "REMOTE";
 
 type CalendarSession = {
     id: string;
+    courseId: string;
+    groupId: string;
     moduleName: string;
     groupName: string;
     studentCount: number;
@@ -17,6 +19,8 @@ type CalendarSession = {
     startTime: Date;
     endTime: Date;
 };
+
+type GroupStudent = { studentId: string; name: string };
 
 const DAYS = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi"];
 const HOURS = ["08:00", "09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00"];
@@ -89,6 +93,8 @@ async function loadInstructorSessions(): Promise<CalendarSession[]> {
             }
             sessions.push({
                 id: session.id,
+                courseId: course.id,
+                groupId: course.groupId,
                 moduleName,
                 groupName: group.name,
                 studentCount: group.studentCount,
@@ -103,11 +109,23 @@ async function loadInstructorSessions(): Promise<CalendarSession[]> {
     return sessions;
 }
 
+async function loadGroupStudents(groupId: string): Promise<GroupStudent[]> {
+    const links = await api.get<{ studentId: string }[]>(`/groups/${groupId}/students`);
+    return Promise.all(
+        links.map(async ({ studentId }) => {
+            const student = await api.get<{ userId: string }>(`/students/${studentId}`);
+            const user = await api.get<{ firstname: string; lastname: string }>(`/users/${student.userId}`);
+            return { studentId, name: `${user.firstname} ${user.lastname}` };
+        }),
+    );
+}
+
 export default function PlanningIntervenant() {
     const [weekOffset, setWeekOffset] = useState(0);
     const [sessions, setSessions] = useState<CalendarSession[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
+    const [selectedSession, setSelectedSession] = useState<CalendarSession | null>(null);
 
     useEffect(() => {
         const refresh = async () => {
@@ -176,6 +194,10 @@ export default function PlanningIntervenant() {
 
             {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl p-4">{error}</div>}
 
+            <p className="text-xs text-gray-500">
+                Cliquez sur une session pour enregistrer les absences du groupe.
+            </p>
+
             <div className="flex items-center gap-4 text-xs text-gray-500">
                 {(Object.entries(typeConfig) as [Mode, (typeof typeConfig)["ON_SITE"]][]).map(([mode, cfg]) => (
                     <div key={mode} className="flex items-center gap-1.5">
@@ -230,6 +252,7 @@ export default function PlanningIntervenant() {
                                     return (
                                         <div
                                             key={session.id}
+                                            onClick={() => setSelectedSession(session)}
                                             title={`${session.moduleName} — ${session.groupName} · ${session.studentCount} étudiants — ${session.room}`}
                                             className={cn(
                                                 "absolute left-1 right-1 rounded-lg border overflow-hidden cursor-pointer hover:shadow-md transition-shadow",
@@ -271,6 +294,140 @@ export default function PlanningIntervenant() {
             {!loading && !error && visibleSessions.length === 0 && (
                 <p className="text-sm text-gray-400">Aucune session cette semaine.</p>
             )}
+
+            {selectedSession && (
+                <SessionAbsenceModal
+                    session={selectedSession}
+                    onClose={() => setSelectedSession(null)}
+                />
+            )}
+        </div>
+    );
+}
+
+function SessionAbsenceModal({ session, onClose }: { session: CalendarSession; onClose: () => void }) {
+    const [students, setStudents] = useState<GroupStudent[]>([]);
+    const [absentIds, setAbsentIds] = useState<Set<string>>(new Set());
+    const [loading, setLoading] = useState(true);
+    const [markingId, setMarkingId] = useState<string | null>(null);
+    const [error, setError] = useState("");
+
+    const sessionStarted = session.startTime <= new Date();
+
+    useEffect(() => {
+        const load = async () => {
+            setLoading(true);
+            setError("");
+            try {
+                const [groupStudents, absences] = await Promise.all([
+                    loadGroupStudents(session.groupId),
+                    api.get<{ studentId: string }[]>(`/sessions/${session.id}/absences`),
+                ]);
+                setStudents(groupStudents.sort((a, b) => a.name.localeCompare(b.name, "fr")));
+                setAbsentIds(new Set(absences.map((a) => a.studentId)));
+            } catch (e) {
+                setError(e instanceof ApiError ? e.message : "Impossible de charger les présences.");
+            } finally {
+                setLoading(false);
+            }
+        };
+        void load();
+    }, [session.groupId, session.id]);
+
+    const markAbsent = async (studentId: string) => {
+        if (absentIds.has(studentId)) return;
+        setMarkingId(studentId);
+        setError("");
+        try {
+            await api.post("/absences", {
+                studentId,
+                sessionId: session.id,
+                reason: "Absent à la session",
+            });
+            setAbsentIds((prev) => new Set([...prev, studentId]));
+        } catch (e) {
+            setError(e instanceof ApiError ? e.message : "Enregistrement impossible.");
+        } finally {
+            setMarkingId(null);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={onClose}>
+            <div
+                className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col"
+                onClick={(e) => e.stopPropagation()}
+            >
+                <div className="flex items-center justify-between p-6 border-b border-gray-100">
+                    <div>
+                        <h3 className="font-bold text-gray-900">{session.moduleName}</h3>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                            {session.groupName} — {session.startTime.toLocaleDateString("fr-FR")}{" "}
+                            {session.startTime.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+                        </p>
+                    </div>
+                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+                        <X size={18} />
+                    </button>
+                </div>
+
+                <div className="p-6 overflow-y-auto flex-1 space-y-3">
+                    {!sessionStarted && (
+                        <p className="text-xs text-orange-700 bg-orange-50 border border-orange-100 rounded-lg p-3">
+                            La session n&apos;a pas encore commencé. Les absences ne peuvent être enregistrées qu&apos;une fois le cours démarré.
+                        </p>
+                    )}
+                    {error && <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-2">{error}</p>}
+
+                    {loading && <p className="text-sm text-gray-400">Chargement des étudiants…</p>}
+
+                    {!loading && students.length === 0 && (
+                        <p className="text-sm text-gray-400">Aucun étudiant dans ce groupe.</p>
+                    )}
+
+                    {!loading &&
+                        students.map((student) => {
+                            const isAbsent = absentIds.has(student.studentId);
+                            const isMarking = markingId === student.studentId;
+                            return (
+                                <div
+                                    key={student.studentId}
+                                    className="flex items-center justify-between py-2.5 px-3 rounded-xl border border-gray-100"
+                                >
+                                    <span className="text-sm font-medium text-gray-800">{student.name}</span>
+                                    {isAbsent ? (
+                                        <span className="flex items-center gap-1 text-xs font-semibold text-red-600 bg-red-50 px-2.5 py-1 rounded-lg">
+                                            <UserX size={13} /> Absent
+                                        </span>
+                                    ) : (
+                                        <button
+                                            onClick={() => void markAbsent(student.studentId)}
+                                            disabled={!sessionStarted || isMarking}
+                                            className="flex items-center gap-1 text-xs font-semibold text-gray-600 bg-gray-50 px-2.5 py-1 rounded-lg hover:bg-red-50 hover:text-red-600 transition-colors disabled:opacity-50"
+                                        >
+                                            {isMarking ? (
+                                                "Enregistrement…"
+                                            ) : (
+                                                <>
+                                                    <UserX size={13} /> Marquer absent
+                                                </>
+                                            )}
+                                        </button>
+                                    )}
+                                </div>
+                            );
+                        })}
+                </div>
+
+                <div className="p-6 border-t border-gray-100">
+                    <button
+                        onClick={onClose}
+                        className="w-full py-2.5 bg-[#001944] text-white rounded-xl text-sm font-semibold hover:bg-[#002C6E] transition-colors flex items-center justify-center gap-2"
+                    >
+                        <Check size={16} /> Terminer
+                    </button>
+                </div>
+            </div>
         </div>
     );
 }
