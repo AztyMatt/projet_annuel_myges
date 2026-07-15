@@ -23,6 +23,7 @@ import { NotFound, Forbidden, ForbiddenOwnership } from "@application/types/resu
 import { type AuthContext } from "@application/types/auth-context";
 import { isCourseInstructor } from "@application/course/course-access";
 import { type NotificationUseCases } from "@application/notification/notification.use-cases";
+import { type AuditRecorder } from "@application/audit-log/audit-recorder";
 
 export type GradeView = {
     id: string;
@@ -218,6 +219,7 @@ export class GradeUseCases {
         private readonly sessionExamStudents: SessionExamStudentRepository,
         private readonly modules: ModuleRepository,
         private readonly notifications: NotificationUseCases,
+        private readonly auditRecorder: AuditRecorder,
     ) {}
 
     async create(input: {
@@ -243,6 +245,13 @@ export class GradeUseCases {
             enteredBy: auth.requesterId,
         };
         await this.grades.save(grade);
+        await this.auditRecorder.record({
+            userId: auth.requesterId,
+            action: "CREATE",
+            entityName: "grade",
+            entityId: grade.id,
+            newValue: { studentId: grade.studentId, value: grade.value, isRetake: grade.isRetake },
+        });
         await this.notifications.notify({
             userId: student.userId,
             type: "GRADE_PUBLISHED",
@@ -269,8 +278,17 @@ export class GradeUseCases {
         if (grade.isLocked) return { kind: "grade_is_locked" };
 
         if (!isValidGradeValue(input.value)) return { kind: "grade_out_of_range" };
+        const previousValue = grade.value;
         grade.value = input.value;
         await this.grades.save(grade);
+        await this.auditRecorder.record({
+            userId: auth.requesterId,
+            action: "UPDATE",
+            entityName: "grade",
+            entityId: grade.id,
+            oldValue: { value: previousValue },
+            newValue: { value: grade.value },
+        });
         return { kind: "grade_updated", grade: toGradeView(grade) };
     }
 
@@ -280,6 +298,14 @@ export class GradeUseCases {
         if (!grade) return NotFound;
         grade.isLocked = true;
         await this.grades.save(grade);
+        await this.auditRecorder.record({
+            userId: auth.requesterId,
+            action: "FREEZE",
+            entityName: "grade",
+            entityId: grade.id,
+            oldValue: { isLocked: false },
+            newValue: { isLocked: true },
+        });
         return { kind: "grade_locked_ok", grade: toGradeView(grade) };
     }
 
@@ -289,6 +315,14 @@ export class GradeUseCases {
         if (!grade) return NotFound;
         grade.isLocked = false;
         await this.grades.save(grade);
+        await this.auditRecorder.record({
+            userId: auth.requesterId,
+            action: "UPDATE",
+            entityName: "grade",
+            entityId: grade.id,
+            oldValue: { isLocked: true },
+            newValue: { event: "unlock", isLocked: false },
+        });
         return { kind: "grade_locked_ok", grade: toGradeView(grade) };
     }
 
@@ -305,6 +339,14 @@ export class GradeUseCases {
         }
         if (grade.isLocked && !auth.isSuperAdmin) return { kind: "grade_is_locked" };
         await this.grades.deleteById(id);
+        await this.auditRecorder.record({
+            userId: auth.requesterId,
+            action: "DELETE",
+            entityName: "grade",
+            entityId: grade.id,
+            oldValue: { studentId: grade.studentId, value: grade.value },
+            newValue: { deleted: true },
+        });
         return { kind: "grade_deleted" };
     }
 

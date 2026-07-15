@@ -14,5 +14,5 @@
     },
     "references": [{ "path": "../../../domain" }, { "path": "../../../application" }],
     "include": ["**/*.ts"],
-    "exclude": ["dist", "node_modules", "**/*.test.ts", "**/*.fakes.ts"]
+    "exclude": ["dist", "node_modules", "**/*.test.ts", "**/*.fakes.ts", "test/**"]
 }

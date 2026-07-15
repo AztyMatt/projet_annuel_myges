@@ -34,6 +34,7 @@ import { type StudentGroupRepository } from "@application/group/student-group/st
 import { canReadAbsence } from "@application/absence/absence-access";
 import { MAX_FILE_SIZE_BYTES, isAllowedMimeType, checkAgainstPolicy, CONTEXT_POLICIES } from "@domain/file/file.policy";
 import { type NotificationUseCases } from "@application/notification/notification.use-cases";
+import { type AuditRecorder } from "@application/audit-log/audit-recorder";
 
 export type FileView = {
     id: string;
@@ -326,6 +327,7 @@ export class FileUseCases {
         private readonly sessions: SessionRepository,
         private readonly studentGroups: StudentGroupRepository,
         private readonly notifications: NotificationUseCases,
+        private readonly auditRecorder: AuditRecorder,
     ) {}
 
     private canReadAbsence(absence: Absence, auth: AuthContext): Promise<boolean> {
@@ -576,8 +578,17 @@ export class FileUseCases {
             const otherKey = otherAdmin ? `admin:${otherAdmin.type}` : otherContract ? `contract:${otherContract.type}` : null;
             if (otherKey === currentKey) return { kind: "valid_document_of_type_exists" };
         }
+        const previousStatus = entry.status;
         entry.status = DocumentStatus.VALID;
         await this.fileDocuments.save(entry);
+        await this.auditRecorder.record({
+            userId: auth.requesterId,
+            action: "VALIDATE",
+            entityName: "file_document",
+            entityId: entry.id,
+            oldValue: { status: previousStatus },
+            newValue: { status: entry.status },
+        });
         const student = await this.students.findById(entry.studentId);
         if (student) {
             await this.notifications.notify({
@@ -598,8 +609,17 @@ export class FileUseCases {
         if (!entry) return NotFound;
 
         if (entry.status === DocumentStatus.EXPIRED) return { kind: "document_already_expired" };
+        const previousStatus = entry.status;
         entry.status = DocumentStatus.EXPIRED;
         await this.fileDocuments.save(entry);
+        await this.auditRecorder.record({
+            userId: auth.requesterId,
+            action: "UPDATE",
+            entityName: "file_document",
+            entityId: entry.id,
+            oldValue: { status: previousStatus },
+            newValue: { event: "expire", status: entry.status },
+        });
         return { kind: "file_document_expired", fileDocument: toFileDocumentView(entry) };
     }
 
@@ -615,6 +635,14 @@ export class FileUseCases {
         if (await this.documentApprenticeshipContracts.findByFileDocumentId(id)) return { kind: "file_document_has_doc_type" };
         if (entry.status === DocumentStatus.VALID) return { kind: "file_document_is_valid" };
         const outcome = await this.cascadeDeleteLinkAndFile(file, () => this.fileDocuments.deleteById(id));
+        await this.auditRecorder.record({
+            userId: auth.requesterId,
+            action: "DELETE",
+            entityName: "file_document",
+            entityId: entry.id,
+            oldValue: { studentId: entry.studentId, status: entry.status },
+            newValue: { deleted: true },
+        });
         return outcome.kind === "deleted"
             ? { kind: "file_document_deleted" }
             : { kind: "file_document_deleted_with_warnings", failedPaths: outcome.failedPaths };

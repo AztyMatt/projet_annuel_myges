@@ -44,7 +44,11 @@ export function useCurrentUser(): UseCurrentUserResult {
     const [hydrated, setHydrated] = useState(false);
 
     useEffect(() => {
+        // La lecture doit rester dans l'effet (pas dans l'initialiseur de useState) : sessionStorage
+        // n'existe pas côté serveur, donc lire la valeur au rendu créerait un mismatch d'hydratation
+        // SSR/client. La reporter ici, après le premier rendu, est le pattern recommandé pour ce cas.
         const cached = readCachedUser();
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         if (cached) setUser(cached);
         setHydrated(true);
 

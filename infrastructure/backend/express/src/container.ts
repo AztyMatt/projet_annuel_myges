@@ -76,11 +76,14 @@ import { MessageUseCases } from "@application/message/message.use-cases";
 import { CompanyUseCases } from "@application/company/company.use-cases";
 import { ExternalUseCases } from "@application/external/external.use-cases";
 import { AuditLogUseCases } from "@application/audit-log/audit-log.use-cases";
+import { AuditRecorder } from "@application/audit-log/audit-recorder";
 import { NotificationUseCases } from "@application/notification/notification.use-cases";
 import { SessionExamUseCases } from "@application/session/session-exam/session-exam.use-cases";
 import { FileUseCases } from "@application/file/file.use-cases";
 import { DocumentUseCases } from "@application/document/document.use-cases";
 import { PlanningUseCases } from "@application/planning/planning.use-cases";
+
+export const auditRecorder = new AuditRecorder(auditLogRepository);
 
 export const authUseCases = new AuthUseCases(
     userRepository,
@@ -99,11 +102,12 @@ export const authUseCases = new AuthUseCases(
     passwordResetTokenRepository,
     emailSender,
     process.env.FRONTEND_PUBLIC_URL ?? "http://localhost:3000",
+    auditRecorder,
 );
 
-export const adminUseCases = new AdminUseCases(adminRepository, userRepository);
-export const studentUseCases = new StudentUseCases(studentRepository, studentGroupRepository, absenceRepository, sessionExamStudentRepository, assessmentGroupMemberRepository, fileDocumentRepository, userRepository, programRepository, courseRepository, instructorRepository);
-export const instructorUseCases = new InstructorUseCases(instructorRepository, courseRepository, sessionExamInstructorRepository, userRepository);
+export const adminUseCases = new AdminUseCases(adminRepository, userRepository, auditRecorder);
+export const studentUseCases = new StudentUseCases(studentRepository, studentGroupRepository, absenceRepository, sessionExamStudentRepository, assessmentGroupMemberRepository, fileDocumentRepository, userRepository, programRepository, courseRepository, instructorRepository, auditRecorder);
+export const instructorUseCases = new InstructorUseCases(instructorRepository, courseRepository, sessionExamInstructorRepository, userRepository, auditRecorder);
 export const campusUseCases = new CampusUseCases(campusRepository, classroomRepository);
 export const classroomUseCases = new ClassroomUseCases(classroomRepository, sessionRepository, campusRepository);
 export const moduleUseCases = new ModuleUseCases(moduleRepository, programModuleRepository, courseRepository, manualNotationRepository);
@@ -148,6 +152,7 @@ export const gradeUseCases = new GradeUseCases(
     sessionExamStudentRepository,
     moduleRepository,
     notificationUseCases,
+    auditRecorder,
 );
 export const absenceUseCases = new AbsenceUseCases(
     absenceRepository,
@@ -161,6 +166,7 @@ export const absenceUseCases = new AbsenceUseCases(
     instructorRepository,
     studentGroupRepository,
     notificationUseCases,
+    auditRecorder,
 );
 export const conversationUseCases = new ConversationUseCases(
     conversationRepository,
@@ -224,6 +230,7 @@ export const fileUseCases = new FileUseCases(
     sessionRepository,
     studentGroupRepository,
     notificationUseCases,
+    auditRecorder,
 );
 export const documentUseCases = new DocumentUseCases(
     documentAdministrativeRepository,
