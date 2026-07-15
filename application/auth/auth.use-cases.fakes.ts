@@ -26,6 +26,7 @@ import { type TwoFactorSessionRepository } from "@application/auth/two-factor-se
 import { type PasswordResetTokenRepository } from "@application/auth/password-reset-token.repository";
 import { type EmailSender } from "@application/auth/email-sender.port";
 import { AuthUseCases } from "@application/auth/auth.use-cases";
+import { createFakeAuditRecorder } from "../../test/fakes/audit-recorder";
 
 const notImplemented = (method: string) => (): never => {
     throw new Error(`fake non branché sur cette méthode: ${method} (pas utilisée par les tests actuels)`);
@@ -317,6 +318,7 @@ export function buildAuthUseCases(frontendPublicUrl = "http://localhost:3000") {
     const hasher = createFakePasswordHasher();
     const tokens = createFakeTokenProvider();
     const totp = createFakeTotpProvider();
+    const { auditRecorder, entries: auditEntries } = createFakeAuditRecorder();
 
     const authUseCases = new AuthUseCases(
         users.repo,
@@ -335,6 +337,7 @@ export function buildAuthUseCases(frontendPublicUrl = "http://localhost:3000") {
         passwordResetTokens.repo,
         emailSender.sender,
         frontendPublicUrl,
+        auditRecorder,
     );
 
     return {
@@ -346,6 +349,7 @@ export function buildAuthUseCases(frontendPublicUrl = "http://localhost:3000") {
         programs: programs.programs,
         twoFactorSessions: twoFactorSessions.sessions,
         passwordResetTokens: passwordResetTokens.tokens,
+        auditEntries,
         emailSender,
         hasher,
     };

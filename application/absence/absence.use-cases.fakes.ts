@@ -19,6 +19,7 @@ import { type NotificationRepository } from "@application/notification/notificat
 import { NotificationUseCases } from "@application/notification/notification.use-cases";
 import { AbsenceUseCases } from "@application/absence/absence.use-cases";
 import { notImplementedMethod, notImplementedRepository } from "../../test/fakes/not-implemented";
+import { createFakeAuditRecorder } from "../../test/fakes/audit-recorder";
 
 function createFakeAbsenceRepository() {
     const absences = new Map<string, Absence>();
@@ -80,6 +81,7 @@ export function buildAbsenceUseCases() {
     const absences = createFakeAbsenceRepository();
     const students = createFakeStudentRepository();
     const notifications = createFakeNotificationUseCases();
+    const { auditRecorder, entries: auditEntries } = createFakeAuditRecorder();
 
     const absenceUseCases = new AbsenceUseCases(
         absences.repo,
@@ -93,6 +95,7 @@ export function buildAbsenceUseCases() {
         notImplementedRepository<InstructorRepository>("instructors"),
         notImplementedRepository<StudentGroupRepository>("studentGroups"),
         notifications.useCases,
+        auditRecorder,
     );
 
     return {
@@ -100,5 +103,6 @@ export function buildAbsenceUseCases() {
         absences: absences.absences,
         students: students.students,
         sentNotifications: notifications.sent,
+        auditEntries,
     };
 }
