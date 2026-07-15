@@ -26,13 +26,15 @@ Argumentation (pondérée sur les rubriques du `Sujet.pdf`, pas sur le volume de
 
 ### Problèmes bloquants (par gravité)
 
-1. **Aucun test** (unitaire, API, E2E) et **CI sans lint/typecheck/test** — rubrique entière de la grille à zéro. Aucune dépendance de test dans aucun `package.json`.
-2. **Pas de stockage réel de fichiers** : `POST /files` ne crée que des métadonnées ; `infrastructure/backend/express/src/storage/storage.adapter.ts` est un **stub no-op** (`delete()` au corps vide). Bloque justificatifs d'absence, documents administratifs, supports de cours, rendus d'évaluation, contrats d'alternance — soit 6 pages front volontairement dégradées.
-3. **Journalisation d'audit factice** (§3.8) : l'API `GET /audit-logs` et les 2 pages `/superadmin/*` existent, mais **aucune ligne de code n'écrit jamais dans la table `audit_log`** (vérifié : seuls des `SELECT` dans `application/` et `infrastructure/backend/express/src/`). Les écrans d'audit affichent une liste vide en permanence.
-4. **Régression RGPD** : le front appelle `DELETE /users/me` (`app/(app)/parametres/page.tsx:118`) mais le backend n'expose plus que `DELETE /users/:id` réservé à `SUPER_ADMIN` (`auth.use-cases.ts:467` → `if (!auth.isSuperAdmin) return Forbidden`). **L'auto-suppression de compte est cassée** depuis le refactor `e91555b`.
-5. **Bug K8s** : `k8s/backend/cleanup-cronjob.yml` appelle `http://backend…:3001/admin/auth/cleanup-sessions` **sans le préfixe `/api`** alors que tous les routeurs sont montés sous `/api` (`app.ts:65`) → le CronJob reçoit un 404 chaque nuit, les sessions 2FA expirées ne sont jamais purgées.
-6. **Aucune notification temps réel** (WebSocket) — requis par `cahierDesCharges.md` §3.1/§3.5 et cité comme service attendu par le Sujet (« Serveurs Web, WebSocket, WebRTC »).
-7. **Aucune sauvegarde** (stratégie 3-2-1, `pg_dump`, sauvegarde externe) et **aucune observabilité** (Grafana/Sentry/Matomo).
+> **Statut au 2026-07-15** : les points 1 à 5 ci-dessous, listés bloquants lors de l'audit du 10/07, sont **tous corrigés** depuis (tests §9.8, upload §9.1, audit-log §9.3, suppression de compte §9.4, CronJob §9.0). Ne restent réellement bloquants que 6 et 7. Conservé tel quel pour l'historique de l'audit.
+
+1. ~~**Aucun test**~~ — corrigé le 2026-07-15 : 103 tests (71 unitaires + 27 API + 5 E2E), CI avec job `quality` (lint/typecheck) et job `test` avant tout build Docker (§9.8/§9.9).
+2. ~~**Pas de stockage réel de fichiers**~~ — corrigé (dernières pages le 2026-07-15, `FILE-013`/`018`) : les 6 pages front sont câblées sur du réel, plus aucun message "désactivé" (§9.1).
+3. ~~**Journalisation d'audit factice**~~ — corrigé le 2026-07-15 : `AuditRecorder` branché sur login, notes, absences, documents, rôles (§9.3).
+4. ~~**Régression RGPD**~~ — corrigé le 2026-07-12 : auto-suppression de compte rétablie (§9.4, `DEL-*`).
+5. ~~**Bug K8s**~~ — corrigé le 2026-07-12 : préfixe `/api` ajouté au CronJob (§9.0, `K8S-001`).
+6. **Aucune notification temps réel** (WebSocket) — requis par `cahierDesCharges.md` §3.1/§3.5 et cité comme service attendu par le Sujet (« Serveurs Web, WebSocket, WebRTC »). Décision d'équipe : polling 30s à la place, assumé (§9.2).
+7. **Aucune sauvegarde** (stratégie 3-2-1, `pg_dump`, sauvegarde externe) et **aucune observabilité applicative** (Sentry — Uptime Kuma pour la santé et Umami pour l'analytique sont déployés, cf. §9.11). Toujours à zéro/partiel.
 
 ### Risques principaux
 
@@ -161,8 +163,8 @@ Sources : **S** = `Sujet.pdf`, **C** = `cahierDesCharges.md`. Priorité : **P0**
 | INF-10 | PostgreSQL volumes persistants | C§6 | P0 | `TERMINÉ` | PVC 5Gi `local-path` (`k8s/postgres/pvc.yml`), strategy `Recreate` | `local-path` = données liées à un seul nœud — à documenter |
 | MET-01 | Planning temps réel | C§3.1 | P1 | `PARTIEL` | CRUD sessions complet (étudiant/intervenant/scolarité, 3 pages planning) | « Temps réel » = notifications (INF-04) ; pas de gestion dédiée jours fériés/fermetures (modélisé comme modification/suppression de session, choix documenté sur `/scolarite/planning`) |
 | MET-02 | Notes : saisie, moyennes, gel, traçabilité | C§3.2 | P1 | `PARTIEL` | Saisie intervenant (`/intervenant/notes`), moyennes pondérées, gel (`POST /grades/:id/lock`), **dégel backend présent** (`unlock`) non exposé au front, **traçabilité des modifications journalisée (AUD-005, 2026-07-15)** | Distinction académique/entreprise écartée (INC-11) |
-| MET-03 | Absences : déclaration, justificatif, workflow | C§3.3 | P1 | `PARTIEL` | Déclaration + validation/rejet bout en bout (`absence/routes.ts:50-64`, pages étudiant + scolarité) ; table `file_justification` prête ; **historique des décisions journalisé (AUD-006, 2026-07-15)** | Dépôt de justificatif bloqué par l'upload (FILE-*) |
-| MET-04 | Documents : dossier centralisé, contrats, alertes | C§3.4 | P1 | `PARTIEL` | Pages `/etudiant/documents`, `/scolarite/documents`, `/scolarite/entreprises` ; statuts, validation, alertes expiration ±30 j | Upload/téléchargement réels (FILE-*) ; génération de documents officiels non commencée ; création de contrat bloquée (exige un fichier) |
+| MET-03 | Absences : déclaration, justificatif, workflow | C§3.3 | P1 | `TERMINÉ` | Déclaration + validation/rejet bout en bout (`absence/routes.ts:50-64`, pages étudiant + scolarité) ; dépôt de justificatif réel (`FILE-013`) ; historique des décisions journalisé (`AUD-006`) ; `/scolarite/absences` permet d'ouvrir le justificatif avant de décider (bouton "Vérifier", 2026-07-15) | — |
+| MET-04 | Documents : dossier centralisé, contrats, alertes | C§3.4 | P1 | `PARTIEL` | Pages `/etudiant/documents`, `/scolarite/documents`, `/scolarite/entreprises` ; statuts, validation, alertes expiration ±30 j ; upload/téléchargement réels faits (`FILE-*`) ; `/scolarite/documents` permet désormais d'ouvrir le fichier avant de le valider (bouton "Vérifier", 2026-07-15 — l'admin ne pouvait auparavant décider qu'au vu du nom de fichier) | Génération de documents officiels non commencée |
 | MET-05 | Messagerie classe/module/ciblée | C§3.5 | P1 | `PARTIEL` | `/messagerie` branchée (conversations classe/cours/privées, envoi, lu) | Noms d'utilisateurs non résolus (USR-*) ; `ADMIN` simple ne peut pas initier (endpoint `GET /admins/user/:userId` réservé SUPER_ADMIN — `admin/routes.ts:16`) ; temps réel (NOTIF-*) |
 | MET-06 | Supports & rendus TP | C§3.6 | P1 | `PARTIEL` | Bibliothèque par module, évaluations, groupes de rendu, statuts Rendu/En retard | Dépôt et téléchargement réels bloqués par FILE-* |
 | MET-07 | Gestion administrative/pédagogique | C§3.7 | P1 | `TERMINÉ` | 13 pages `/scolarite/*` (filières, blocs, modules, classes, groupes, cours, campus, salles, examens, externes, année académique) sur endpoints réels | Aide à la décision = affichage des spécialités uniquement (conforme « non automatique ») |
@@ -296,7 +298,7 @@ Sources : **S** = `Sujet.pdf`, **C** = `cahierDesCharges.md`. Priorité : **P0**
 
 ### 9.1 Fonctionnalité : upload et stockage réel des fichiers
 
-**Statut actuel :** partiel (métadonnées seules ; adaptateur stockage no-op).
+**Statut actuel (2026-07-15) :** fait pour les 5 usages métier — les 6 pages front qui affichaient un message "désactivé" (justificatif d'absence, documents étudiant, supports de cours, rendus d'évaluation, contrats d'alternance) ont toutes un dépôt et un téléchargement réels et vérifiés. Reste `FILE-008` (interdire `POST /files` nu), `FILE-011` (sauvegarde du volume, dépend de `BAK-*`), `FILE-012` (dropzone mutualisée — chaque page a son propre `<input type="file">`, pas bloquant) et `FILE-020…024` (tests dédiés).
 
 **Objectif fonctionnel :** permettre le dépôt, le téléchargement et la suppression physiques de fichiers pour les 5 usages métier : justificatif d'absence, document administratif étudiant, support de cours, rendu d'évaluation, contrat d'alternance.
 
@@ -320,12 +322,12 @@ Sources : **S** = `Sujet.pdf`, **C** = `cahierDesCharges.md`. Priorité : **P0**
 **Frontend :**
 
 - [ ] `FILE-012` Créer un composant dropzone mutualisé `components/ui/file-upload.tsx` *(à créer)* : sélection, barre de progression, erreurs taille/type, `fetch` multipart (le client `lib/api.ts` est JSON-only — ajouter `api.upload()`).
-- [ ] `FILE-013` `app/(app)/etudiant/absences/page.tsx` : remplacer le message « dépôt indisponible » (ligne 284) par le dépôt de justificatif → `POST /files/upload` + `POST /file-justifications`.
+- [x] `FILE-013` *(déjà fait avant cette session, trouvé lors de l'audit du 2026-07-15 — probablement livré par un autre membre de l'équipe)* `app/(app)/etudiant/absences/page.tsx` : dépôt de justificatif fonctionnel (`JustifyModal` → `POST /files/upload` puis `POST /file-justifications`), lien de téléchargement une fois déposé. Revérifié de bout en bout par API le 2026-07-15 (upload → attache → apparaît sur l'absence).
 - [x] `FILE-014` `app/(app)/etudiant/documents/page.tsx` : activer dépôt et téléchargement réels.
 - [x] `FILE-015` `app/(app)/etudiant/evaluations/page.tsx` : activer le dépôt de rendu (`POST /file-assessments` avec le `fileId` fraîchement créé) ; afficher la date de dépôt. *(2026-07-12 : dépôt fait, groupe solo auto-créé pour les évaluations individuelles ; date de dépôt non affichée, non bloquant)*
 - [x] `FILE-016` `app/(app)/intervenant/supports/page.tsx` : réactiver le dépôt de support (`POST /file-courses`).
 - [x] `FILE-017` `app/(app)/intervenant/evaluations/page.tsx` : lien de téléchargement des rendus par groupe. *(2026-07-12, nécessitait d'élargir `FileUseCases.findById` pour l'intervenant du cours et les membres du groupe)*
-- [ ] `FILE-018` `app/(app)/scolarite/entreprises/page.tsx` : débloquer la création de contrat (upload du fichier puis `POST /document-apprenticeship-contracts`).
+- [x] `FILE-018` *(fait le 2026-07-15)* `app/(app)/scolarite/entreprises/page.tsx` : bouton "Nouveau contrat" par entreprise → modale (étudiant, type, dates, fichier PDF) qui enchaîne `POST /files/upload` → `POST /file-documents` (`{fileId, studentId}`) → `POST /document-apprenticeship-contracts` (`{fileDocumentId, companyId, type, startDate, endDate}`) — le contrat nécessite un `fileDocumentId`, pas juste un `fileId` brut, contrairement au justificatif d'absence. Noms d'étudiants résolus via `lib/user-names.ts` (même pattern que `USR-106`). Sélecteur de fichier restreint au PDF (`APPRENTICESHIP_CONTRACT_POLICIES` = PDF only, 25 Mo). Vérifié par API et par navigateur réel (Playwright) : le contrat créé apparaît immédiatement dans la liste dépliée de l'entreprise.
 - [x] `FILE-019` `app/(app)/scolarite/documents/page.tsx` + `app/(app)/etudiant/cours/page.tsx` : liens de téléchargement.
 
 **Tests :**

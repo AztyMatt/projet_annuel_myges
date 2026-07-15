@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CheckCircle, XCircle, Clock, Paperclip, Trash2 } from "lucide-react";
+import { CheckCircle, XCircle, Clock, Paperclip, Trash2, Eye } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import { buildStudentNameMap, formatStudentName } from "@/lib/user-names";
 import { StatusBadge, type StatusTone } from "@/components/ui/status-badge";
@@ -10,7 +10,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 type Status = "PENDING" | "VALIDATED" | "REJECTED";
 type Absence = { id: string; studentId: string; sessionId: string; reason: string; status: Status; declaredAt: string };
-type Row = Absence & { sessionDate: Date | null; hasJustification: boolean };
+type Row = Absence & { sessionDate: Date | null; justificationFileId: string | null };
 
 const statusConfig: Record<Status, { label: string; tone: StatusTone; icon: typeof Clock }> = {
     PENDING: { label: "En attente", tone: "orange", icon: Clock },
@@ -37,8 +37,8 @@ export default function AbsencesScolarite() {
             const resolved = await Promise.all(
                 absences.map(async (a) => {
                     const session = await api.get<{ startTime: string }>(`/sessions/${a.sessionId}`).catch(() => null);
-                    const justifications = await api.get<unknown[]>(`/file-justifications/absence/${a.id}`).catch(() => []);
-                    return { ...a, sessionDate: session ? new Date(session.startTime) : null, hasJustification: justifications.length > 0 };
+                    const justifications = await api.get<{ fileId: string }[]>(`/file-justifications/absence/${a.id}`).catch(() => []);
+                    return { ...a, sessionDate: session ? new Date(session.startTime) : null, justificationFileId: justifications[0]?.fileId ?? null };
                 }),
             );
             setRows(resolved.sort((a, b) => new Date(b.declaredAt).getTime() - new Date(a.declaredAt).getTime()));
@@ -131,7 +131,7 @@ export default function AbsencesScolarite() {
                                         <td className="px-5 py-3 text-gray-500">{r.sessionDate ? r.sessionDate.toLocaleDateString("fr-FR") : "—"}</td>
                                         <td className="px-5 py-3 text-gray-700">{r.reason}</td>
                                         <td className="px-5 py-3">
-                                            {r.hasJustification ? (
+                                            {r.justificationFileId ? (
                                                 <span className="flex items-center gap-1 text-xs text-green-600 font-medium"><Paperclip size={11} /> Déposé</span>
                                             ) : (
                                                 <span className="text-xs text-gray-400">Aucun</span>
@@ -142,6 +142,16 @@ export default function AbsencesScolarite() {
                                         </td>
                                         <td className="px-5 py-3">
                                             <div className="flex items-center gap-1.5">
+                                                {r.justificationFileId && (
+                                                    <a
+                                                        href={`/api/files/${r.justificationFileId}/download`}
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                        className="flex items-center gap-1 px-2.5 py-1 text-gray-600 text-xs rounded-lg hover:bg-gray-100 font-medium"
+                                                    >
+                                                        <Eye size={13} /> Vérifier
+                                                    </a>
+                                                )}
                                                 {r.status === "PENDING" && (
                                                     <>
                                                         <button onClick={() => void handleDecision(r.id, "validate")} disabled={processingId === r.id} className="px-2.5 py-1 bg-green-600 text-white text-xs rounded-lg hover:bg-green-700 font-medium disabled:opacity-50">
