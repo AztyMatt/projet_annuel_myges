@@ -19,6 +19,13 @@ conversationRouter.get("/conversations", ...authed(async (req, res) => {
     });
 }));
 
+conversationRouter.get("/conversations/mine", ...authed(async (req, res) => {
+    const result = await conversationUseCases.listMine(getAuthFlags(req.auth));
+    respond(res, result, {
+        conversations_listed_mine: (r) => ({ status: 200, body: r.conversations }),
+    });
+}));
+
 conversationRouter.get("/conversations/:id", ...authed(async (req, res) => {
     const result = await conversationUseCases.findById(String(req.params.id), getAuthFlags(req.auth));
     respond(res, result, {

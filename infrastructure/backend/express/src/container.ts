@@ -178,6 +178,10 @@ export const conversationUseCases = new ConversationUseCases(
     studentRepository,
     groupRepository,
     userRepository,
+    studentGroupRepository,
+    moduleRepository,
+    messageRepository,
+    messageReadRepository,
 );
 export const messageUseCases = new MessageUseCases(messageRepository, messageReadRepository, conversationPrivateRepository, courseRepository, classRepository, groupRepository, studentGroupRepository, studentRepository, instructorRepository, notificationUseCases);
 export const companyUseCases = new CompanyUseCases(companyRepository, documentApprenticeshipContractRepository);
