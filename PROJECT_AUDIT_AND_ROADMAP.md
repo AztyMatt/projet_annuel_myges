@@ -279,16 +279,16 @@ Sources : **S** = `Sujet.pdf`, **C** = `cahierDesCharges.md`. Priorité : **P0**
 
 ### 9.0 Correctifs immédiats (bugs avérés, < 1 jour chacun)
 
-- [ ] `K8S-001` Corriger l'URL du CronJob 2FA : `k8s/backend/cleanup-cronjob.yml` → `http://backend.backend.svc.cluster.local:3001/api/admin/auth/cleanup-sessions` (préfixe `/api` manquant, cf. `app.ts:65`).
-- [ ] `DEL-001` Rétablir l'auto-suppression de compte (voir feature détaillée §9.4).
-- [ ] `NOTE-001` Exposer le dégel des notes au front : bouton « Dégeler ce module » sur `app/(app)/scolarite/notes/page.tsx` appelant `POST /grades/:id/unlock` (endpoint déjà présent, `src/grade/routes.ts:69`) ; mettre à jour `CLAUDE.md` qui affirme que l'endpoint n'existe pas.
+- [x] `K8S-001` Corriger l'URL du CronJob 2FA : `k8s/backend/cleanup-cronjob.yml` → `http://backend.backend.svc.cluster.local:3001/api/admin/auth/cleanup-sessions` (préfixe `/api` manquant, cf. `app.ts:65`).
+- [x] `DEL-001` Rétablir l'auto-suppression de compte (voir feature détaillée §9.4).
+- [x] `NOTE-001` Exposer le dégel des notes au front : bouton « Dégeler ce module » sur `app/(app)/scolarite/notes/page.tsx` appelant `POST /grades/:id/unlock` (endpoint déjà présent, `src/grade/routes.ts:69`) ; mettre à jour `CLAUDE.md` qui affirme que l'endpoint n'existe pas.
 - [ ] `TECH-001` Supprimer le dépôt git imbriqué : `rm -rf infrastructure/frontend/next/.git` (les fichiers sont déjà suivis par le dépôt parent — vérifié).
 - [ ] `TECH-002` Retirer l'endpoint de debug `GET /api/hello` (`src/app.ts:67`).
 - [ ] `TECH-004` Retirer la ligne `package-lock.json` de `.gitignore` (le lockfile est suivi et requis par `npm ci` en CI/Docker).
 - [ ] `TECH-005` Désinstaller `otplib` (`infrastructure/backend/express/package.json`) — seul `speakeasy` est utilisé.
-- [ ] `DOC-002` Trancher le sort de `WORKFLOW.md` (obsolète mais stagé) : le retirer de l'index ou lui ajouter un bandeau « ARCHIVÉ — remplacé par CLAUDE.md/PROJECT_AUDIT_AND_ROADMAP.md ».
-- [ ] `DOC-003` Corriger le `README.md` : plateformes d'images (amd64+arm64), existence de `.env.example`, noms de rôles seed (`ADMIN`/`SUPER_ADMIN`).
-- [ ] `UI-001` Retirer (ou brancher) la barre de recherche factice de `components/layout/TopBar.tsx:83`.
+- [x] `DOC-002` Trancher le sort de `WORKFLOW.md` (obsolète mais stagé) : le retirer de l'index ou lui ajouter un bandeau « ARCHIVÉ — remplacé par CLAUDE.md/PROJECT_AUDIT_AND_ROADMAP.md ».
+- [x] `DOC-003` Corriger le `README.md` : plateformes d'images (amd64+arm64), existence de `.env.example`, noms de rôles seed (`ADMIN`/`SUPER_ADMIN`).
+- [x] `UI-001` Retirer (ou brancher) la barre de recherche factice de `components/layout/TopBar.tsx:83`.
 
 ---
 
@@ -300,19 +300,19 @@ Sources : **S** = `Sujet.pdf`, **C** = `cahierDesCharges.md`. Priorité : **P0**
 
 **Backend :**
 
-- [ ] `FILE-001` Choisir et documenter la cible de stockage (disque + volume k8s en V1 ; S3-compatible en option) — décision à inscrire dans `README.md`.
-- [ ] `FILE-002` Ajouter `multer` (ou équivalent) au workspace `@myges/express` et créer un middleware d'upload avec limite de taille (ex. 10 Mo) et liste blanche MIME (PDF, images, zip).
-- [ ] `FILE-003` Implémenter réellement `StorageService` : `save(buffer, path)`, `read(path)`, `delete(path)` dans `infrastructure/backend/express/src/storage/storage.adapter.ts` (remplacer le no-op).
-- [ ] `FILE-004` Créer `POST /files/upload` (multipart) : écrit l'octet, puis crée la ligne `file` (nom original, MIME, taille, `uploadedBy`, `storagePath` généré — jamais fourni par le client).
-- [ ] `FILE-005` Créer `GET /files/:id/download` : vérifie l'autorisation métier (propriétaire, staff, intervenant du cours, membre du groupe de rendu selon le type de lien), streame le fichier avec `Content-Disposition`.
-- [ ] `FILE-006` Étendre `application/file/file.use-cases.ts` : use case `upload` (validation taille/MIME côté application) et `download` (résolution des droits par type de rattachement).
-- [ ] `FILE-007` Câbler la suppression physique : les cascades de suppression existantes appellent déjà `storageService.delete` — vérifier chaque chemin après FILE-003 (le `storage-warning.ts` devient enfin significatif).
+- [x] `FILE-001` Choisir et documenter la cible de stockage (disque + volume k8s en V1 ; S3-compatible en option) — décision à inscrire dans `README.md`.
+- [x] `FILE-002` Ajouter `multer` (ou équivalent) au workspace `@myges/express` et créer un middleware d'upload avec limite de taille (ex. 10 Mo) et liste blanche MIME (PDF, images, zip).
+- [x] `FILE-003` Implémenter réellement `StorageService` : `save(buffer, path)`, `read(path)`, `delete(path)` dans `infrastructure/backend/express/src/storage/storage.adapter.ts` (remplacer le no-op).
+- [x] `FILE-004` Créer `POST /files/upload` (multipart) : écrit l'octet, puis crée la ligne `file` (nom original, MIME, taille, `uploadedBy`, `storagePath` généré — jamais fourni par le client).
+- [x] `FILE-005` Créer `GET /files/:id/download` : vérifie l'autorisation métier (propriétaire, staff, intervenant du cours, membre du groupe de rendu selon le type de lien), streame le fichier avec `Content-Disposition`.
+- [x] `FILE-006` Étendre `application/file/file.use-cases.ts` : use case `upload` (validation taille/MIME côté application) et `download` (résolution des droits par type de rattachement).
+- [x] `FILE-007` Câbler la suppression physique : les cascades de suppression existantes appellent déjà `storageService.delete` — vérifier chaque chemin après FILE-003 (le `storage-warning.ts` devient enfin significatif).
 - [ ] `FILE-008` Interdire la création de métadonnées orphelines : déprécier/restreindre `POST /files` nu au profit de `POST /files/upload`.
 
 **Infrastructure :**
 
-- [ ] `FILE-009` Ajouter un volume dédié dev dans `docker-compose.yml` (ex. `uploads_data:/app/uploads`).
-- [ ] `FILE-010` Ajouter un PVC + `volumeMounts` dans `k8s/backend/deployment.yml` — ⚠️ avec `replicas: 2`, un PVC `local-path` (RWO) ne peut pas être partagé : soit stockage S3/MinIO, soit PVC RWX (NFS), soit affinité — décision à prendre avec FILE-001. *(fichier à créer : `k8s/backend/uploads-pvc.yml`)*
+- [x] `FILE-009` Ajouter un volume dédié dev dans `docker-compose.yml` (ex. `uploads_data:/app/uploads`).
+- [x] `FILE-010` *(fait 2026-07-13 : `k8s/backend/pvc.yml` `backend-uploads` 30Gi RWO `local-path`, monté `/data/uploads` — RWO + 2 réplicas OK en mono-nœud uniquement, limitation assumée)* Ajouter un PVC + `volumeMounts` dans `k8s/backend/deployment.yml` — ⚠️ avec `replicas: 2`, un PVC `local-path` (RWO) ne peut pas être partagé : soit stockage S3/MinIO, soit PVC RWX (NFS), soit affinité — décision à prendre avec FILE-001. *(fichier à créer : `k8s/backend/uploads-pvc.yml`)*
 - [ ] `FILE-011` Inclure le répertoire d'uploads dans la politique de sauvegarde (dépend de BAK-*).
 
 **Frontend :**
@@ -324,7 +324,7 @@ Sources : **S** = `Sujet.pdf`, **C** = `cahierDesCharges.md`. Priorité : **P0**
 - [x] `FILE-016` `app/(app)/intervenant/supports/page.tsx` : réactiver le dépôt de support (`POST /file-courses`).
 - [x] `FILE-017` `app/(app)/intervenant/evaluations/page.tsx` : lien de téléchargement des rendus par groupe. *(2026-07-12, nécessitait d'élargir `FileUseCases.findById` pour l'intervenant du cours et les membres du groupe)*
 - [ ] `FILE-018` `app/(app)/scolarite/entreprises/page.tsx` : débloquer la création de contrat (upload du fichier puis `POST /document-apprenticeship-contracts`).
-- [ ] `FILE-019` `app/(app)/scolarite/documents/page.tsx` + `app/(app)/etudiant/cours/page.tsx` : liens de téléchargement.
+- [x] `FILE-019` `app/(app)/scolarite/documents/page.tsx` + `app/(app)/etudiant/cours/page.tsx` : liens de téléchargement.
 
 **Tests :**
 
@@ -342,14 +342,14 @@ Sources : **S** = `Sujet.pdf`, **C** = `cahierDesCharges.md`. Priorité : **P0**
 
 ### 9.2 Fonctionnalité : notifications temps réel (WebSocket)
 
-**Statut actuel :** non commencé.
+**Statut actuel :** réalisé le 2026-07-12 en **polling 30 s** (décision d'équipe, pas de WebSocket — voir CLAUDE.md §10) : table + module `notification`, 4 déclencheurs, cloche `NotificationBell`. Les tâches WS ci-dessous (NOTIF-003/004/006, temps réel strict) restent ouvertes uniquement si l'équipe décide de passer au WebSocket ; sinon les considérer caduques et assumer le polling à l'oral.
 
 **Objectif fonctionnel :** notifier en temps réel (cloche globale + toast) les événements du cahier §3.1/§3.5 : modification de planning, nouvelle note, nouveau message, décision sur absence/document.
 
 **Backend :**
 
-- [ ] `NOTIF-001` Créer la table `notification` (id, userId FK, type, entityId, message, readAt, createdAt) — schéma *(à créer)* `src/postgres/schema/notification.ts` + migration.
-- [ ] `NOTIF-002` Créer `domain/notification/notification.entity.ts`, `application/notification/{notification.repository.ts,notification.use-cases.ts}`, adapter Postgres, routes `GET /notifications`, `POST /notifications/:id/read` *(tous à créer, en suivant le pattern des 26 modules existants)*.
+- [x] `NOTIF-001` Créer la table `notification` (id, userId FK, type, entityId, message, readAt, createdAt) — schéma *(à créer)* `src/postgres/schema/notification.ts` + migration.
+- [x] `NOTIF-002` Créer `domain/notification/notification.entity.ts`, `application/notification/{notification.repository.ts,notification.use-cases.ts}`, adapter Postgres, routes `GET /notifications`, `POST /notifications/:id/read` *(tous à créer, en suivant le pattern des 26 modules existants)*.
 - [ ] `NOTIF-003` Ajouter un serveur WebSocket (`socket.io` ou `ws`) attaché au serveur HTTP Express (`server.ts`), authentifié par le JWT (même `tokenProvider`), une room par `userId`.
 - [ ] `NOTIF-004` Créer un port `application/notification/notification-publisher.port.ts` *(à créer)* et son adapter WS, injectés via `container.ts`.
 - [ ] `NOTIF-005` Émettre depuis les use cases : `session.update/delete` (→ étudiants du groupe), `grade.create/update` (→ étudiant), `message.create` (→ participants), `absence.validate/reject` et `fileDocument.validate` (→ étudiant).
@@ -358,7 +358,7 @@ Sources : **S** = `Sujet.pdf`, **C** = `cahierDesCharges.md`. Priorité : **P0**
 **Frontend :**
 
 - [ ] `NOTIF-007` Client WS dans un provider global (`app/(app)/layout.tsx`), reconnexion automatique.
-- [ ] `NOTIF-008` Cloche dans `components/layout/TopBar.tsx` : badge non-lus, dropdown listant `GET /notifications`, marquage lu.
+- [x] `NOTIF-008` Cloche dans `components/layout/TopBar.tsx` : badge non-lus, dropdown listant `GET /notifications`, marquage lu.
 - [ ] `NOTIF-009` Toast temps réel via le `ToastProvider` existant (`components/ui/toast.tsx`).
 - [ ] `NOTIF-010` Rafraîchissement des données de la page courante à réception (au minimum : messagerie et plannings).
 
@@ -403,9 +403,9 @@ Sources : **S** = `Sujet.pdf`, **C** = `cahierDesCharges.md`. Priorité : **P0**
 
 **Statut actuel :** incorrect.
 
-- [ ] `DEL-002` Backend : réintroduire `DELETE /users/me` dans `src/auth/routes.ts` (ou faire accepter `me` explicitement), appelant un use case `deleteOwnAccount(requesterId)` distinct du `deleteAccount` super-admin.
-- [ ] `DEL-003` Application : dans `auth.use-cases.ts`, autoriser l'auto-suppression (requester = cible) sans exiger `isSuperAdmin` ; conserver les garde-fous (rôle actif, fichiers, messages) mais **décider et documenter** le comportement RGPD quand ils bloquent (le droit à l'effacement ne peut pas être refusé indéfiniment parce qu'on a envoyé un message — prévoir anonymisation en V2, tâche documentée).
-- [ ] `DEL-004` Front : gérer les nouveaux cas d'erreur de blocage sur `app/(app)/parametres/page.tsx` (messages explicites au lieu d'un échec générique).
+- [x] `DEL-002` Backend : réintroduire `DELETE /users/me` dans `src/auth/routes.ts` (ou faire accepter `me` explicitement), appelant un use case `deleteOwnAccount(requesterId)` distinct du `deleteAccount` super-admin.
+- [x] `DEL-003` Application : dans `auth.use-cases.ts`, autoriser l'auto-suppression (requester = cible) sans exiger `isSuperAdmin` ; conserver les garde-fous (rôle actif, fichiers, messages) mais **décider et documenter** le comportement RGPD quand ils bloquent (le droit à l'effacement ne peut pas être refusé indéfiniment parce qu'on a envoyé un message — prévoir anonymisation en V2, tâche documentée).
+- [x] `DEL-004` Front : gérer les nouveaux cas d'erreur de blocage sur `app/(app)/parametres/page.tsx` (messages explicites au lieu d'un échec générique).
 - [ ] `DEL-005` Test API : un étudiant supprime son compte → login refusé ensuite ; un étudiant ne peut pas supprimer le compte d'un autre ; SUPER_ADMIN peut supprimer un compte sans rôle.
 
 **Dépendances :** SEC-101 (revue des autorisations) idéalement en même temps.
@@ -418,7 +418,7 @@ Sources : **S** = `Sujet.pdf`, **C** = `cahierDesCharges.md`. Priorité : **P0**
 
 **Backend :**
 
-- [ ] `USR-101` Décision d'API (une des deux, recommandation = A) : **(A)** joindre `firstname`/`lastname` dans les réponses `students`/`instructors`/`admins` listées par le staff ; **(B)** endpoint minimal `GET /users/:id/public` (nom seul) accessible aux authentifiés.
+- [x] `USR-101` *(décision prise = option B, `GET /users/:id` profil public minimal)* Décision d'API (une des deux, recommandation = A) : **(A)** joindre `firstname`/`lastname` dans les réponses `students`/`instructors`/`admins` listées par le staff ; **(B)** endpoint minimal `GET /users/:id/public` (nom seul) accessible aux authentifiés.
 - [ ] `USR-102` Implémenter la jointure dans `src/postgres/student/student.adapter.ts` et `instructor.adapter.ts` (+ vues correspondantes dans `application/student|instructor/*.use-cases.ts`).
 - [ ] `USR-103` Enrichir les messages : joindre le nom de l'expéditeur dans `message.use-cases.ts`.
 - [ ] `USR-104` Enrichir `GET /audit-logs` avec le nom de l'acteur.
@@ -437,7 +437,7 @@ Sources : **S** = `Sujet.pdf`, **C** = `cahierDesCharges.md`. Priorité : **P0**
 ### 9.6 Fonctionnalité : messagerie — corrections ciblées
 
 - [ ] `API-001` Créer `GET /conversations/mine` (agrégat serveur : conversations + dernier message + non-lus) pour remplacer la cascade d'appels client de `app/(app)/messagerie/page.tsx` (451 lignes, en partie à cause de cette reconstruction).
-- [ ] `API-002` Permettre à un `ADMIN` de retrouver son propre `adminId` : soit ouvrir `GET /admins/user/:userId` à l'intéressé lui-même (`admin/routes.ts:16` — vérifier `requesterId === userId`), soit ajouter `GET /admins/me`. Retire la « fonctionnalité limitée pour votre rôle ».
+- [x] `API-002` Permettre à un `ADMIN` de retrouver son propre `adminId` : soit ouvrir `GET /admins/user/:userId` à l'intéressé lui-même (`admin/routes.ts:16` — vérifier `requesterId === userId`), soit ajouter `GET /admins/me`. Retire la « fonctionnalité limitée pour votre rôle ».
 - [ ] `API-003` Test API : un ADMIN non-super crée une conversation privée de bout en bout.
 
 **Dépendances :** USR-* pour l'affichage des noms.
@@ -507,7 +507,7 @@ Sources : **S** = `Sujet.pdf`, **C** = `cahierDesCharges.md`. Priorité : **P0**
 
 ### 9.10 Kubernetes / déploiement (au-delà des correctifs 9.0)
 
-- [ ] `K8S-002` Versionner la gestion TLS : installer cert-manager + `ClusterIssuer` Let's Encrypt + annotation/`Certificate` pour `myges-tls` *(fichiers à créer : `k8s/cert-manager/cluster-issuer.yml`, `k8s/cert-manager/certificate.yml`)* — ou documenter précisément la procédure actuelle si le certificat est géré hors repo.
+- [x] `K8S-002` *(fait 2026-07-12)* Versionner la gestion TLS : installer cert-manager + `ClusterIssuer` Let's Encrypt + annotation/`Certificate` pour `myges-tls` *(fichiers à créer : `k8s/cert-manager/cluster-issuer.yml`, `k8s/cert-manager/certificate.yml`)* — ou documenter précisément la procédure actuelle si le certificat est géré hors repo.
 - [ ] `K8S-003` Endpoint santé HTTP : `GET /health` (vérifie un `SELECT 1`) dans Express *(route à créer, hors `/api` ou sous `/api/health`)* et basculer readiness/liveness de `tcpSocket` vers `httpGet` dans `k8s/backend/deployment.yml`.
 - [ ] `K8S-004` Sortir les migrations du démarrage : `Job`/`initContainer` de migration pré-rollout *(à créer : `k8s/backend/migrate-job.yml`)* ; retirer `migrate()` de `server.ts` en prod (le garder en dev).
 - [ ] `K8S-005` `NetworkPolicy` : postgres accessible uniquement depuis le namespace `backend` ; backend uniquement depuis Traefik + frontend *(à créer : `k8s/postgres/network-policy.yml`, `k8s/backend/network-policy.yml`)*. Complète l'exigence « pare-feu » du Sujet côté cluster ; le pare-feu VPS (ufw) reste une action hors repo à documenter.
@@ -518,9 +518,9 @@ Sources : **S** = `Sujet.pdf`, **C** = `cahierDesCharges.md`. Priorité : **P0**
 
 ### 9.11 Observabilité (rubrique à zéro)
 
-- [ ] `OBS-001` Santé des conteneurs : déployer **Uptime Kuma** (le moins coûteux) *(à créer : `k8s/monitoring/uptime-kuma.yml`)* pointé sur `/health` backend + `/` frontend, ou stack kube-prometheus si le temps le permet.
+- [x] `OBS-001` Santé des conteneurs : déployer **Uptime Kuma** (le moins coûteux) *(à créer : `k8s/monitoring/uptime-kuma.yml`)* pointé sur `/health` backend + `/` frontend, ou stack kube-prometheus si le temps le permet.
 - [ ] `OBS-002` Erreurs applicatives : intégrer **Sentry** (ou GlitchTip auto-hébergé) — SDK Node dans `server.ts`/error handler `app.ts:75`, SDK Next (`instrumentation.ts` *(à créer)*), DSN via Infisical.
-- [ ] `OBS-003` Analytique RGPD : **Plausible** ou Matomo auto-hébergé, script dans `app/layout.tsx`, mention dans la politique cookies (lié à LEG-002).
+- [ ] `OBS-003` Analytique RGPD — **à moitié fait (2026-07-14)** : **Umami** auto-hébergé déployé (`k8s/observability/umami/` + postgres dédié) mais **script de tracking absent du front** → reste : `<script>` Umami dans `app/layout.tsx` + mention politique cookies (lié à LEG-002).
 - [ ] `OBS-004` Capturer les erreurs du error handler Express dans Sentry (aujourd'hui simple `console.error`).
 
 ---
@@ -551,6 +551,39 @@ Sources : **S** = `Sujet.pdf`, **C** = `cahierDesCharges.md`. Priorité : **P0**
 - [ ] `DOC-001` Mettre à jour `CLAUDE.md` : autorisation par capacités (plus de `requireRole`), endpoint `unlock` existant, statut réel de la suppression de compte et de l'audit-log.
 - [ ] `DOC-004` Documentation API minimale : soit OpenAPI généré, soit `docs/api.md` listant les 26 routeurs et conventions (`respond`, formats d'erreur `{ error, type? }`) — le Sujet exige une « documentation claire qui permet de reproduire le projet ».
 - [ ] `DOC-005` Guide de reproduction locale vérifié de bout en bout (README §Running + `.env.example` — tester sur machine vierge).
+
+---
+
+### 9.15 Fonctionnalité : invitation d'étudiant par l'administration (ajout au périmètre — décision d'équipe du 2026-07-15)
+
+**Statut actuel :** fait le 2026-07-15 (vérifié de bout en bout par API : invitation → login refusé avant activation → refus sans consentement → activation → login STUDENT → token à usage unique → 403 pour un étudiant → 409 email existant). Restent les tests automatisés INV-010…012 (dépendent de TEST-001…).
+
+**Objectif fonctionnel :** un `ADMIN`/`SUPER_ADMIN` crée directement un compte étudiant (prénom, nom, email, filière). L'étudiant reçoit un email contenant un lien (valable 72 h) vers une page « Définissez votre mot de passe » où il choisit son mot de passe **et donne son consentement RGPD** (l'admin ne peut pas consentir à sa place). Le compte est inutilisable tant que le mot de passe n'est pas défini. Supprime l'étape « compte en attente de rôle » pour ce parcours.
+
+**Backend :**
+
+- [x] `INV-001` Rendre `users.gdpr_consent_at` nullable (entité `domain/auth/user.entity.ts` + schéma `src/postgres/schema/auth.ts`) — un compte invité n'a pas encore consenti.
+- [x] `INV-002` Ajouter `purpose` (`'reset' | 'invitation'`, défaut `'reset'`) à `password_reset_tokens` (entité + schéma + port `application/auth/password-reset-token.repository.ts` + adapter).
+- [x] `INV-003` **Nouvelle** migration Drizzle (ne jamais éditer les migrations appliquées — cf. `TECH-002`).
+- [x] `INV-004` Use case `inviteStudent` dans `application/auth/auth.use-cases.ts` : réservé `isAdmin` ; crée le `user` (hash aléatoire → connexion impossible avant activation, `gdprConsentAt: null`) + la ligne `student` (filière validée via `ProgramRepository`) + un token `invitation` + envoi de l'email.
+- [x] `INV-005` TTL dédié invitation (72 h) ; `resetWithToken` vérifie l'expiration selon le `purpose` du token ; purge (`cleanupExpiredSessions`) adaptée par purpose.
+- [x] `INV-006` `resetWithToken` : si l'utilisateur n'a pas encore consenti (`gdprConsentAt` null), exiger `gdprConsent: true` dans le body (nouveau résultat `missing_gdpr_consent`), puis enregistrer la date de consentement à l'activation.
+- [x] `INV-007` Route `POST /users/invite` (`src/auth/routes.ts`, schéma Zod, messages français) + `sendInvitationEmail` sur le port `EmailSender` et son adapter (console.log en dev, comme le reset).
+
+**Frontend :**
+
+- [x] `INV-008` `/scolarite/etudiants` : bouton « Inviter un étudiant » + modal (prénom, nom, email, filière) → `POST /users/invite`, rafraîchissement de la liste, toast de confirmation.
+- [x] `INV-009` `/reset-password?token=…&invitation=1` : variante « Définissez votre mot de passe » avec case de consentement RGPD obligatoire, envoyée au backend.
+
+**Tests (avec l'outillage TEST-001…) :**
+
+- [ ] `INV-010` API : invitation par un ADMIN → compte créé + connexion refusée avant activation → activation avec consentement → login OK ; refus sans consentement ; token expiré (>72 h) ; email déjà existant.
+- [ ] `INV-011` API : un `STUDENT`/`INSTRUCTOR` ne peut pas inviter (403).
+- [ ] `INV-012` E2E : parcours complet admin invite → lien (récupéré des logs en dev) → définition du mot de passe → première connexion étudiante.
+
+**Critères d'acceptation :** un étudiant invité apparaît immédiatement dans `/scolarite/etudiants` ; il ne peut pas se connecter avant d'avoir défini son mot de passe ; l'activation exige le consentement RGPD et le stocke ; le lien expire après 72 h ; le flux signup libre existant reste inchangé.
+
+**Dépendances :** aucune (email = console.log en dev ; SMTP réel = `AUTH-001`).
 
 ---
 
@@ -711,9 +744,9 @@ Tâches : UI-002…005, LEG-001/002, DOC-004/005, PM-001, seed de démo, répét
 ## 19. Checklist finale de conformité
 
 - [ ] **Sujet — Sécurité** : inscription ✅, connexion ✅, mot de passe oublié ✅, réinitialisation ✅, mdp fort ✅, 60 j ✅, blocage ✅, 2FA TOTP ✅ — reste : email SMTP réel (AUTH-001), durcissements SEC-102…110
-- [ ] **Sujet — Infrastructure** : Docker ✅, k8s (≡ Swarm accepté) ✅, ≥2 réplicas ✅, registre GHCR ✅, WebSocket ❌ (NOTIF), pare-feu ❌ (K8S-005 + VPS), domaine+SSL ⚠️ (K8S-002), VPS à confirmer
+- [ ] **Sujet — Infrastructure** : Docker ✅, k8s (≡ Swarm accepté) ✅, ≥2 réplicas ✅, registre GHCR ✅, WebSocket ❌ (NOTIF), pare-feu ❌ (K8S-005 + VPS), domaine+SSL ✅ (cert-manager, 2026-07-12), VPS à confirmer
 - [ ] **Sujet — Tests** : unitaires ❌, fonctionnels ❌, interface ❌ → phase 1 + 5
-- [ ] **Sujet — Observabilité** : santé ❌, erreurs ❌, analytique ❌ → phase 6
+- [ ] **Sujet — Observabilité** : santé ✅ (Uptime Kuma, 2026-07-14), erreurs ❌ (Sentry), analytique ⚠️ (Umami déployé, script front manquant) → reste OBS-002/003
 - [ ] **Sujet — Sauvegarde 3-2-1** : ❌ → phase 6 ; IaC ✅
 - [ ] **Sujet — Gestion de projet** : git ✅, outil de suivi à prouver (PM-001)
 - [ ] **Cahier — Métier** : planning ✅, notes ⚠️ (audit), absences ⚠️ (justificatifs), documents ⚠️ (upload), messagerie ⚠️ (noms, admin, temps réel), supports/rendus ⚠️ (upload), administration ✅, audit ❌ (écriture)

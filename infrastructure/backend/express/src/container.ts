@@ -87,6 +87,7 @@ export const authUseCases = new AuthUseCases(
     adminRepository,
     studentRepository,
     instructorRepository,
+    programRepository,
     fileRepository,
     messageRepository,
     messageReadRepository,
