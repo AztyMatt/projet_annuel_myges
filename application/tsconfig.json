@@ -15,5 +15,5 @@
     },
     "references": [{ "path": "../domain" }],
     "include": ["**/*.ts"],
-    "exclude": ["dist", "node_modules"]
+    "exclude": ["dist", "node_modules", "**/*.test.ts", "**/*.fakes.ts"]
 }

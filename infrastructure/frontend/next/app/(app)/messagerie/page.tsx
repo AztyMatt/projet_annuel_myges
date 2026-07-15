@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Send, Search, Plus, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api, ApiError } from "@/lib/api";
+
+const POLL_INTERVAL_MS = 30000;
 
 type ConversationEntry = {
     id: string; // conversationId
@@ -144,6 +146,16 @@ export default function Messagerie() {
 
     const [showNewConversation, setShowNewConversation] = useState(false);
 
+    const messagesRef = useRef<Message[]>([]);
+    const meRef = useRef<Me | null>(null);
+    const messagesEndRef = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        messagesRef.current = messages;
+    }, [messages]);
+    useEffect(() => {
+        meRef.current = me;
+    }, [me]);
+
     useEffect(() => {
         (async () => {
             setLoading(true);
@@ -175,30 +187,44 @@ export default function Messagerie() {
         })();
     }, []);
 
-    useEffect(() => {
-        if (!activeId) return;
-        setMessagesError("");
-        api
-            .get<Message[]>(`/messages/conversation/${activeId}`)
-            .then(async (msgs) => {
-                setMessages(msgs);
-                // Marquage "lu" best-effort : on ne bloque pas l'affichage si ça échoue.
-                if (me) {
-                    msgs
-                        .filter((m) => m.senderId !== me.id)
-                        .forEach((m) => {
-                            void api.post("/message-reads", { messageId: m.id, userId: me.id }).catch(() => {});
-                        });
-                }
-                const uniqueSenderIds = [...new Set(msgs.map((m) => m.senderId).filter((id) => id !== me?.id))];
+    const fetchMessages = async (conversationId: string, opts: { silent?: boolean } = {}) => {
+        try {
+            const msgs = await api.get<Message[]>(`/messages/conversation/${conversationId}`);
+            const previousIds = new Set(messagesRef.current.map((m) => m.id));
+            const newOnes = msgs.filter((m) => !previousIds.has(m.id));
+            setMessages(msgs);
+            if (!opts.silent) setMessagesError("");
+
+            const currentMe = meRef.current;
+            if (currentMe) {
+                newOnes
+                    .filter((m) => m.senderId !== currentMe.id)
+                    .forEach((m) => {
+                        void api.post("/message-reads", { messageId: m.id, userId: currentMe.id }).catch(() => {});
+                    });
+            }
+            const uniqueSenderIds = [...new Set(newOnes.map((m) => m.senderId).filter((id) => id !== currentMe?.id))];
+            if (uniqueSenderIds.length > 0) {
                 const resolved = await Promise.all(uniqueSenderIds.map(async (id) => [id, await resolveSenderName(id)] as const));
                 setSenderNames((prev) => ({ ...prev, ...Object.fromEntries(resolved) }));
-            })
-            .catch((error) => {
+            }
+        } catch (error) {
+            if (!opts.silent) {
                 setMessagesError(error instanceof ApiError ? error.message : "Impossible de charger les messages.");
-            });
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+            }
+        }
+    };
+
+    useEffect(() => {
+        if (!activeId) return;
+        void fetchMessages(activeId);
+        const interval = setInterval(() => void fetchMessages(activeId, { silent: true }), POLL_INTERVAL_MS);
+        return () => clearInterval(interval);
     }, [activeId]);
+
+    useEffect(() => {
+        messagesEndRef.current?.scrollIntoView({ block: "end" });
+    }, [messages.length]);
 
     const handleSend = async () => {
         if (!draft.trim() || !activeId) return;
@@ -340,6 +366,7 @@ export default function Messagerie() {
                                     {messages.length === 0 && !messagesError && (
                                         <p className="text-xs text-gray-400">Aucun message pour l&apos;instant.</p>
                                     )}
+                                    <div ref={messagesEndRef} />
                                 </div>
 
                                 <div className="px-5 py-4 border-t border-gray-100">
