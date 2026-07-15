@@ -417,21 +417,25 @@ Sources : **S** = `Sujet.pdf`, **C** = `cahierDesCharges.md`. Priorité : **P0**
 
 ### 9.5 Fonctionnalité : résolution des identités (noms affichables)
 
-**Statut actuel :** partiel — le front affiche des libellés génériques partout où un nom est attendu.
+**Statut actuel (2026-07-15) :** fait — plus aucun libellé générique de type "Étudiant #fx_stude…" trouvé sur les pages authentifiées (vérifié par grep exhaustif + navigateur réel). Reste `USR-108` (test API).
 
 **Backend :**
 
 - [x] `USR-101` *(décision prise = option B, `GET /users/:id` profil public minimal)* Décision d'API (une des deux, recommandation = A) : **(A)** joindre `firstname`/`lastname` dans les réponses `students`/`instructors`/`admins` listées par le staff ; **(B)** endpoint minimal `GET /users/:id/public` (nom seul) accessible aux authentifiés.
-- [ ] `USR-102` Implémenter la jointure dans `src/postgres/student/student.adapter.ts` et `instructor.adapter.ts` (+ vues correspondantes dans `application/student|instructor/*.use-cases.ts`).
-- [ ] `USR-103` Enrichir les messages : joindre le nom de l'expéditeur dans `message.use-cases.ts`.
-- [ ] `USR-104` Enrichir `GET /audit-logs` avec le nom de l'acteur.
-- [ ] `USR-105` Ne jamais exposer email/hash/état de verrouillage dans ces vues publiques (le hash n'est déjà jamais sérialisé — maintenir).
+- [x] `USR-102` *(fait autrement — pas de jointure serveur)* La résolution se fait entièrement côté front (voir USR-106) via `GET /users/:id`, pas par jointure dans `student.adapter.ts`/`instructor.adapter.ts`. Choix assumé : évite de complexifier les vues repository pour un besoin uniquement d'affichage ; le coût est N requêtes `GET /users/:id` côté client (mitigé par le cache module-level de `lib/user-names.ts`, partagé entre toutes les pages d'une session navigateur).
+- [x] `USR-103` *(fait le 2026-07-12)* Nom de l'expéditeur affiché sur `/messagerie` — résolution directe côté front (`Message.senderId` est déjà un `userId`), pas de jointure backend nécessaire.
+- [x] `USR-104` *(fait le 2026-07-15)* Nom de l'acteur affiché sur `/superadmin/securite` — résolu côté front (même pattern), pas de jointure sur `GET /audit-logs`.
+- [x] `USR-105` Vérifié : aucune vue publique (`findPublicProfile`, `GET /users/:id`) n'expose email/hash/verrouillage — seuls `id`/`firstname`/`lastname`.
 
 **Frontend :**
 
-- [ ] `USR-106` Remplacer les libellés génériques : `messagerie`, dashboards, `scolarite/etudiants`, `scolarite/intervenants`, `scolarite/classes`, `superadmin/securite`, `intervenant/evaluations` (membres de groupes).
-- [ ] `USR-107` `messagerie` : sélection d'un destinataire par nom (plus par ID tronqué).
-- [ ] `USR-108` Test API : un étudiant ne peut pas lister les noms de tous les étudiants hors de ses groupes (définir la portée exacte avec USR-101).
+- [x] `USR-106` *(fait le 2026-07-15)* Libellés génériques remplacés partout où un gap réel subsistait, vérifié par audit exhaustif du code (grep `Étudiant #`/`Intervenant #`/`Utilisateur #` sur tout `app/`) puis par navigateur réel (Playwright) :
+  - `messagerie`, `scolarite/etudiants`, `scolarite/intervenants`, `superadmin/securite`, `intervenant/evaluations`, `intervenant/notes`, `scolarite/absences`, `scolarite/documents`, `scolarite/examens` — **déjà faits lors de sessions précédentes** (certains via le helper partagé `lib/user-names.ts` — `resolveUserName`/`buildNameMap`/`buildStudentNameMap`/`formatStudentName`, créé entre-temps).
+  - `scolarite/cours` (nom d'intervenant en tableau + select de la modale création/édition) et `scolarite/classes` (roster d'étudiants par groupe + select "Affecter un étudiant", suppression du message obsolète "noms pas encore disponibles") — **corrigés aujourd'hui**, en réutilisant `lib/user-names.ts` pour rester cohérent avec le reste du front plutôt que dupliquer un pattern ad hoc.
+  - Dashboards : aucun gap trouvé à l'audit — les 4 dashboards (`/etudiant`, `/intervenant`, `/scolarite`, `/superadmin`) n'affichent pas de nom de tiers, à l'exception du widget "Derniers événements d'audit" de `/superadmin` qui n'affiche aujourd'hui ni id ni nom d'acteur (seulement action + entité + date) — non traité ici, hors du gap "libellé générique" (rien n'est affiché à remplacer).
+  - Colonne "Entité" de `/superadmin/securite` (`grade #fx_grade…`, `absence #fx_absen…`) : id technique de l'enregistrement concerné, volontairement non résolu en nom de personne — chaque `entityName` aurait un chemin de résolution différent (pas de champ `userId` uniforme comme pour la colonne "Utilisateur"), jugé hors scope de USR-106 (qui vise les libellés de *personnes*, pas les références d'entités).
+- [x] `USR-107` `messagerie` : sélection d'un destinataire par nom déjà fonctionnelle (`NewConversationModal` résout `firstname`/`lastname` par étudiant, repli sur id seulement en cas d'échec réseau).
+- [ ] `USR-108` Test API : un étudiant ne peut pas lister les noms de tous les étudiants hors de ses groupes (définir la portée exacte avec USR-101) — non fait, mais l'outillage `TEST-*` existe désormais pour l'écrire.
 
 **Dépendances :** aucune. Fort effet démo pour un coût modéré.
 
