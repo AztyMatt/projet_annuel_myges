@@ -160,14 +160,14 @@ Sources : **S** = `Sujet.pdf`, **C** = `cahierDesCharges.md`. Priorité : **P0**
 | INF-09 | Pas de solution clé en main | S | P0 | `TERMINÉ` | Auto-hébergé k8s | — |
 | INF-10 | PostgreSQL volumes persistants | C§6 | P0 | `TERMINÉ` | PVC 5Gi `local-path` (`k8s/postgres/pvc.yml`), strategy `Recreate` | `local-path` = données liées à un seul nœud — à documenter |
 | MET-01 | Planning temps réel | C§3.1 | P1 | `PARTIEL` | CRUD sessions complet (étudiant/intervenant/scolarité, 3 pages planning) | « Temps réel » = notifications (INF-04) ; pas de gestion dédiée jours fériés/fermetures (modélisé comme modification/suppression de session, choix documenté sur `/scolarite/planning`) |
-| MET-02 | Notes : saisie, moyennes, gel, traçabilité | C§3.2 | P1 | `PARTIEL` | Saisie intervenant (`/intervenant/notes`), moyennes pondérées, gel (`POST /grades/:id/lock`), **dégel backend présent** (`unlock`) non exposé au front | Traçabilité des modifications = audit-log jamais écrit (AUD-*) ; distinction académique/entreprise écartée (INC-11) |
-| MET-03 | Absences : déclaration, justificatif, workflow | C§3.3 | P1 | `PARTIEL` | Déclaration + validation/rejet bout en bout (`absence/routes.ts:50-64`, pages étudiant + scolarité) ; table `file_justification` prête | Dépôt de justificatif bloqué par l'upload (FILE-*) ; historique des décisions non journalisé (AUD-*) |
+| MET-02 | Notes : saisie, moyennes, gel, traçabilité | C§3.2 | P1 | `PARTIEL` | Saisie intervenant (`/intervenant/notes`), moyennes pondérées, gel (`POST /grades/:id/lock`), **dégel backend présent** (`unlock`) non exposé au front, **traçabilité des modifications journalisée (AUD-005, 2026-07-15)** | Distinction académique/entreprise écartée (INC-11) |
+| MET-03 | Absences : déclaration, justificatif, workflow | C§3.3 | P1 | `PARTIEL` | Déclaration + validation/rejet bout en bout (`absence/routes.ts:50-64`, pages étudiant + scolarité) ; table `file_justification` prête ; **historique des décisions journalisé (AUD-006, 2026-07-15)** | Dépôt de justificatif bloqué par l'upload (FILE-*) |
 | MET-04 | Documents : dossier centralisé, contrats, alertes | C§3.4 | P1 | `PARTIEL` | Pages `/etudiant/documents`, `/scolarite/documents`, `/scolarite/entreprises` ; statuts, validation, alertes expiration ±30 j | Upload/téléchargement réels (FILE-*) ; génération de documents officiels non commencée ; création de contrat bloquée (exige un fichier) |
 | MET-05 | Messagerie classe/module/ciblée | C§3.5 | P1 | `PARTIEL` | `/messagerie` branchée (conversations classe/cours/privées, envoi, lu) | Noms d'utilisateurs non résolus (USR-*) ; `ADMIN` simple ne peut pas initier (endpoint `GET /admins/user/:userId` réservé SUPER_ADMIN — `admin/routes.ts:16`) ; temps réel (NOTIF-*) |
 | MET-06 | Supports & rendus TP | C§3.6 | P1 | `PARTIEL` | Bibliothèque par module, évaluations, groupes de rendu, statuts Rendu/En retard | Dépôt et téléchargement réels bloqués par FILE-* |
 | MET-07 | Gestion administrative/pédagogique | C§3.7 | P1 | `TERMINÉ` | 13 pages `/scolarite/*` (filières, blocs, modules, classes, groupes, cours, campus, salles, examens, externes, année académique) sur endpoints réels | Aide à la décision = affichage des spécialités uniquement (conforme « non automatique ») |
-| MET-08 | Audit & traçabilité | C§3.8 | P1 | `INCORRECT` | API lecture + pages `/superadmin/securite` et dashboard | **Aucune écriture d'audit dans tout le code** — fonctionnalité factice en l'état (AUD-*) |
-| MET-09 | Cas dégradés (§4) | C§4 | P1 | `PARTIEL` | Gel des notes ; réaffectation intervenant possible via `/scolarite/cours` ; sous-effectif documenté comme procédure manuelle | Changement de statut initial↔alternant non modélisé ; traçabilité renforcée dépend d'AUD-* |
+| MET-08 | Audit & traçabilité | C§3.8 | P1 | `TERMINÉ` | API lecture + pages `/superadmin/securite` et dashboard + **écriture réelle branchée (AUD-001…009, 2026-07-15)** sur login, notes, absences, documents, rôles | Vérifié par API ; pas de vérification visuelle navigateur (AUD-010) |
+| MET-09 | Cas dégradés (§4) | C§4 | P1 | `PARTIEL` | Gel des notes ; réaffectation intervenant possible via `/scolarite/cours` ; sous-effectif documenté comme procédure manuelle ; traçabilité renforcée faite (AUD-*) | Changement de statut initial↔alternant non modélisé |
 | DES-01 | UI/UX, accessibilité, SEO | S | P0 | `PARTIEL` | Charte cohérente (Tailwind 4, shadcn/radix, StatusBadge/ConfirmDialog/toast mutualisés), états chargement/vide/erreur présents sur les pages vérifiées | Aucun outil a11y (axe/Lighthouse), pas de `robots.txt`/`sitemap` (vérifié absent), responsive non audité, barre de recherche factice (`TopBar.tsx:83`) |
 | TEST-01 | Tests unitaires | S, C§9 | P0 | `TERMINÉ` | Vitest, 71 tests unitaires (domaine + use cases auth/grade/absence avec doubles en mémoire) | `application/*/*.test.ts`, `domain/auth/*.test.ts` |
 | TEST-02 | Tests fonctionnels API | S, C§9 | P0 | `TERMINÉ` | Supertest + Postgres réelle, 27 tests (auth, RBAC sur 6 endpoints, contraintes 409, fil rouge métier complet) | `infrastructure/backend/express/test/api/*.test.ts` |
@@ -375,29 +375,30 @@ Sources : **S** = `Sujet.pdf`, **C** = `cahierDesCharges.md`. Priorité : **P0**
 
 ### 9.3 Fonctionnalité : journalisation d'audit réelle (§3.8)
 
-**Statut actuel :** incorrect (lecture seule d'une table jamais alimentée).
+**Statut actuel (2026-07-15) :** fait — écriture réelle branchée sur les actions sensibles, vérifiée de bout en bout par API (login réussi/échoué, validation d'absence, validation de document, mise à jour d'un intervenant → toutes visibles via `GET /audit-logs` avec le bon `oldValue`/`newValue`).
 
 **Backend :**
 
-- [ ] `AUD-001` Ajouter au port `application/audit-log/audit-log.repository.ts` une méthode `save(entry)` et l'implémenter dans `src/postgres/audit-log/audit-log.adapter.ts`.
-- [ ] `AUD-002` Créer un service applicatif `application/audit-log/audit-recorder.ts` *(à créer)* : `record({ userId, action, entity, entityId, oldValue, newValue })`, non bloquant (échec d'audit loggué, jamais propagé à l'utilisateur).
-- [ ] `AUD-003` Injecter le recorder via `container.ts` dans les use cases sensibles.
-- [ ] `AUD-004` Auth : journaliser login réussi/échoué, verrouillage, reset de mot de passe, activation 2FA (`auth.use-cases.ts`).
-- [ ] `AUD-005` Notes : create/update/lock/unlock/delete avec `oldValue`/`newValue` (`grade.use-cases.ts`) — exigence explicite « traçabilité complète des modifications » (§3.2).
-- [ ] `AUD-006` Absences : validate/reject avec décideur (`absence.use-cases.ts`) — « historique et traçabilité des décisions » (§3.3).
-- [ ] `AUD-007` Documents : validate/expire/delete (`document.use-cases.ts`, `file.use-cases.ts`).
-- [ ] `AUD-008` Rôles : attribution/retrait/changement (`admin`, `student`, `instructor` use cases) + suppression de compte.
-- [ ] `AUD-009` Vérifier que `enteredBy`/`processedBy` et l'audit restent cohérents (pas de double source de vérité).
+- [x] `AUD-001` `save(entry)` déjà présent au port `application/audit-log/audit-log.repository.ts` et implémenté dans `src/postgres/audit-log/audit-log.adapter.ts` (`onConflictDoUpdate` sur l'id).
+- [x] `AUD-002` Service `application/audit-log/audit-recorder.ts` créé : `AuditRecorder.record({ userId, action, entityName, entityId, oldValue?, newValue })`, `try/catch` interne qui loggue en console et ne propage jamais l'échec à l'appelant.
+- [x] `AUD-003` `auditRecorder` instancié une fois dans `container.ts` (`new AuditRecorder(auditLogRepository)`) et injecté en dernier paramètre de `authUseCases`, `gradeUseCases`, `absenceUseCases`, `fileUseCases`, `adminUseCases`, `studentUseCases`, `instructorUseCases`.
+- [x] `AUD-004` Auth (`auth.use-cases.ts`) : `LOGIN` (succès dans `login()`+`verify2fa()`, échec avec indicateur de verrouillage dans `login()`), reset de mot de passe centralisé dans `applyPasswordUpdate` (couvre `resetWithCredentials`/`resetWithToken`), activation 2FA dans `enable2fa` (branche finale), suppression de compte dans `deleteAccount`.
+  - Limite assumée : l'auto-suppression (`isSelf`) n'est **jamais** journalisée — le compte visé n'a par construction aucun audit log (sinon `user_has_audit_logs` bloque déjà la suppression plus haut), et on ne peut pas insérer une ligne `audit_log.user_id` référençant un utilisateur qu'on vient de supprimer (contrainte FK `NOT NULL` sans cascade). Seule la suppression d'un compte tiers par un `SUPER_ADMIN` est journalisée (`action: DELETE`, acteur = le super admin).
+- [x] `AUD-005` Notes (`grade.use-cases.ts`) : `create` (CREATE), `update` (UPDATE, `oldValue.value`/`newValue.value`), `lock` (FREEZE), `unlock` (UPDATE avec `event: "unlock"` — pas d'action `UNFREEZE` dédiée dans l'enum), `delete` (DELETE).
+- [x] `AUD-006` Absences (`absence.use-cases.ts`) : `validate` (VALIDATE) et `reject` (REJECT), acteur = `auth.requesterId` (décideur), diff de statut.
+- [x] `AUD-007` Documents (`file.use-cases.ts`) : `validateDocument` (VALIDATE), `expireDocument` (UPDATE, `event: "expire"`), `deleteFileDocument` (DELETE).
+- [x] `AUD-008` Rôles : `admin.use-cases.ts` (create/update/delete), `student.use-cases.ts` (create/update/delete), `instructor.use-cases.ts` (create/update/delete — `specialties` sérialisé en chaîne jointe par virgule, `AuditLogValue` n'acceptant pas les tableaux de primitifs) ; suppression de compte couverte par `AUD-004`.
+- [x] `AUD-009` Vérifié : `grade.enteredBy` reste l'unique source pour "qui a saisi la note" (champ métier, jamais écrit par l'audit) ; `Absence` n'a pas de champ `processedBy` propre, l'audit `VALIDATE`/`REJECT` est la seule trace du décideur — pas de double source de vérité.
 
 **Frontend :**
 
-- [ ] `AUD-010` Rien à créer — vérifier que `/superadmin/securite` et le dashboard affichent correctement les vraies entrées (les pages existent et sont branchées ; adapter le rendu du diff si le format `oldValue/newValue` choisi diffère).
+- [x] `AUD-010` Vérifié par navigateur réel (Playwright, 2026-07-15) : login, validation d'absence, garde de rôle, activation 2FA et rendu de `/superadmin/securite` + `/superadmin` tous confirmés sans régression. Au passage, la colonne "Utilisateur" affichait un id brut tronqué (`Utilisateur #fx_user_`) — corrigé le même jour : résolution des noms via `GET /users/:id` (même pattern que `/scolarite/intervenants`), voir CLAUDE.md section 11.6.
 
-**Tests :** couverts dans TEST-* (cas : chaque action sensible produit une entrée ; un échec d'écriture d'audit ne fait pas échouer l'action).
+**Tests :** toujours aucun test automatisé dans le repo (cf. section 5) — la vérification de cette session est manuelle (API, cf. ci-dessus). Couverture automatisée reste dans `TEST-*`.
 
-**Critères d'acceptation :** après un scénario de démo (login, saisie de note, gel, validation d'absence, attribution de rôle), `/superadmin/securite` affiche ≥ 5 entrées horodatées exactes.
+**Critères d'acceptation :** ✅ vérifié manuellement le 2026-07-15 — login (réussi + échoué), validation d'absence, validation de document, mise à jour d'un intervenant produisent chacun une entrée exacte dans `GET /audit-logs`.
 
-**Dépendances :** aucune. À faire avant la démo — c'est une exigence du cahier au statut aujourd'hui factice.
+**Dépendances :** aucune côté code restante.
 
 ---
 
@@ -617,7 +618,7 @@ Sources : **S** = `Sujet.pdf`, **C** = `cahierDesCharges.md`. Priorité : **P0**
 
 **Problèmes** :
 1. **Validation d'entrée minimale** : pas de couche de validation déclarative (zod a été retiré) ; les use cases vérifient la présence des champs (`missing_fields`) mais peu les formats/bornes (ex. `value` d'une note non bornée 0–20, dates non validées). Recommandation : valider aux use cases (pas de retour de zod obligatoire) — à traiter au fil de l'eau, prioritairement sur grades/sessions/absences.
-2. **Audit-log jamais écrit** (AUD-*) — la « journalisation » n'existe pas.
+2. ~~**Audit-log jamais écrit**~~ — corrigé le 2026-07-15, écriture réelle branchée sur login/notes/absences/documents/rôles (AUD-*, §9.3).
 3. **`storage.adapter.ts` no-op** (FILE-*).
 4. **Régression d'autorisation** sur la suppression de compte (DEL-*) ; revue générale nécessaire (SEC-101).
 5. Endpoints présents mais non consommés par le front : `POST /grades/:id/unlock` (NOTE-001), `GET /audit-logs/user/:userId` et variantes (utiles après AUD-*), `DELETE /users/:id` (superadmin — pas d'UI de suppression de compte dans `/superadmin/gestion`, seulement retrait de rôle).

@@ -17,6 +17,7 @@ import { type UnitOfWork } from "@application/types/unit-of-work";
 import { type AuthContext } from "@application/types/auth-context";
 import { NotFound, Forbidden, ForbiddenOwnership } from "@application/types/results";
 import { type NotificationUseCases } from "@application/notification/notification.use-cases";
+import { type AuditRecorder } from "@application/audit-log/audit-recorder";
 
 export type AbsenceView = {
     id: string;
@@ -72,6 +73,7 @@ export class AbsenceUseCases {
         private readonly instructors: InstructorRepository,
         private readonly studentGroups: StudentGroupRepository,
         private readonly notifications: NotificationUseCases,
+        private readonly auditRecorder: AuditRecorder,
     ) {}
 
     async declare(
@@ -116,8 +118,17 @@ export class AbsenceUseCases {
         if (!absence) return NotFound;
 
         if (absence.status !== BasicStatus.PENDING && !auth.isSuperAdmin) return { kind: "absence_already_processed" };
+        const previousStatus = absence.status;
         absence.status = BasicStatus.VALIDATED;
         await this.absences.save(absence);
+        await this.auditRecorder.record({
+            userId: auth.requesterId,
+            action: "VALIDATE",
+            entityName: "absence",
+            entityId: absence.id,
+            oldValue: { status: previousStatus },
+            newValue: { status: absence.status },
+        });
         const student = await this.students.findById(absence.studentId);
         if (student) {
             await this.notifications.notify({
@@ -138,8 +149,17 @@ export class AbsenceUseCases {
         if (!absence) return NotFound;
 
         if (absence.status !== BasicStatus.PENDING && !auth.isSuperAdmin) return { kind: "absence_already_processed" };
+        const previousStatus = absence.status;
         absence.status = BasicStatus.REJECTED;
         await this.absences.save(absence);
+        await this.auditRecorder.record({
+            userId: auth.requesterId,
+            action: "REJECT",
+            entityName: "absence",
+            entityId: absence.id,
+            oldValue: { status: previousStatus },
+            newValue: { status: absence.status },
+        });
         const student = await this.students.findById(absence.studentId);
         if (student) {
             await this.notifications.notify({

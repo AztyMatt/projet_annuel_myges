@@ -18,6 +18,7 @@ import { type FileRepository } from "@application/file/file.repository";
 import { type MessageRepository } from "@application/message/message.repository";
 import { type MessageReadRepository } from "@application/message/message-read/message-read.repository";
 import { type AuditLogRepository } from "@application/audit-log/audit-log.repository";
+import { type AuditRecorder } from "@application/audit-log/audit-recorder";
 import { type PasswordHasher } from "@application/auth/password-hasher.port";
 import { type TokenProvider } from "@application/auth/token-provider.port";
 import { type TotpProvider } from "@application/auth/totp-provider.port";
@@ -166,6 +167,7 @@ export class AuthUseCases {
         private readonly passwordResetTokens: PasswordResetTokenRepository,
         private readonly emailSender: EmailSender,
         private readonly frontendPublicUrl: string,
+        private readonly auditRecorder: AuditRecorder,
     ) {}
 
     private async resolveRole(userId: string): Promise<Role | undefined> {
@@ -232,11 +234,19 @@ export class AuthUseCases {
         const validPassword = await this.hasher.verify(user.passwordHash, password);
         if (!validPassword) {
             user.failedAttempts += 1;
-            if (user.failedAttempts >= MAX_FAILED_ATTEMPTS) {
+            const justLocked = user.failedAttempts >= MAX_FAILED_ATTEMPTS;
+            if (justLocked) {
                 user.lockedUntil = new Date(Date.now() + LOCK_DURATION_MS);
                 user.failedAttempts = 0;
             }
             await this.users.save(user);
+            await this.auditRecorder.record({
+                userId: user.id,
+                action: "LOGIN",
+                entityName: "user",
+                entityId: user.id,
+                newValue: { success: false, lockedUntil: justLocked ? user.lockedUntil!.toISOString() : null },
+            });
             return { kind: "invalid_credentials" };
         }
 
@@ -264,6 +274,13 @@ export class AuthUseCases {
 
         user.lastLoginAt = new Date();
         await this.users.save(user);
+        await this.auditRecorder.record({
+            userId: user.id,
+            action: "LOGIN",
+            entityName: "user",
+            entityId: user.id,
+            newValue: { success: true },
+        });
         return this.authenticated(user, role);
     }
 
@@ -287,6 +304,13 @@ export class AuthUseCases {
         if (!role) return { kind: "invalid_2fa_session" };
         user.lastLoginAt = new Date();
         await this.users.save(user);
+        await this.auditRecorder.record({
+            userId: user.id,
+            action: "LOGIN",
+            entityName: "user",
+            entityId: user.id,
+            newValue: { success: true },
+        });
         return this.authenticated(user, role);
     }
 
@@ -378,11 +402,20 @@ export class AuthUseCases {
     }
 
     private async applyPasswordUpdate(user: User, newPassword: string): Promise<ResetPasswordResult> {
+        const previousPasswordUpdatedAt = user.passwordUpdatedAt.toISOString();
         user.passwordHash = await this.hasher.hash(newPassword);
         user.passwordUpdatedAt = new Date();
         user.failedAttempts = 0;
         user.lockedUntil = null;
         await this.users.save(user);
+        await this.auditRecorder.record({
+            userId: user.id,
+            action: "UPDATE",
+            entityName: "user",
+            entityId: user.id,
+            oldValue: { passwordUpdatedAt: previousPasswordUpdatedAt },
+            newValue: { event: "password_reset", passwordUpdatedAt: user.passwordUpdatedAt.toISOString() },
+        });
         return { kind: "password_updated" };
     }
 
@@ -498,6 +531,14 @@ export class AuthUseCases {
         user.twoFactorEnabled = true;
         await this.users.save(user);
         if (input.setupSessionToken) await this.twoFactorSessions.delete(input.setupSessionToken);
+        await this.auditRecorder.record({
+            userId: user.id,
+            action: "UPDATE",
+            entityName: "user",
+            entityId: user.id,
+            oldValue: { twoFactorEnabled: false },
+            newValue: { event: "2fa_enabled", twoFactorEnabled: true },
+        });
         return { kind: "two_factor_enabled" };
     }
 
@@ -530,6 +571,19 @@ export class AuthUseCases {
         if (await this.messageReads.existsByUserId(userId)) return { kind: "user_has_message_reads" };
         if (await this.auditLogs.existsByUserId(userId)) return { kind: "user_has_audit_logs" };
         await this.users.deleteById(user.id);
+        // Auto-suppression jamais journalisée : le compte ciblé n'a par construction aucun audit log
+        // (sinon bloqué juste au-dessus), et on ne peut pas insérer une ligne référençant un userId
+        // qu'on vient de supprimer (contrainte FK audit_log.user_id -> users.id).
+        if (!isSelf) {
+            await this.auditRecorder.record({
+                userId: auth.requesterId,
+                action: "DELETE",
+                entityName: "user",
+                entityId: userId,
+                oldValue: { firstname: user.firstname, lastname: user.lastname, email: user.email },
+                newValue: { deleted: true },
+            });
+        }
         return { kind: "account_deleted" };
     }
 
