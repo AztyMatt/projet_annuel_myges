@@ -43,7 +43,12 @@ describe("Parcours métier complet : filière → session → absence → valida
         const period = await request(app)
             .post("/api/periods")
             .set("Authorization", `Bearer ${adminToken}`)
-            .send({ order: 1, startDate: "2026-09-01T00:00:00.000Z", endDate: "2027-08-31T00:00:00.000Z", academicYearId: academicYear.body.id });
+            .send({
+                order: 1,
+                startDate: "2026-09-01T00:00:00.000Z",
+                endDate: "2027-08-31T00:00:00.000Z",
+                academicYearId: academicYear.body.id,
+            });
         expect(period.status).toBe(201);
 
         const program = await request(app)
@@ -86,7 +91,13 @@ describe("Parcours métier complet : filière → session → absence → valida
         const course = await request(app)
             .post("/api/courses")
             .set("Authorization", `Bearer ${adminToken}`)
-            .send({ instructorId, moduleId: module.body.id, classId: klass.body.id, groupId: group.body.id, blocId: bloc.body.id });
+            .send({
+                instructorId,
+                moduleId: module.body.id,
+                classId: klass.body.id,
+                groupId: group.body.id,
+                blocId: bloc.body.id,
+            });
         expect(course.status).toBe(201);
 
         const campus = await request(app)
@@ -116,16 +127,13 @@ describe("Parcours métier complet : filière → session → absence → valida
 
         const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
         const anHourLater = new Date(yesterday.getTime() + 60 * 60 * 1000);
-        const session = await request(app)
-            .post("/api/sessions")
-            .set("Authorization", `Bearer ${adminToken}`)
-            .send({
-                courseId: course.body.id,
-                startTime: yesterday.toISOString(),
-                endTime: anHourLater.toISOString(),
-                mode: "ON_SITE",
-                classroomId: classroom.body.id,
-            });
+        const session = await request(app).post("/api/sessions").set("Authorization", `Bearer ${adminToken}`).send({
+            courseId: course.body.id,
+            startTime: yesterday.toISOString(),
+            endTime: anHourLater.toISOString(),
+            mode: "ON_SITE",
+            classroomId: classroom.body.id,
+        });
         expect(session.status).toBe(201);
 
         // Déclarée par l'intervenant du cours — la déclaration d'absence est réservée au staff (§ règle métier, CLAUDE.md)

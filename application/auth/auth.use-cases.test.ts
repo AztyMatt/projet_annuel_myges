@@ -88,7 +88,12 @@ describe("AuthUseCases.login", () => {
 
     it("demande le code TOTP si la 2FA est activée sur le compte", async () => {
         const { authUseCases, users, students } = buildAuthUseCases();
-        const user = buildUser({ id: "u1", email: "student@myges.fr", twoFactorEnabled: true, twoFactorSecret: "secret" });
+        const user = buildUser({
+            id: "u1",
+            email: "student@myges.fr",
+            twoFactorEnabled: true,
+            twoFactorSecret: "secret",
+        });
         users.set(user.id, user);
         students.set("s1", { id: "s1", userId: "u1", programId: "prog1" });
 

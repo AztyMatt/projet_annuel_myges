@@ -95,5 +95,10 @@ export function buildAbsenceUseCases() {
         notifications.useCases,
     );
 
-    return { absenceUseCases, absences: absences.absences, students: students.students, sentNotifications: notifications.sent };
+    return {
+        absenceUseCases,
+        absences: absences.absences,
+        students: students.students,
+        sentNotifications: notifications.sent,
+    };
 }

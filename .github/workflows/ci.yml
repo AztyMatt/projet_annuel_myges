@@ -6,8 +6,83 @@ on:
     branches: [main, develop]
 
 jobs:
+  quality:
+    name: Lint & Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # tsc -b type-check domain + application + backend ensemble (project references) —
+      # c'est aussi ce que fait le build de l'image Docker prod, donc une erreur ici aurait
+      # de toute façon fait échouer le build plus loin dans le pipeline.
+      - name: Typecheck backend (domain + application + express)
+        run: npm run build:express
+
+      - name: Typecheck frontend
+        run: npx tsc --noEmit
+        working-directory: infrastructure/frontend/next
+
+      - name: Lint frontend
+        run: npm run lint --workspace=@myges/next
+
+  test:
+    name: Unit & API tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: myges_test
+          POSTGRES_USER: myges
+          POSTGRES_PASSWORD: myges_ci_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U myges -d myges_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DB_HOST: localhost
+      DB_PORT: 5432
+      POSTGRES_DB: myges_test
+      POSTGRES_USER: myges
+      POSTGRES_PASSWORD: myges_ci_password
+      JWT_SECRET: ci-only-secret-not-for-production
+      CRON_SECRET: ci-only-cron-secret
+      FRONTEND_PUBLIC_URL: http://localhost:3000
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # npm test (Vitest) crée/migre myges_test via globalSetup — le service Postgres ci-dessus
+      # sert de base, pas besoin de docker compose ici (tests unitaires + tests API Supertest
+      # contre l'app Express directement, sans passer par un vrai serveur HTTP).
+      - name: Run unit and API tests
+        run: npm test
+
   build:
     name: ${{ github.ref == 'refs/heads/main' && 'Build & Push' || 'Build' }} ${{ matrix.service }}
+    needs: [quality, test]
     runs-on: ubuntu-latest
     permissions:
       contents: read

@@ -227,7 +227,12 @@ export function createFakeTwoFactorSessionRepository() {
     let counter = 0;
     const repo: TwoFactorSessionRepository = {
         async create(userId) {
-            const session: TwoFactorSession = { token: `2fa-token-${++counter}`, userId, attempts: 0, createdAt: new Date() };
+            const session: TwoFactorSession = {
+                token: `2fa-token-${++counter}`,
+                userId,
+                attempts: 0,
+                createdAt: new Date(),
+            };
             sessions.set(session.token, session);
             return session;
         },
@@ -255,7 +260,12 @@ export function createFakePasswordResetTokenRepository() {
     let counter = 0;
     const repo: PasswordResetTokenRepository = {
         async create(userId, purpose) {
-            const token: PasswordResetToken = { token: `reset-token-${++counter}`, userId, purpose, createdAt: new Date() };
+            const token: PasswordResetToken = {
+                token: `reset-token-${++counter}`,
+                userId,
+                purpose,
+                createdAt: new Date(),
+            };
             tokens.set(token.token, token);
             return token;
         },
@@ -269,7 +279,8 @@ export function createFakePasswordResetTokenRepository() {
             for (const [token, entry] of tokens) if (entry.userId === userId) tokens.delete(token);
         },
         async deleteOlderThan(cutoff, purpose) {
-            for (const [token, entry] of tokens) if (entry.purpose === purpose && entry.createdAt < cutoff) tokens.delete(token);
+            for (const [token, entry] of tokens)
+                if (entry.purpose === purpose && entry.createdAt < cutoff) tokens.delete(token);
         },
     };
     return { repo, tokens };

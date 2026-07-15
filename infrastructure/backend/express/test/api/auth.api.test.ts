@@ -3,7 +3,13 @@ import request from "supertest";
 import { app } from "@express/src/app";
 import { pool } from "@express/src/postgres/db";
 import { resetTestDatabase } from "./reset-database";
-import { createTestStudent, createTestSuperAdmin, createTestUserWithoutRole, generateTotpCode, TEST_ACCOUNT_PASSWORD } from "./seed-test-accounts";
+import {
+    createTestStudent,
+    createTestSuperAdmin,
+    createTestUserWithoutRole,
+    generateTotpCode,
+    TEST_ACCOUNT_PASSWORD,
+} from "./seed-test-accounts";
 
 beforeAll(async () => {
     await resetTestDatabase();
@@ -26,18 +32,22 @@ describe("Auth API — inscription et connexion", () => {
         expect(signupResponse.status).toBe(201);
         expect(signupResponse.body.email).toBe(email);
 
-        const loginResponse = await request(app).post("/api/auth/login").send({ email, password: TEST_ACCOUNT_PASSWORD });
+        const loginResponse = await request(app)
+            .post("/api/auth/login")
+            .send({ email, password: TEST_ACCOUNT_PASSWORD });
         expect(loginResponse.status).toBe(403);
         expect(loginResponse.body.error).toMatch(/attente/i);
     });
 
     it("POST /auth/signup refuse un consentement RGPD manquant", async () => {
-        const response = await request(app).post("/api/auth/signup").send({
-            firstname: "Sans",
-            lastname: "Consentement",
-            email: `sans-consentement-${Date.now()}@myges-test.fr`,
-            password: TEST_ACCOUNT_PASSWORD,
-        });
+        const response = await request(app)
+            .post("/api/auth/signup")
+            .send({
+                firstname: "Sans",
+                lastname: "Consentement",
+                email: `sans-consentement-${Date.now()}@myges-test.fr`,
+                password: TEST_ACCOUNT_PASSWORD,
+            });
         expect(response.status).toBe(400);
     });
 
