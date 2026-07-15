@@ -4,18 +4,20 @@ import { useEffect, useState } from "react";
 import { Plus, ChevronDown, ChevronUp, X, Trash2 } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import { useToast } from "@/components/ui/toast";
+import { buildStudentNameMap, formatStudentName } from "@/lib/user-names";
 
 type Program = { id: string; name: string };
 type Class = { id: string; number: number; programId: string; size: number; conversationId: string };
 type Group = { id: string; classId: string; name: string };
 type StudentGroup = { id: string; studentId: string; groupId: string };
-type Student = { id: string };
+type Student = { id: string; userId: string };
 
 export default function ClassesPage() {
     const [programs, setPrograms] = useState<Program[]>([]);
     const [programId, setProgramId] = useState("");
     const [classes, setClasses] = useState<Class[]>([]);
     const [students, setStudents] = useState<Student[]>([]);
+    const [studentNames, setStudentNames] = useState<Record<string, string>>({});
     const [groups, setGroups] = useState<Record<string, Group[]>>({});
     const [studentGroups, setStudentGroups] = useState<Record<string, StudentGroup[]>>({});
     const [expandedClass, setExpandedClass] = useState<string | null>(null);
@@ -44,6 +46,7 @@ export default function ClassesPage() {
                 const [p, s] = await Promise.all([api.get<Program[]>("/programs"), api.get<Student[]>("/students")]);
                 setPrograms(p);
                 setStudents(s);
+                void buildStudentNameMap(s.map((student) => student.id)).then(setStudentNames);
                 if (p[0]) {
                     setProgramId(p[0].id);
                     await loadClasses(p[0].id);
@@ -181,7 +184,7 @@ export default function ClassesPage() {
                                                         <div className="space-y-1">
                                                             {(studentGroups[group.id] ?? []).map((sg) => (
                                                                 <div key={sg.id} className="flex items-center gap-2 text-xs bg-white border border-gray-100 rounded-lg px-2.5 py-1.5">
-                                                                    <span className="flex-1 text-gray-600">Étudiant #{sg.studentId.slice(0, 8)}</span>
+                                                                    <span className="flex-1 text-gray-600">{formatStudentName(sg.studentId, studentNames)}</span>
                                                                     <button onClick={() => void handleRemoveStudent(group.id, sg.id)} className="text-gray-400 hover:text-red-600">
                                                                         <Trash2 size={11} />
                                                                     </button>
@@ -218,6 +221,7 @@ export default function ClassesPage() {
                 <AddStudentModal
                     groupId={showAddStudentFor}
                     students={students}
+                    studentNames={studentNames}
                     onClose={() => setShowAddStudentFor(null)}
                     onCreated={(sg) => { setStudentGroups((prev) => ({ ...prev, [showAddStudentFor]: [...(prev[showAddStudentFor] ?? []), sg] })); setShowAddStudentFor(null); }}
                 />
@@ -322,11 +326,13 @@ function CreateGroupModal({ classId, onClose, onCreated }: { classId: string; on
 function AddStudentModal({
     groupId,
     students,
+    studentNames,
     onClose,
     onCreated,
 }: {
     groupId: string;
     students: Student[];
+    studentNames: Record<string, string>;
     onClose: () => void;
     onCreated: (sg: StudentGroup) => void;
 }) {
@@ -356,13 +362,10 @@ function AddStudentModal({
                     <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
                 </div>
                 <div className="p-6 space-y-4">
-                    <p className="text-xs text-gray-500">
-                        Les noms d&apos;étudiants ne sont pas encore disponibles côté backend — sélection par identifiant.
-                    </p>
                     <select value={studentId} onChange={(e) => setStudentId(e.target.value)} className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none bg-white">
                         {students.length === 0 && <option value="">Aucun étudiant</option>}
                         {students.map((s) => (
-                            <option key={s.id} value={s.id}>Étudiant #{s.id.slice(0, 8)}</option>
+                            <option key={s.id} value={s.id}>{formatStudentName(s.id, studentNames)}</option>
                         ))}
                     </select>
                     {error && <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-2">{error}</p>}

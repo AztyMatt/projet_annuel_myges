@@ -3,12 +3,13 @@
 import { useEffect, useState } from "react";
 import { Plus, Pencil, X } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
+import { buildNameMap } from "@/lib/user-names";
 
 type Course = { id: string; instructorId: string; moduleId: string; groupId: string; blocId: string; conversationId: string };
 type Module = { id: string; name: string };
 type Group = { id: string; name: string; classId: string };
 type Bloc = { id: string; name: string };
-type Instructor = { id: string; contractType: string; specialties: string[] | null };
+type Instructor = { id: string; userId: string; contractType: string; specialties: string[] | null };
 
 export default function CoursPage() {
     const [courses, setCourses] = useState<Course[]>([]);
@@ -16,6 +17,7 @@ export default function CoursPage() {
     const [groups, setGroups] = useState<Group[]>([]);
     const [blocs, setBlocs] = useState<Bloc[]>([]);
     const [instructors, setInstructors] = useState<Instructor[]>([]);
+    const [instructorNames, setInstructorNames] = useState<Record<string, string>>({});
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [showCreate, setShowCreate] = useState(false);
@@ -24,6 +26,7 @@ export default function CoursPage() {
     const moduleName = (id: string) => modules.find((m) => m.id === id)?.name ?? id.slice(0, 8);
     const groupName = (id: string) => groups.find((g) => g.id === id)?.name ?? id.slice(0, 8);
     const blocName = (id: string) => blocs.find((b) => b.id === id)?.name ?? id.slice(0, 8);
+    const instructorName = (id: string) => instructorNames[id] ?? `Intervenant #${id.slice(0, 8)}`;
 
     const refresh = async () => {
         setLoading(true);
@@ -41,6 +44,7 @@ export default function CoursPage() {
             setGroups(g);
             setBlocs(b);
             setInstructors(i);
+            setInstructorNames(await buildNameMap(i, "Intervenant"));
         } catch (e) {
             setError(e instanceof ApiError ? e.message : "Impossible de charger les cours.");
         } finally {
@@ -86,7 +90,7 @@ export default function CoursPage() {
                                     <td className="px-5 py-3 font-medium text-gray-900">{moduleName(c.moduleId)}</td>
                                     <td className="px-5 py-3 text-gray-700">{groupName(c.groupId)}</td>
                                     <td className="px-5 py-3 text-gray-700">{blocName(c.blocId)}</td>
-                                    <td className="px-5 py-3 text-gray-700">Intervenant #{c.instructorId.slice(0, 8)}</td>
+                                    <td className="px-5 py-3 text-gray-700">{instructorName(c.instructorId)}</td>
                                     <td className="px-5 py-3">
                                         <button onClick={() => setEditing(c)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg">
                                             <Pencil size={13} />
@@ -108,6 +112,7 @@ export default function CoursPage() {
                     groups={groups}
                     blocs={blocs}
                     instructors={instructors}
+                    instructorNames={instructorNames}
                     onClose={() => setShowCreate(false)}
                     onSaved={() => { setShowCreate(false); void refresh(); }}
                 />
@@ -119,6 +124,7 @@ export default function CoursPage() {
                     groups={groups}
                     blocs={blocs}
                     instructors={instructors}
+                    instructorNames={instructorNames}
                     onClose={() => setEditing(null)}
                     onSaved={() => { setEditing(null); void refresh(); }}
                 />
@@ -133,6 +139,7 @@ function CourseModal({
     groups,
     blocs,
     instructors,
+    instructorNames,
     onClose,
     onSaved,
 }: {
@@ -141,6 +148,7 @@ function CourseModal({
     groups: Group[];
     blocs: Bloc[];
     instructors: Instructor[];
+    instructorNames: Record<string, string>;
     onClose: () => void;
     onSaved: () => void;
 }) {
@@ -201,7 +209,7 @@ function CourseModal({
                     <div>
                         <label className="text-xs font-medium text-gray-700 block mb-1">Intervenant</label>
                         <select value={instructorId} onChange={(e) => setInstructorId(e.target.value)} className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none bg-white">
-                            {instructors.map((i) => <option key={i.id} value={i.id}>Intervenant #{i.id.slice(0, 8)}</option>)}
+                            {instructors.map((i) => <option key={i.id} value={i.id}>{instructorNames[i.id] ?? `Intervenant #${i.id.slice(0, 8)}`}</option>)}
                         </select>
                         {selectedInstructor && (selectedInstructor.specialties ?? []).length > 0 && (
                             <p className="text-xs text-gray-400 mt-1">
