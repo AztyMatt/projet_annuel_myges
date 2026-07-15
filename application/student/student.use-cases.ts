@@ -12,6 +12,7 @@ import { type CourseRepository } from "@application/course/course.repository";
 import { type InstructorRepository } from "@application/instructor/instructor.repository";
 import { NotFound, Forbidden } from "@application/types/results";
 import { type AuthContext } from "@application/types/auth-context";
+import { type AuditRecorder } from "@application/audit-log/audit-recorder";
 
 export type StudentView = { id: string; userId: string; programId: string };
 
@@ -56,6 +57,7 @@ export class StudentUseCases {
         private readonly programs: ProgramRepository,
         private readonly courses: CourseRepository,
         private readonly instructors: InstructorRepository,
+        private readonly auditRecorder: AuditRecorder,
     ) {}
 
     async create(input: { userId?: string; programId?: string }, auth: AuthContext): Promise<CreateStudentResult> {
@@ -67,6 +69,13 @@ export class StudentUseCases {
         if (await this.students.findByUserId(userId)) return { kind: "user_already_student" };
         const student: Student = { id: randomUUID(), userId, programId };
         await this.students.save(student);
+        await this.auditRecorder.record({
+            userId: auth.requesterId,
+            action: "CREATE",
+            entityName: "student",
+            entityId: student.id,
+            newValue: { userId: student.userId, programId: student.programId },
+        });
         return { kind: "student_created", student: toView(student) };
     }
 
@@ -75,8 +84,17 @@ export class StudentUseCases {
         const student = await this.students.findById(id);
         if (!student) return NotFound;
         if (input.programId !== undefined && !(await this.programs.findById(input.programId))) return { kind: "program_not_found" };
+        const previousProgramId = student.programId;
         if (input.programId !== undefined) student.programId = input.programId;
         await this.students.save(student);
+        await this.auditRecorder.record({
+            userId: auth.requesterId,
+            action: "UPDATE",
+            entityName: "student",
+            entityId: student.id,
+            oldValue: { programId: previousProgramId },
+            newValue: { programId: student.programId },
+        });
         return { kind: "student_updated", student: toView(student) };
     }
 
@@ -97,6 +115,14 @@ export class StudentUseCases {
         if (inAssessmentGroups) return { kind: "student_in_assessment_groups" };
         if (hasDocuments) return { kind: "student_has_documents" };
         await this.students.deleteById(id);
+        await this.auditRecorder.record({
+            userId: auth.requesterId,
+            action: "DELETE",
+            entityName: "student",
+            entityId: student.id,
+            oldValue: { userId: student.userId, programId: student.programId },
+            newValue: { deleted: true },
+        });
         return { kind: "student_deleted" };
     }
 

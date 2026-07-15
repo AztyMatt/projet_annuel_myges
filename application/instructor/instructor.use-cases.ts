@@ -7,6 +7,7 @@ import { type SessionExamInstructorRepository } from "@application/session/sessi
 import { type UserRepository } from "@application/auth/user.repository";
 import { type AuthContext } from "@application/types/auth-context";
 import { NotFound, Forbidden } from "@application/types/results";
+import { type AuditRecorder } from "@application/audit-log/audit-recorder";
 
 export type InstructorView = {
     id: string;
@@ -45,6 +46,7 @@ export class InstructorUseCases {
         private readonly courses: CourseRepository,
         private readonly sessionExamInstructors: SessionExamInstructorRepository,
         private readonly users: UserRepository,
+        private readonly auditRecorder: AuditRecorder,
     ) {}
 
     async create(input: {
@@ -67,6 +69,13 @@ export class InstructorUseCases {
             specialties: specialties ?? null,
         };
         await this.instructors.save(instructor);
+        await this.auditRecorder.record({
+            userId: auth.requesterId,
+            action: "CREATE",
+            entityName: "instructor",
+            entityId: instructor.id,
+            newValue: { userId: instructor.userId, contractType: instructor.contractType },
+        });
         return { kind: "instructor_created", instructor: toView(instructor) };
     }
 
@@ -78,9 +87,18 @@ export class InstructorUseCases {
         if (!auth.isAdmin) return Forbidden;
         const instructor = await this.instructors.findById(id);
         if (!instructor) return NotFound;
+        const previous = { contractType: instructor.contractType, specialties: (instructor.specialties ?? []).join(", ") || null };
         if (input.contractType !== undefined) instructor.contractType = input.contractType;
         if (input.specialties !== undefined) instructor.specialties = input.specialties ?? null;
         await this.instructors.save(instructor);
+        await this.auditRecorder.record({
+            userId: auth.requesterId,
+            action: "UPDATE",
+            entityName: "instructor",
+            entityId: instructor.id,
+            oldValue: previous,
+            newValue: { contractType: instructor.contractType, specialties: (instructor.specialties ?? []).join(", ") || null },
+        });
         return { kind: "instructor_updated", instructor: toView(instructor) };
     }
 
@@ -95,6 +113,14 @@ export class InstructorUseCases {
         if (hasCourses) return { kind: "instructor_has_courses" };
         if (hasSessionExams) return { kind: "instructor_has_session_exams" };
         await this.instructors.deleteById(id);
+        await this.auditRecorder.record({
+            userId: auth.requesterId,
+            action: "DELETE",
+            entityName: "instructor",
+            entityId: instructor.id,
+            oldValue: { userId: instructor.userId, contractType: instructor.contractType },
+            newValue: { deleted: true },
+        });
         return { kind: "instructor_deleted" };
     }
 

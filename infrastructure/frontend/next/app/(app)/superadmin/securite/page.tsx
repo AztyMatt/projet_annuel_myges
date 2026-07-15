@@ -35,6 +35,7 @@ const PAGE_SIZE = 20;
 
 export default function SecuriteSuperAdmin() {
     const [logs, setLogs] = useState<AuditLog[]>([]);
+    const [names, setNames] = useState<Record<string, string>>({});
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -53,6 +54,18 @@ export default function SecuriteSuperAdmin() {
             try {
                 const data = await api.get<AuditLog[]>("/audit-logs");
                 setLogs(data.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+
+                const uniqueUserIds = Array.from(new Set(data.map((log) => log.userId)));
+                const resolved = await Promise.all(
+                    uniqueUserIds.map(async (userId) => {
+                        const name = await api
+                            .get<{ firstname: string; lastname: string }>(`/users/${userId}`)
+                            .then((u) => `${u.firstname} ${u.lastname}`)
+                            .catch(() => null);
+                        return [userId, name] as const;
+                    }),
+                );
+                setNames(Object.fromEntries(resolved.filter((entry): entry is [string, string] => entry[1] !== null)));
             } catch (e) {
                 setError(e instanceof ApiError ? e.message : "Impossible de charger l'audit-log.");
             } finally {
@@ -64,7 +77,12 @@ export default function SecuriteSuperAdmin() {
 
     const filtered = useMemo(() => {
         return logs.filter((log) => {
-            if (userFilter && !log.userId.toLowerCase().includes(userFilter.toLowerCase())) return false;
+            if (userFilter) {
+                const needle = userFilter.toLowerCase();
+                const matchesId = log.userId.toLowerCase().includes(needle);
+                const matchesName = (names[log.userId] ?? "").toLowerCase().includes(needle);
+                if (!matchesId && !matchesName) return false;
+            }
             if (entityFilter && !log.entityName.toLowerCase().includes(entityFilter.toLowerCase())) return false;
             if (actionFilter !== "all" && log.action !== actionFilter) return false;
             const createdAt = new Date(log.createdAt);
@@ -72,7 +90,7 @@ export default function SecuriteSuperAdmin() {
             if (dateTo && createdAt > new Date(`${dateTo}T23:59:59`)) return false;
             return true;
         });
-    }, [logs, userFilter, entityFilter, actionFilter, dateFrom, dateTo]);
+    }, [logs, names, userFilter, entityFilter, actionFilter, dateFrom, dateTo]);
 
     const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
     const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -91,8 +109,7 @@ export default function SecuriteSuperAdmin() {
             <div>
                 <h2 className="text-2xl font-bold text-gray-900">Sécurité — Audit et traçabilité</h2>
                 <p className="text-sm text-gray-500 mt-1">
-                    Consultation seule des événements consignés (§3.8). Les noms d&apos;utilisateurs ne sont pas encore
-                    résolus côté backend : les identifiants bruts sont affichés (voir CLAUDE.md).
+                    Consultation seule des événements consignés (§3.8).
                 </p>
             </div>
 
@@ -101,12 +118,12 @@ export default function SecuriteSuperAdmin() {
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-3 items-end">
                     <div>
-                        <label className="text-xs font-medium text-gray-500">Utilisateur (ID)</label>
+                        <label className="text-xs font-medium text-gray-500">Utilisateur</label>
                         <input
                             type="text"
                             value={userFilter}
                             onChange={(e) => { setUserFilter(e.target.value); setPage(1); }}
-                            placeholder="uuid…"
+                            placeholder="nom ou uuid…"
                             className="mt-1 w-full px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500/20"
                         />
                     </div>
@@ -185,7 +202,9 @@ export default function SecuriteSuperAdmin() {
                                             <td className="px-5 py-3 text-gray-500 whitespace-nowrap">
                                                 {new Date(log.createdAt).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })}
                                             </td>
-                                            <td className="px-5 py-3 text-gray-700">Utilisateur #{log.userId.slice(0, 8)}</td>
+                                            <td className="px-5 py-3 text-gray-700">
+                                                {names[log.userId] ?? `Utilisateur #${log.userId.slice(0, 8)}`}
+                                            </td>
                                             <td className="px-5 py-3">
                                                 <StatusBadge tone={actionConfig[log.action]}>{log.action}</StatusBadge>
                                             </td>
