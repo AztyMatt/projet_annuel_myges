@@ -38,9 +38,6 @@ spec:
           containers:
             - name: offsite
               image: rclone/rclone:1
-              envFrom:
-                - secretRef:
-                    name: backend-generated-secrets
               env:
                 - name: RCLONE_CONFIG_B2_TYPE
                   value: s3
@@ -51,23 +48,28 @@ spec:
                 - name: RCLONE_CONFIG_B2_ACCESS_KEY_ID
                   valueFrom:
                     secretKeyRef:
-                      name: backend-generated-secrets
+                      name: backup-s3-secrets
                       key: BACKUP_S3_ACCESS_KEY
                 - name: RCLONE_CONFIG_B2_SECRET_ACCESS_KEY
                   valueFrom:
                     secretKeyRef:
-                      name: backend-generated-secrets
+                      name: backup-s3-secrets
                       key: BACKUP_S3_SECRET_KEY
                 - name: RCLONE_CONFIG_B2_ENDPOINT
                   valueFrom:
                     secretKeyRef:
-                      name: backend-generated-secrets
+                      name: backup-s3-secrets
                       key: BACKUP_S3_ENDPOINT
                 - name: RCLONE_CONFIG_B2_REGION
                   valueFrom:
                     secretKeyRef:
-                      name: backend-generated-secrets
+                      name: backup-s3-secrets
                       key: BACKUP_S3_REGION
+                - name: BACKUP_S3_BUCKET
+                  valueFrom:
+                    secretKeyRef:
+                      name: backup-s3-secrets
+                      key: BACKUP_S3_BUCKET
               command:
                 - sh
                 - -c
