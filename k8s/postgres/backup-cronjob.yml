@@ -1,0 +1,96 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: postgres-backup
+  namespace: postgres
+spec:
+  schedule: "0 2 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 10
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: OnFailure
+          initContainers:
+            - name: dump
+              image: postgres:16-alpine
+              envFrom:
+                - secretRef:
+                    name: postgres-generated-secrets
+              command:
+                - sh
+                - -c
+                - |
+                  set -eu
+                  export PGPASSWORD="$POSTGRES_PASSWORD"
+                  TS=$(date +%Y%m%d-%H%M%S)
+                  DEST="/backups/myges-$TS.dump"
+                  echo "[dump] $POSTGRES_DB -> $DEST"
+                  pg_dump \
+                    -h postgres.postgres.svc.cluster.local \
+                    -U "$POSTGRES_USER" \
+                    -d "$POSTGRES_DB" \
+                    -F c \
+                    -f "$DEST"
+                  echo "[dump] prune local > 14 jours"
+                  find /backups -name 'myges-*.dump' -mtime +14 -delete
+                  echo "[dump] ok: $DEST ($(du -h "$DEST" | cut -f1))"
+              volumeMounts:
+                - name: backups
+                  mountPath: /backups
+          containers:
+            - name: offsite
+              image: rclone/rclone:1
+              envFrom:
+                - secretRef:
+                    name: postgres-generated-secrets
+              env:
+                - name: RCLONE_CONFIG_B2_TYPE
+                  value: s3
+                - name: RCLONE_CONFIG_B2_PROVIDER
+                  value: Other
+                - name: RCLONE_CONFIG_B2_ACL
+                  value: private
+                - name: RCLONE_CONFIG_B2_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: postgres-generated-secrets
+                      key: BACKUP_S3_ACCESS_KEY
+                - name: RCLONE_CONFIG_B2_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: postgres-generated-secrets
+                      key: BACKUP_S3_SECRET_KEY
+                - name: RCLONE_CONFIG_B2_ENDPOINT
+                  valueFrom:
+                    secretKeyRef:
+                      name: postgres-generated-secrets
+                      key: BACKUP_S3_ENDPOINT
+                - name: RCLONE_CONFIG_B2_REGION
+                  valueFrom:
+                    secretKeyRef:
+                      name: postgres-generated-secrets
+                      key: BACKUP_S3_REGION
+              command:
+                - sh
+                - -c
+                - |
+                  set -eu
+                  echo "[offsite] push -> b2:$BACKUP_S3_BUCKET/postgres"
+                  rclone copy /backups "b2:$BACKUP_S3_BUCKET/postgres" \
+                    --s3-no-check-bucket \
+                    --stats-one-line -v
+                  echo "[offsite] prune distant > 30 jours"
+                  rclone delete "b2:$BACKUP_S3_BUCKET/postgres" \
+                    --min-age 30d --s3-no-check-bucket -v
+                  echo "[offsite] ok"
+              volumeMounts:
+                - name: backups
+                  mountPath: /backups
+          volumes:
+            - name: backups
+              persistentVolumeClaim:
+                claimName: postgres-backups
