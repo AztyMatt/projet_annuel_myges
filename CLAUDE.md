@@ -107,10 +107,10 @@ Next.js (frontend) · Express.js (backend) · PostgreSQL + Drizzle (ORM) · Dock
 
 ## 5. Tests
 
-- [ ] Tests unitaires — **aucun test trouvé dans le repo**, aucune dépendance de test installée (pas de vitest/jest dans `package.json`)
-- [ ] Tests fonctionnels (API) — aucun
-- [ ] Tests d'interface (E2E) — aucun (pas de Playwright/Cypress)
-- [ ] Intégration dans la CI — `ci.yml` ne fait que builder les images Docker, **aucune étape de test ni de lint n'est exécutée**
+- [x] **Tests unitaires (2026-07-15)** — Vitest, 71 tests : `domain/auth/{security-policy,authorization-policy}.test.ts` (règles pures) + `application/{auth,grade,absence}/*.use-cases.test.ts` (doubles en mémoire, voir `*.use-cases.fakes.ts` et `test/fakes/not-implemented.ts` pour le pattern de stub réutilisable). `npm test` à la racine (nécessite `docker compose up -d postgres`, config dans `.env.test.local`).
+- [x] **Tests fonctionnels API (2026-07-15)** — Supertest contre `app` réelle + base Postgres dédiée `myges_test` (créée/migrée automatiquement, jamais la base dev), 27 tests dans `infrastructure/backend/express/test/api/` : parcours auth complet (dont 2FA SUPER_ADMIN avec un vrai TOTP), RBAC sur 6 endpoints sensibles, contraintes 409 (doublon/référence), fil rouge métier complet (filière → session → absence → validation) via la vraie API HTTP.
+- [~] **Tests d'interface E2E (2026-07-15)** — Playwright, 5 tests dans `infrastructure/frontend/next/e2e/` (`npm run test:e2e`, nécessite la stack dev démarrée) : connexion (erreur + succès), garde de route par rôle dans un vrai navigateur, saisie d'une note par un intervenant relue par l'étudiant dans une session isolée. **Pas encore branché en CI** (`CICD-003`, décision assumée — voir roadmap §9.9).
+- [x] **Intégration CI (2026-07-15)** — `.github/workflows/ci.yml` : job `quality` (typecheck backend+frontend, lint frontend) + job `test` (Vitest avec service Postgres) exécutés **avant** le build Docker, qui ne se déclenche plus si l'un des deux échoue (`needs: [quality, test]`). `prettier --check` volontairement laissé hors CI : 166 fichiers préexistants jamais formatés y échoueraient pour un motif sans rapport avec le code en cours — décision d'équipe à prendre avant de l'activer. Lint backend et Playwright en CI restent à faire.
 
 ## 6. Observabilité
 

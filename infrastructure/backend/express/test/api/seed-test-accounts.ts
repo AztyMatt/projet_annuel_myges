@@ -102,7 +102,12 @@ async function getOrCreateTestProgram(): Promise<string> {
     };
     await periodRepository.save(period);
 
-    const program: Program = { id: randomUUID(), name: "Programme de test", code: `TEST-${randomUUID().slice(0, 8)}`, periodId: period.id };
+    const program: Program = {
+        id: randomUUID(),
+        name: "Programme de test",
+        code: `TEST-${randomUUID().slice(0, 8)}`,
+        periodId: period.id,
+    };
     await programRepository.save(program);
 
     cachedProgramId = program.id;

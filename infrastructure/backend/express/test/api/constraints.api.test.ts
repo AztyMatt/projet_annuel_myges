@@ -32,10 +32,16 @@ describe("Contraintes — création en doublon", () => {
             contactName: "Contact Test",
         };
 
-        const first = await request(app).post("/api/companies").set("Authorization", `Bearer ${adminToken}`).send(company);
+        const first = await request(app)
+            .post("/api/companies")
+            .set("Authorization", `Bearer ${adminToken}`)
+            .send(company);
         expect(first.status).toBe(201);
 
-        const second = await request(app).post("/api/companies").set("Authorization", `Bearer ${adminToken}`).send(company);
+        const second = await request(app)
+            .post("/api/companies")
+            .set("Authorization", `Bearer ${adminToken}`)
+            .send(company);
         expect(second.status).toBe(409);
         expect(second.body.type).toBe("Creation");
     });

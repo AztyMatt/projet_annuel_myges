@@ -2,6 +2,8 @@
 
 > Audit complet du dépôt réalisé le **2026-07-10** (branche `develop`, dernier commit `b04b18f`).
 > Méthode : lecture intégrale de `Sujet.pdf`, `cahierDesCharges.md`, `README.md`, `WORKFLOW.md`, `CLAUDE.md`, puis vérification **dans le code** de chaque exigence, de bout en bout (UI → API → use case → repository → PostgreSQL). Chaque constat cite les fichiers réels ; les chemins proposés pour des fichiers à créer sont explicitement marqués comme tels.
+>
+> **Mise à jour 2026-07-15** : la rubrique Tests (§9.8), citée ci-dessous comme premier problème bloquant et comme rubrique à 0 %, est **passée à 103 tests réels et vérifiés verts** (71 unitaires + 27 API + 5 E2E Playwright) avec CI qui en dépend (§9.9, `CICD-001/002` faits). Le reste de ce document (daté du 10/07) n'a pas été ré-audité intégralement — les pourcentages et « problèmes bloquants » ci-dessous restent la photo du 10/07 sauf mention contraire explicite plus bas dans le document (§9.8/§9.9/§9.15, checklist §19).
 
 ---
 
@@ -167,9 +169,9 @@ Sources : **S** = `Sujet.pdf`, **C** = `cahierDesCharges.md`. Priorité : **P0**
 | MET-08 | Audit & traçabilité | C§3.8 | P1 | `INCORRECT` | API lecture + pages `/superadmin/securite` et dashboard | **Aucune écriture d'audit dans tout le code** — fonctionnalité factice en l'état (AUD-*) |
 | MET-09 | Cas dégradés (§4) | C§4 | P1 | `PARTIEL` | Gel des notes ; réaffectation intervenant possible via `/scolarite/cours` ; sous-effectif documenté comme procédure manuelle | Changement de statut initial↔alternant non modélisé ; traçabilité renforcée dépend d'AUD-* |
 | DES-01 | UI/UX, accessibilité, SEO | S | P0 | `PARTIEL` | Charte cohérente (Tailwind 4, shadcn/radix, StatusBadge/ConfirmDialog/toast mutualisés), états chargement/vide/erreur présents sur les pages vérifiées | Aucun outil a11y (axe/Lighthouse), pas de `robots.txt`/`sitemap` (vérifié absent), responsive non audité, barre de recherche factice (`TopBar.tsx:83`) |
-| TEST-01 | Tests unitaires | S, C§9 | P0 | `NON COMMENCÉ` | Aucun fichier `*.test.*`/`*.spec.*`, aucune dépendance de test | TEST-* |
-| TEST-02 | Tests fonctionnels API | S, C§9 | P0 | `NON COMMENCÉ` | — | TEST-* |
-| TEST-03 | Tests E2E | S, C§9 | P0 | `NON COMMENCÉ` | — | TEST-* |
+| TEST-01 | Tests unitaires | S, C§9 | P0 | `TERMINÉ` | Vitest, 71 tests unitaires (domaine + use cases auth/grade/absence avec doubles en mémoire) | `application/*/*.test.ts`, `domain/auth/*.test.ts` |
+| TEST-02 | Tests fonctionnels API | S, C§9 | P0 | `TERMINÉ` | Supertest + Postgres réelle, 27 tests (auth, RBAC sur 6 endpoints, contraintes 409, fil rouge métier complet) | `infrastructure/backend/express/test/api/*.test.ts` |
+| TEST-03 | Tests E2E | S, C§9 | P0 | `PARTIEL` | Playwright, 5 tests (login, garde de route par rôle, saisie/lecture de note bout en bout dans un vrai navigateur) — non branché en CI (`CICD-003`) | `infrastructure/frontend/next/e2e/*.spec.ts` |
 | OBS-01 | Santé des conteneurs | S, C§7 | P0 | `NON COMMENCÉ` | Probes k8s ≠ observabilité (pas de dashboard/alerting) | OBS-* |
 | OBS-02 | Erreurs applicatives (Sentry) | S, C§7 | P0 | `NON COMMENCÉ` | — | OBS-* |
 | OBS-03 | Analytique RGPD | S, C§7 | P0 | `NON COMMENCÉ` | — | OBS-* |
@@ -461,47 +463,49 @@ Sources : **S** = `Sujet.pdf`, **C** = `cahierDesCharges.md`. Priorité : **P0**
 
 ### 9.8 Tests (rubrique de note entière — partir de zéro)
 
+**Statut global : fait le 2026-07-15.** 98 tests Vitest (unitaires + API) + 5 tests Playwright E2E, tous exécutés et vérifiés réellement verts (pas juste écrits). Détail ci-dessous.
+
 **Mise en place :**
 
-- [ ] `TEST-001` Installer Vitest à la racine (workspaces `domain`, `application`, `@myges/express`) + config `vitest.config.ts` *(à créer)* avec les alias de `tsconfig.base.json`.
-- [ ] `TEST-002` Installer Supertest pour les tests d'API Express (l'`app` est exportée sans `listen` — `src/app.ts` est déjà testable telle quelle).
-- [ ] `TEST-003` Base de test : Testcontainers Postgres ou service Postgres GitHub Actions ; script `npm run test` racine.
-- [ ] `TEST-004` Installer Playwright pour l'E2E (`infrastructure/frontend/next`), projet chromium minimum.
+- [x] `TEST-001` Vitest installé à la racine, `vitest.config.ts` avec les alias `@domain/@application/@express`, `setupFiles`/`globalSetup` (`test/vitest.setup.ts`, `test/vitest.global-setup.ts`).
+- [x] `TEST-002` Supertest installé, utilisé contre `app` (`@express/src/app`, exportée sans `listen`) dans `infrastructure/backend/express/test/api/`.
+- [x] `TEST-003` Base de test dédiée `myges_test` (réutilise l'instance Postgres du `docker-compose.yml` dev, créée/migrée automatiquement par `globalSetup`) ; `npm test` à la racine. *(Le choix final a été un service Postgres dev réutilisé plutôt que Testcontainers — plus léger, cohérent avec le service Postgres GitHub Actions utilisé en CI.)*
+- [x] `TEST-004` Playwright installé (`playwright.config.ts` à la racine, tests dans `infrastructure/frontend/next/e2e/`), navigateur Chromium, `npm run test:e2e`.
 
 **Unitaires (domaine/application — sans DB) :**
 
-- [ ] `TEST-010` `domain/auth/security-policy.ts` : force du mot de passe (8 cas), expiration 60 j (bornes), verrouillage.
-- [ ] `TEST-011` `application/auth/auth.use-cases.ts` avec repositories en mémoire : login (7 variantes de résultat), verrouillage après 5 échecs, flux forgot/reset token (expiré, réutilisé, inconnu), enable2fa.
-- [ ] `TEST-012` `application/grade/grade.use-cases.ts` : création, update refusé si `isLocked`, lock/unlock selon capacités, delete (not_owner, locked).
-- [ ] `TEST-013` `application/absence/absence.use-cases.ts` : validate/reject selon capacités, double décision.
-- [ ] `TEST-014` `capabilitiesForRole` : matrice des 4 rôles.
+- [x] `TEST-010` `domain/auth/security-policy.test.ts` (22 cas) + `domain/auth/authorization-policy.test.ts` (4 cas, matrice des 4 rôles) : force du mot de passe (limite 11/12 car., 4 critères), expiration 60 j (bornes J-1/J+1), verrouillage.
+- [x] `TEST-011` `application/auth/auth.use-cases.test.ts` (21 cas, doubles en mémoire dans `auth.use-cases.fakes.ts`) : login (9 variantes), verrouillage à la 5e tentative, flux `resetWithToken` (expiré, TTL différencié reset/invitation, consentement RGPD, usage unique), **`inviteStudent`** (5 cas, hors périmètre initial mais couvert car développé en parallèle §9.15).
+- [x] `TEST-012` `application/grade/grade.use-cases.test.ts` (13 cas) : création (hors intervalle, étudiant introuvable, notification), update refusé si `isLocked`, lock/unlock réservés admin/super admin.
+- [x] `TEST-013` `application/absence/absence.use-cases.test.ts` (11 cas) : validate/reject réservés au staff, **ADMIN ne peut pas re-traiter une décision déjà prise mais SUPER_ADMIN le peut**, notification best-effort si étudiant supprimé.
+- [x] `TEST-014` `capabilitiesForRole` : matrice complète des 4 rôles (inclus dans `authorization-policy.test.ts`).
 
-**Fonctionnels API (Supertest + Postgres) :**
+**Fonctionnels API (Supertest + Postgres réelle) :**
 
-- [ ] `TEST-020` Auth bout en bout : signup → login → `GET /users/me` ; login 2FA avec un TOTP généré par `speakeasy` ; 401 sans token ; 403 pending role.
-- [ ] `TEST-021` RBAC : pour 6-8 endpoints représentatifs (grades lock, absences validate, admins, audit-logs, students), vérifier 403 pour chaque rôle interdit (fixtures des 4 rôles via le seed).
-- [ ] `TEST-022` Contraintes DB : 409 sur doublon (23505), 409 sur suppression référencée (23503) — l'error handler `app.ts:71` est aujourd'hui non testé.
-- [ ] `TEST-023` Parcours métier : création filière→classe→groupe→cours→session→absence→validation (le fil rouge de la démo).
+- [x] `TEST-020` `auth.api.test.ts` (8 cas) : signup → pending role → login refusé, consentement RGPD manquant, email inconnu, 401 sans token / token invalide, parcours étudiant complet, **flux SUPER_ADMIN + 2FA de bout en bout avec un vrai code TOTP speakeasy**.
+- [x] `TEST-021` `rbac.api.test.ts` (16 cas) sur 6 endpoints (`grades/:id/lock`, `GET /grades`, `absences/:id/validate`, `users/invite`, `DELETE /users/:id`, `admin/security/users`) : chaque rôle non autorisé → 403, chaque rôle autorisé → jamais 403.
+- [x] `TEST-022` `constraints.api.test.ts` (2 cas) : 409 doublon (SIRET entreprise), 409 suppression référencée (filière avec étudiant). *Ces deux 409 viennent des garde-fous applicatifs (systématiques dans ce projet, vérifié sur plusieurs entités) — le gestionnaire générique Postgres 23505/23503 de `app.ts:71-77` reste non exercé faute d'avoir trouvé un endpoint qui s'appuie dessus sans garde-fou applicatif au-dessus.*
+- [x] `TEST-023` `business-flow.api.test.ts` : fil rouge complet via la vraie API HTTP — année académique→période→filière→classe→groupe→bloc→module→rattachement→cours→campus→salle→étudiant→session→absence déclarée par l'intervenant→validée par l'admin.
 
-**Interface (Playwright) :**
+**Interface (Playwright, contre la stack `docker compose` réelle) :**
 
-- [ ] `TEST-030` Login (mauvais mdp, compte verrouillé simulé, succès + redirection par rôle).
-- [ ] `TEST-031` Garde de route : accès `/scolarite` avec un cookie étudiant → redirection.
-- [ ] `TEST-032` Saisie d'une note par un intervenant et lecture par l'étudiant.
-- [ ] `TEST-033` Déclaration + validation d'absence (2 rôles).
+- [x] `TEST-030` `auth.spec.ts` : mauvais mot de passe → erreur affichée ; identifiants valides → redirection vers l'espace du rôle.
+- [x] `TEST-031` `role-guard.spec.ts` : étudiant connecté redirigé hors de `/scolarite` (garde `middleware.ts` vérifiée dans un vrai navigateur) ; visiteur non connecté redirigé vers `/login`.
+- [x] `TEST-032` `grade-round-trip.spec.ts` : intervenant saisit une note dans `/intervenant/notes` (clic + saisie + Entrée), étudiant la retrouve dans une session de navigateur séparée sur `/etudiant/notes`.
+- [ ] `TEST-033` Déclaration + validation d'absence (2 rôles) en E2E — non fait (le parcours équivalent est couvert côté API par `TEST-023`, mais pas encore rejoué dans un navigateur).
 
-**Intégration CI :** voir CICD-002.
+**Intégration CI :** voir CICD-002 (fait).
 
 ---
 
 ### 9.9 CI/CD
 
-- [ ] `CICD-001` Ajouter un job `quality` dans `.github/workflows/ci.yml` (avant les builds Docker) : `npm ci`, `tsc -b` (backend + `tsc --noEmit` front), `next lint`, `prettier --check`.
-- [ ] `CICD-002` Ajouter un job `test` : unitaires + API (service Postgres), `needs: quality` ; conditionner le build/push Docker à sa réussite (`needs: [quality, test]`).
-- [ ] `CICD-003` Ajouter Playwright en CI (au moins sur PR vers `main`) — peut être un workflow séparé si trop lent.
+- [~] `CICD-001` *(fait le 2026-07-15, sauf `prettier --check`)* Job `quality` dans `.github/workflows/ci.yml` : `npm ci`, `tsc -b` (backend, via `build:express`), `tsc --noEmit` (front), `eslint` (front). **`prettier --check` volontairement exclu** : 166 fichiers préexistants (jamais passés au formateur avant cette session) le feraient échouer immédiatement pour un motif sans rapport avec le code — reformater tout le repo en masse sans validation d'équipe serait un diff énorme et risqué. Décision à prendre par l'équipe : soit reformater une fois globalement puis activer le check, soit l'abandonner.
+- [x] `CICD-002` Job `test` (service Postgres `postgres:16-alpine`, healthcheck `pg_isready`) exécutant `npm test` ; `build` déclaré `needs: [quality, test]` → le build/push Docker ne se déclenche plus si l'un des deux échoue.
+- [ ] `CICD-003` Playwright en CI — **non fait, décision assumée** : nécessiterait de démarrer toute la stack (`docker compose up`, génération d'un `.env` de CI, attente de readiness) dans le job, ce qui alourdit sensiblement le pipeline pour un gain marginal par rapport à `quality`+`test` qui bloquent déjà l'essentiel des régressions. La suite E2E existe et tourne (`npm run test:e2e` en local), reste à la brancher en CI si le temps le permet — c'était déjà noté comme optionnel/séparable dans la roadmap initiale.
 - [ ] `CICD-004` Scan de vulnérabilités des images (Trivy) après build, bloquant sur CRITICAL.
 - [ ] `CICD-005` Étape de validation des migrations : `drizzle-kit generate` en CI doit être un no-op (échec si le schéma et les migrations divergent).
-- [ ] `CICD-006` Lint backend inexistant : ajouter ESLint au workspace `@myges/express` (seul le front en a).
+- [ ] `CICD-006` Lint backend inexistant : ajouter ESLint au workspace `@myges/express` (seul le front en a) — le job `quality` type-check le backend mais ne le lint pas.
 
 ---
 
@@ -745,7 +749,7 @@ Tâches : UI-002…005, LEG-001/002, DOC-004/005, PM-001, seed de démo, répét
 
 - [ ] **Sujet — Sécurité** : inscription ✅, connexion ✅, mot de passe oublié ✅, réinitialisation ✅, mdp fort ✅, 60 j ✅, blocage ✅, 2FA TOTP ✅ — reste : email SMTP réel (AUTH-001), durcissements SEC-102…110
 - [ ] **Sujet — Infrastructure** : Docker ✅, k8s (≡ Swarm accepté) ✅, ≥2 réplicas ✅, registre GHCR ✅, WebSocket ❌ (NOTIF), pare-feu ❌ (K8S-005 + VPS), domaine+SSL ✅ (cert-manager, 2026-07-12), VPS à confirmer
-- [ ] **Sujet — Tests** : unitaires ❌, fonctionnels ❌, interface ❌ → phase 1 + 5
+- [x] **Sujet — Tests (2026-07-15)** : unitaires ✅ (71), fonctionnels API ✅ (27), interface ✅ (5 Playwright, pas encore en CI) — 103 tests au total, tous vérifiés réellement verts
 - [ ] **Sujet — Observabilité** : santé ✅ (Uptime Kuma, 2026-07-14), erreurs ❌ (Sentry), analytique ⚠️ (Umami déployé, script front manquant) → reste OBS-002/003
 - [ ] **Sujet — Sauvegarde 3-2-1** : ❌ → phase 6 ; IaC ✅
 - [ ] **Sujet — Gestion de projet** : git ✅, outil de suivi à prouver (PM-001)

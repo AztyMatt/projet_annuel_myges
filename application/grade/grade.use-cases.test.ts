@@ -37,7 +37,10 @@ describe("GradeUseCases.create", () => {
         const { gradeUseCases, students, sentNotifications } = buildGradeUseCases();
         students.set("s1", { id: "s1", userId: "u1", programId: "prog1" });
 
-        const result = await gradeUseCases.create({ studentId: "s1", value: 16 }, authContext(Role.INSTRUCTOR, "instr-1"));
+        const result = await gradeUseCases.create(
+            { studentId: "s1", value: 16 },
+            authContext(Role.INSTRUCTOR, "instr-1"),
+        );
 
         expect(result.kind).toBe("grade_created");
         if (result.kind !== "grade_created") return;
@@ -64,7 +67,15 @@ describe("GradeUseCases.update", () => {
 
     it("refuse la modification d'une note gelée", async () => {
         const { gradeUseCases, grades } = buildGradeUseCases();
-        grades.set("g1", { id: "g1", studentId: "s1", value: 10, isRetake: false, isLocked: true, enteredAt: new Date(), enteredBy: "instr-1" });
+        grades.set("g1", {
+            id: "g1",
+            studentId: "s1",
+            value: 10,
+            isRetake: false,
+            isLocked: true,
+            enteredAt: new Date(),
+            enteredBy: "instr-1",
+        });
 
         const result = await gradeUseCases.update("g1", { value: 12 }, authContext(Role.INSTRUCTOR, "instr-1"));
 
@@ -73,7 +84,15 @@ describe("GradeUseCases.update", () => {
 
     it("refuse une nouvelle valeur hors intervalle", async () => {
         const { gradeUseCases, grades } = buildGradeUseCases();
-        grades.set("g1", { id: "g1", studentId: "s1", value: 10, isRetake: false, isLocked: false, enteredAt: new Date(), enteredBy: "instr-1" });
+        grades.set("g1", {
+            id: "g1",
+            studentId: "s1",
+            value: 10,
+            isRetake: false,
+            isLocked: false,
+            enteredAt: new Date(),
+            enteredBy: "instr-1",
+        });
 
         const result = await gradeUseCases.update("g1", { value: 21 }, authContext(Role.INSTRUCTOR, "instr-1"));
 
@@ -82,7 +101,15 @@ describe("GradeUseCases.update", () => {
 
     it("met à jour la valeur d'une note non verrouillée (cas nominal)", async () => {
         const { gradeUseCases, grades } = buildGradeUseCases();
-        grades.set("g1", { id: "g1", studentId: "s1", value: 10, isRetake: false, isLocked: false, enteredAt: new Date(), enteredBy: "instr-1" });
+        grades.set("g1", {
+            id: "g1",
+            studentId: "s1",
+            value: 10,
+            isRetake: false,
+            isLocked: false,
+            enteredAt: new Date(),
+            enteredBy: "instr-1",
+        });
 
         const result = await gradeUseCases.update("g1", { value: 18 }, authContext(Role.INSTRUCTOR, "instr-1"));
 
@@ -93,7 +120,15 @@ describe("GradeUseCases.update", () => {
 
 describe("GradeUseCases.lock / unlock", () => {
     const seedGrade = (grades: Map<string, import("@domain/grade/grade.entity").Grade>, isLocked: boolean) =>
-        grades.set("g1", { id: "g1", studentId: "s1", value: 10, isRetake: false, isLocked, enteredAt: new Date(), enteredBy: "instr-1" });
+        grades.set("g1", {
+            id: "g1",
+            studentId: "s1",
+            value: 10,
+            isRetake: false,
+            isLocked,
+            enteredAt: new Date(),
+            enteredBy: "instr-1",
+        });
 
     it("refuse le gel/dégel pour un intervenant (réservé admin/super admin)", async () => {
         const { gradeUseCases, grades } = buildGradeUseCases();
