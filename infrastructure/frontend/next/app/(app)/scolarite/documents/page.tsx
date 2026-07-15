@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CheckCircle, Clock, AlertTriangle, Trash2 } from "lucide-react";
+import { CheckCircle, Clock, AlertTriangle, Trash2, Eye } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import { buildStudentNameMap, formatStudentName } from "@/lib/user-names";
 import { StatusBadge, type StatusTone } from "@/components/ui/status-badge";
@@ -144,6 +144,14 @@ export default function DocumentsScolarite() {
                                             </td>
                                             <td className="px-5 py-3">
                                                 <div className="flex items-center gap-1.5">
+                                                    <a
+                                                        href={`/api/files/${r.fileId}/download`}
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                        className="flex items-center gap-1 px-2.5 py-1 text-gray-600 text-xs rounded-lg hover:bg-gray-100 font-medium"
+                                                    >
+                                                        <Eye size={13} /> Vérifier
+                                                    </a>
                                                     <button onClick={() => void handleValidate(r.id)} disabled={processingId === r.id} className="px-2.5 py-1 bg-green-600 text-white text-xs rounded-lg hover:bg-green-700 font-medium disabled:opacity-50">
                                                         Valider
                                                     </button>

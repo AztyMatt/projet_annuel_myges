@@ -26,13 +26,15 @@ Argumentation (pondérée sur les rubriques du `Sujet.pdf`, pas sur le volume de
 
 ### Problèmes bloquants (par gravité)
 
-1. **Aucun test** (unitaire, API, E2E) et **CI sans lint/typecheck/test** — rubrique entière de la grille à zéro. Aucune dépendance de test dans aucun `package.json`.
-2. **Pas de stockage réel de fichiers** : `POST /files` ne crée que des métadonnées ; `infrastructure/backend/express/src/storage/storage.adapter.ts` est un **stub no-op** (`delete()` au corps vide). Bloque justificatifs d'absence, documents administratifs, supports de cours, rendus d'évaluation, contrats d'alternance — soit 6 pages front volontairement dégradées.
-3. **Journalisation d'audit factice** (§3.8) : l'API `GET /audit-logs` et les 2 pages `/superadmin/*` existent, mais **aucune ligne de code n'écrit jamais dans la table `audit_log`** (vérifié : seuls des `SELECT` dans `application/` et `infrastructure/backend/express/src/`). Les écrans d'audit affichent une liste vide en permanence.
-4. **Régression RGPD** : le front appelle `DELETE /users/me` (`app/(app)/parametres/page.tsx:118`) mais le backend n'expose plus que `DELETE /users/:id` réservé à `SUPER_ADMIN` (`auth.use-cases.ts:467` → `if (!auth.isSuperAdmin) return Forbidden`). **L'auto-suppression de compte est cassée** depuis le refactor `e91555b`.
-5. **Bug K8s** : `k8s/backend/cleanup-cronjob.yml` appelle `http://backend…:3001/admin/auth/cleanup-sessions` **sans le préfixe `/api`** alors que tous les routeurs sont montés sous `/api` (`app.ts:65`) → le CronJob reçoit un 404 chaque nuit, les sessions 2FA expirées ne sont jamais purgées.
-6. **Aucune notification temps réel** (WebSocket) — requis par `cahierDesCharges.md` §3.1/§3.5 et cité comme service attendu par le Sujet (« Serveurs Web, WebSocket, WebRTC »).
-7. **Aucune sauvegarde** (stratégie 3-2-1, `pg_dump`, sauvegarde externe) et **aucune observabilité** (Grafana/Sentry/Matomo).
+> **Statut au 2026-07-15** : les points 1 à 5 ci-dessous, listés bloquants lors de l'audit du 10/07, sont **tous corrigés** depuis (tests §9.8, upload §9.1, audit-log §9.3, suppression de compte §9.4, CronJob §9.0). Ne restent réellement bloquants que 6 et 7. Conservé tel quel pour l'historique de l'audit.
+
+1. ~~**Aucun test**~~ — corrigé le 2026-07-15 : 103 tests (71 unitaires + 27 API + 5 E2E), CI avec job `quality` (lint/typecheck) et job `test` avant tout build Docker (§9.8/§9.9).
+2. ~~**Pas de stockage réel de fichiers**~~ — corrigé (dernières pages le 2026-07-15, `FILE-013`/`018`) : les 6 pages front sont câblées sur du réel, plus aucun message "désactivé" (§9.1).
+3. ~~**Journalisation d'audit factice**~~ — corrigé le 2026-07-15 : `AuditRecorder` branché sur login, notes, absences, documents, rôles (§9.3).
+4. ~~**Régression RGPD**~~ — corrigé le 2026-07-12 : auto-suppression de compte rétablie (§9.4, `DEL-*`).
+5. ~~**Bug K8s**~~ — corrigé le 2026-07-12 : préfixe `/api` ajouté au CronJob (§9.0, `K8S-001`).
+6. **Aucune notification temps réel** (WebSocket) — requis par `cahierDesCharges.md` §3.1/§3.5 et cité comme service attendu par le Sujet (« Serveurs Web, WebSocket, WebRTC »). Décision d'équipe : polling 30s à la place, assumé (§9.2).
+7. **Aucune sauvegarde** (stratégie 3-2-1, `pg_dump`, sauvegarde externe) et **aucune observabilité applicative** (Sentry — Uptime Kuma pour la santé et Umami pour l'analytique sont déployés, cf. §9.11). Toujours à zéro/partiel.
 
 ### Risques principaux
 
@@ -161,8 +163,8 @@ Sources : **S** = `Sujet.pdf`, **C** = `cahierDesCharges.md`. Priorité : **P0**
 | INF-10 | PostgreSQL volumes persistants | C§6 | P0 | `TERMINÉ` | PVC 5Gi `local-path` (`k8s/postgres/pvc.yml`), strategy `Recreate` | `local-path` = données liées à un seul nœud — à documenter |
 | MET-01 | Planning temps réel | C§3.1 | P1 | `PARTIEL` | CRUD sessions complet (étudiant/intervenant/scolarité, 3 pages planning) | « Temps réel » = notifications (INF-04) ; pas de gestion dédiée jours fériés/fermetures (modélisé comme modification/suppression de session, choix documenté sur `/scolarite/planning`) |
 | MET-02 | Notes : saisie, moyennes, gel, traçabilité | C§3.2 | P1 | `PARTIEL` | Saisie intervenant (`/intervenant/notes`), moyennes pondérées, gel (`POST /grades/:id/lock`), **dégel backend présent** (`unlock`) non exposé au front, **traçabilité des modifications journalisée (AUD-005, 2026-07-15)** | Distinction académique/entreprise écartée (INC-11) |
-| MET-03 | Absences : déclaration, justificatif, workflow | C§3.3 | P1 | `PARTIEL` | Déclaration + validation/rejet bout en bout (`absence/routes.ts:50-64`, pages étudiant + scolarité) ; table `file_justification` prête ; **historique des décisions journalisé (AUD-006, 2026-07-15)** | Dépôt de justificatif bloqué par l'upload (FILE-*) |
-| MET-04 | Documents : dossier centralisé, contrats, alertes | C§3.4 | P1 | `PARTIEL` | Pages `/etudiant/documents`, `/scolarite/documents`, `/scolarite/entreprises` ; statuts, validation, alertes expiration ±30 j | Upload/téléchargement réels (FILE-*) ; génération de documents officiels non commencée ; création de contrat bloquée (exige un fichier) |
+| MET-03 | Absences : déclaration, justificatif, workflow | C§3.3 | P1 | `TERMINÉ` | Déclaration + validation/rejet bout en bout (`absence/routes.ts:50-64`, pages étudiant + scolarité) ; dépôt de justificatif réel (`FILE-013`) ; historique des décisions journalisé (`AUD-006`) ; `/scolarite/absences` permet d'ouvrir le justificatif avant de décider (bouton "Vérifier", 2026-07-15) | — |
+| MET-04 | Documents : dossier centralisé, contrats, alertes | C§3.4 | P1 | `PARTIEL` | Pages `/etudiant/documents`, `/scolarite/documents`, `/scolarite/entreprises` ; statuts, validation, alertes expiration ±30 j ; upload/téléchargement réels faits (`FILE-*`) ; `/scolarite/documents` permet désormais d'ouvrir le fichier avant de le valider (bouton "Vérifier", 2026-07-15 — l'admin ne pouvait auparavant décider qu'au vu du nom de fichier) | Génération de documents officiels non commencée |
 | MET-05 | Messagerie classe/module/ciblée | C§3.5 | P1 | `PARTIEL` | `/messagerie` branchée (conversations classe/cours/privées, envoi, lu) | Noms d'utilisateurs non résolus (USR-*) ; `ADMIN` simple ne peut pas initier (endpoint `GET /admins/user/:userId` réservé SUPER_ADMIN — `admin/routes.ts:16`) ; temps réel (NOTIF-*) |
 | MET-06 | Supports & rendus TP | C§3.6 | P1 | `PARTIEL` | Bibliothèque par module, évaluations, groupes de rendu, statuts Rendu/En retard | Dépôt et téléchargement réels bloqués par FILE-* |
 | MET-07 | Gestion administrative/pédagogique | C§3.7 | P1 | `TERMINÉ` | 13 pages `/scolarite/*` (filières, blocs, modules, classes, groupes, cours, campus, salles, examens, externes, année académique) sur endpoints réels | Aide à la décision = affichage des spécialités uniquement (conforme « non automatique ») |
@@ -240,9 +242,9 @@ Sources : **S** = `Sujet.pdf`, **C** = `cahierDesCharges.md`. Priorité : **P0**
 - → Tâches **DEL-001…DEL-005** (§9.4).
 
 ### 7.4 Messagerie (§3.5)
-- **Fonctionne** : conversations classe/cours/privées reconstruites côté client, envoi, marquage lu.
-- **Dégradé** : pas de noms affichables (gap USR), `ADMIN` simple exclu de la messagerie ciblée (`GET /admins/user/:userId` réservé SUPER_ADMIN), pas de temps réel, pas d'endpoint agrégé « mes conversations » (N appels en cascade).
-- → USR-*, NOTIF-*, API-001.
+- **Fonctionne** : conversations classe/cours/privées via l'agrégat serveur `GET /conversations/mine` (2026-07-15, `API-001`) — un seul appel, noms résolus, dernier message + badge de non-lus, envoi, marquage lu.
+- **Dégradé** : pas de temps réel (polling 30s, décision d'équipe).
+- → NOTIF-* (reste).
 
 ### 7.5 Notifications temps réel (§3.1, §3.5) — `NON COMMENCÉ` côté code, listé ici car les pages hôtes existent
 - → Feature **NOTIF-001…NOTIF-012** (§9.2).
@@ -296,7 +298,7 @@ Sources : **S** = `Sujet.pdf`, **C** = `cahierDesCharges.md`. Priorité : **P0**
 
 ### 9.1 Fonctionnalité : upload et stockage réel des fichiers
 
-**Statut actuel :** partiel (métadonnées seules ; adaptateur stockage no-op).
+**Statut actuel (2026-07-15) :** fait pour les 5 usages métier — les 6 pages front qui affichaient un message "désactivé" (justificatif d'absence, documents étudiant, supports de cours, rendus d'évaluation, contrats d'alternance) ont toutes un dépôt et un téléchargement réels et vérifiés. Reste `FILE-008` (interdire `POST /files` nu), `FILE-011` (sauvegarde du volume, dépend de `BAK-*`), `FILE-012` (dropzone mutualisée — chaque page a son propre `<input type="file">`, pas bloquant) et `FILE-020…024` (tests dédiés).
 
 **Objectif fonctionnel :** permettre le dépôt, le téléchargement et la suppression physiques de fichiers pour les 5 usages métier : justificatif d'absence, document administratif étudiant, support de cours, rendu d'évaluation, contrat d'alternance.
 
@@ -320,12 +322,12 @@ Sources : **S** = `Sujet.pdf`, **C** = `cahierDesCharges.md`. Priorité : **P0**
 **Frontend :**
 
 - [ ] `FILE-012` Créer un composant dropzone mutualisé `components/ui/file-upload.tsx` *(à créer)* : sélection, barre de progression, erreurs taille/type, `fetch` multipart (le client `lib/api.ts` est JSON-only — ajouter `api.upload()`).
-- [ ] `FILE-013` `app/(app)/etudiant/absences/page.tsx` : remplacer le message « dépôt indisponible » (ligne 284) par le dépôt de justificatif → `POST /files/upload` + `POST /file-justifications`.
+- [x] `FILE-013` *(déjà fait avant cette session, trouvé lors de l'audit du 2026-07-15 — probablement livré par un autre membre de l'équipe)* `app/(app)/etudiant/absences/page.tsx` : dépôt de justificatif fonctionnel (`JustifyModal` → `POST /files/upload` puis `POST /file-justifications`), lien de téléchargement une fois déposé. Revérifié de bout en bout par API le 2026-07-15 (upload → attache → apparaît sur l'absence).
 - [x] `FILE-014` `app/(app)/etudiant/documents/page.tsx` : activer dépôt et téléchargement réels.
 - [x] `FILE-015` `app/(app)/etudiant/evaluations/page.tsx` : activer le dépôt de rendu (`POST /file-assessments` avec le `fileId` fraîchement créé) ; afficher la date de dépôt. *(2026-07-12 : dépôt fait, groupe solo auto-créé pour les évaluations individuelles ; date de dépôt non affichée, non bloquant)*
 - [x] `FILE-016` `app/(app)/intervenant/supports/page.tsx` : réactiver le dépôt de support (`POST /file-courses`).
 - [x] `FILE-017` `app/(app)/intervenant/evaluations/page.tsx` : lien de téléchargement des rendus par groupe. *(2026-07-12, nécessitait d'élargir `FileUseCases.findById` pour l'intervenant du cours et les membres du groupe)*
-- [ ] `FILE-018` `app/(app)/scolarite/entreprises/page.tsx` : débloquer la création de contrat (upload du fichier puis `POST /document-apprenticeship-contracts`).
+- [x] `FILE-018` *(fait le 2026-07-15)* `app/(app)/scolarite/entreprises/page.tsx` : bouton "Nouveau contrat" par entreprise → modale (étudiant, type, dates, fichier PDF) qui enchaîne `POST /files/upload` → `POST /file-documents` (`{fileId, studentId}`) → `POST /document-apprenticeship-contracts` (`{fileDocumentId, companyId, type, startDate, endDate}`) — le contrat nécessite un `fileDocumentId`, pas juste un `fileId` brut, contrairement au justificatif d'absence. Noms d'étudiants résolus via `lib/user-names.ts` (même pattern que `USR-106`). Sélecteur de fichier restreint au PDF (`APPRENTICESHIP_CONTRACT_POLICIES` = PDF only, 25 Mo). Vérifié par API et par navigateur réel (Playwright) : le contrat créé apparaît immédiatement dans la liste dépliée de l'entreprise.
 - [x] `FILE-019` `app/(app)/scolarite/documents/page.tsx` + `app/(app)/etudiant/cours/page.tsx` : liens de téléchargement.
 
 **Tests :**
@@ -417,21 +419,25 @@ Sources : **S** = `Sujet.pdf`, **C** = `cahierDesCharges.md`. Priorité : **P0**
 
 ### 9.5 Fonctionnalité : résolution des identités (noms affichables)
 
-**Statut actuel :** partiel — le front affiche des libellés génériques partout où un nom est attendu.
+**Statut actuel (2026-07-15) :** fait — plus aucun libellé générique de type "Étudiant #fx_stude…" trouvé sur les pages authentifiées (vérifié par grep exhaustif + navigateur réel). Reste `USR-108` (test API).
 
 **Backend :**
 
 - [x] `USR-101` *(décision prise = option B, `GET /users/:id` profil public minimal)* Décision d'API (une des deux, recommandation = A) : **(A)** joindre `firstname`/`lastname` dans les réponses `students`/`instructors`/`admins` listées par le staff ; **(B)** endpoint minimal `GET /users/:id/public` (nom seul) accessible aux authentifiés.
-- [ ] `USR-102` Implémenter la jointure dans `src/postgres/student/student.adapter.ts` et `instructor.adapter.ts` (+ vues correspondantes dans `application/student|instructor/*.use-cases.ts`).
-- [ ] `USR-103` Enrichir les messages : joindre le nom de l'expéditeur dans `message.use-cases.ts`.
-- [ ] `USR-104` Enrichir `GET /audit-logs` avec le nom de l'acteur.
-- [ ] `USR-105` Ne jamais exposer email/hash/état de verrouillage dans ces vues publiques (le hash n'est déjà jamais sérialisé — maintenir).
+- [x] `USR-102` *(fait autrement — pas de jointure serveur)* La résolution se fait entièrement côté front (voir USR-106) via `GET /users/:id`, pas par jointure dans `student.adapter.ts`/`instructor.adapter.ts`. Choix assumé : évite de complexifier les vues repository pour un besoin uniquement d'affichage ; le coût est N requêtes `GET /users/:id` côté client (mitigé par le cache module-level de `lib/user-names.ts`, partagé entre toutes les pages d'une session navigateur).
+- [x] `USR-103` *(fait le 2026-07-12)* Nom de l'expéditeur affiché sur `/messagerie` — résolution directe côté front (`Message.senderId` est déjà un `userId`), pas de jointure backend nécessaire.
+- [x] `USR-104` *(fait le 2026-07-15)* Nom de l'acteur affiché sur `/superadmin/securite` — résolu côté front (même pattern), pas de jointure sur `GET /audit-logs`.
+- [x] `USR-105` Vérifié : aucune vue publique (`findPublicProfile`, `GET /users/:id`) n'expose email/hash/verrouillage — seuls `id`/`firstname`/`lastname`.
 
 **Frontend :**
 
-- [ ] `USR-106` Remplacer les libellés génériques : `messagerie`, dashboards, `scolarite/etudiants`, `scolarite/intervenants`, `scolarite/classes`, `superadmin/securite`, `intervenant/evaluations` (membres de groupes).
-- [ ] `USR-107` `messagerie` : sélection d'un destinataire par nom (plus par ID tronqué).
-- [ ] `USR-108` Test API : un étudiant ne peut pas lister les noms de tous les étudiants hors de ses groupes (définir la portée exacte avec USR-101).
+- [x] `USR-106` *(fait le 2026-07-15)* Libellés génériques remplacés partout où un gap réel subsistait, vérifié par audit exhaustif du code (grep `Étudiant #`/`Intervenant #`/`Utilisateur #` sur tout `app/`) puis par navigateur réel (Playwright) :
+  - `messagerie`, `scolarite/etudiants`, `scolarite/intervenants`, `superadmin/securite`, `intervenant/evaluations`, `intervenant/notes`, `scolarite/absences`, `scolarite/documents`, `scolarite/examens` — **déjà faits lors de sessions précédentes** (certains via le helper partagé `lib/user-names.ts` — `resolveUserName`/`buildNameMap`/`buildStudentNameMap`/`formatStudentName`, créé entre-temps).
+  - `scolarite/cours` (nom d'intervenant en tableau + select de la modale création/édition) et `scolarite/classes` (roster d'étudiants par groupe + select "Affecter un étudiant", suppression du message obsolète "noms pas encore disponibles") — **corrigés aujourd'hui**, en réutilisant `lib/user-names.ts` pour rester cohérent avec le reste du front plutôt que dupliquer un pattern ad hoc.
+  - Dashboards : aucun gap trouvé à l'audit — les 4 dashboards (`/etudiant`, `/intervenant`, `/scolarite`, `/superadmin`) n'affichent pas de nom de tiers, à l'exception du widget "Derniers événements d'audit" de `/superadmin` qui n'affiche aujourd'hui ni id ni nom d'acteur (seulement action + entité + date) — non traité ici, hors du gap "libellé générique" (rien n'est affiché à remplacer).
+  - Colonne "Entité" de `/superadmin/securite` (`grade #fx_grade…`, `absence #fx_absen…`) : id technique de l'enregistrement concerné, volontairement non résolu en nom de personne — chaque `entityName` aurait un chemin de résolution différent (pas de champ `userId` uniforme comme pour la colonne "Utilisateur"), jugé hors scope de USR-106 (qui vise les libellés de *personnes*, pas les références d'entités).
+- [x] `USR-107` `messagerie` : sélection d'un destinataire par nom déjà fonctionnelle (`NewConversationModal` résout `firstname`/`lastname` par étudiant, repli sur id seulement en cas d'échec réseau).
+- [ ] `USR-108` Test API : un étudiant ne peut pas lister les noms de tous les étudiants hors de ses groupes (définir la portée exacte avec USR-101) — non fait, mais l'outillage `TEST-*` existe désormais pour l'écrire.
 
 **Dépendances :** aucune. Fort effet démo pour un coût modéré.
 
@@ -439,7 +445,10 @@ Sources : **S** = `Sujet.pdf`, **C** = `cahierDesCharges.md`. Priorité : **P0**
 
 ### 9.6 Fonctionnalité : messagerie — corrections ciblées
 
-- [ ] `API-001` Créer `GET /conversations/mine` (agrégat serveur : conversations + dernier message + non-lus) pour remplacer la cascade d'appels client de `app/(app)/messagerie/page.tsx` (451 lignes, en partie à cause de cette reconstruction).
+- [x] `API-001` *(fait le 2026-07-15)* `GET /conversations/mine` créé — agrégat serveur (classe/cours/privées + dernier message + compteur de non-lus), résout aussi le nom du participant privé (remplace l'ancien placeholder "Administration" y compris côté étudiant).
+  - Backend : `ConversationUseCases.listMine(auth)` (`application/conversation/conversation.use-cases.ts`) — résout les conversations de classe/cours pour un étudiant (via `student-groups` → `groups` → `classes`/`courses`), les conversations de cours pour un intervenant (`courses.findByInstructorId`), les conversations privées pour tout rôle (`conversationPrivates.findByUserId`, avec résolution du nom du second participant) ; enrichit chaque entrée avec le dernier message (`messages.findByConversationId`, le plus récent) et le nombre de non-lus (messages pas envoyés par soi et absents de `messageReads.findByUserId`) ; trie par activité la plus récente. Route `GET /conversations/mine` (`conversation/routes.ts`, positionnée **avant** `GET /conversations/:id` pour ne pas être avalée par le paramètre `:id`).
+  - Frontend : `app/(app)/messagerie/page.tsx` réécrite pour consommer ce seul endpoint au lieu de la cascade (`students/me` → `student-groups` → `groups` → `classes`/`courses` → `modules`, ou `courses/mine` → `modules`, ou `conversation-privates/mine` → `users/:id` par entrée) ; la liste des conversations est maintenant aussi rafraîchie par polling 30s (même pattern que le fil de messages), avec badge de non-lus et aperçu du dernier message dans la sidebar — comble la limitation notée dans `CLAUDE.md` §11.2 ("aucun endpoint n'expose de compteur de non-lus, pas de badge"). Vérifié par API (3 rôles) et par navigateur réel (Playwright, 3 rôles, thread + badge).
+  - Non fait : pas de test automatisé dédié (aucune couverture Vitest/Supertest n'existait déjà sur `conversation`/`message`, cohérent avec l'état antérieur — pas une régression introduite ici).
 - [x] `API-002` Permettre à un `ADMIN` de retrouver son propre `adminId` : soit ouvrir `GET /admins/user/:userId` à l'intéressé lui-même (`admin/routes.ts:16` — vérifier `requesterId === userId`), soit ajouter `GET /admins/me`. Retire la « fonctionnalité limitée pour votre rôle ».
 - [ ] `API-003` Test API : un ADMIN non-super crée une conversation privée de bout en bout.
 
@@ -622,7 +631,7 @@ Sources : **S** = `Sujet.pdf`, **C** = `cahierDesCharges.md`. Priorité : **P0**
 3. **`storage.adapter.ts` no-op** (FILE-*).
 4. **Régression d'autorisation** sur la suppression de compte (DEL-*) ; revue générale nécessaire (SEC-101).
 5. Endpoints présents mais non consommés par le front : `POST /grades/:id/unlock` (NOTE-001), `GET /audit-logs/user/:userId` et variantes (utiles après AUD-*), `DELETE /users/:id` (superadmin — pas d'UI de suppression de compte dans `/superadmin/gestion`, seulement retrait de rôle).
-6. Pas d'endpoint agrégé pour la messagerie (API-001) ni de pagination serveur (audit-logs paginés côté client).
+6. ~~Pas d'endpoint agrégé pour la messagerie~~ — corrigé le 2026-07-15 (`API-001`) ; pas de pagination serveur (audit-logs paginés côté client).
 7. `console.*` comme seule journalisation applicative — pas de logger structuré (acceptable ; Sentry via OBS-002 comblera l'essentiel).
 8. Pas de documentation API (DOC-004).
 
@@ -703,7 +712,7 @@ Conséquence : chaque fonctionnalité listée « terminée » en §6 l'est **san
 
 1. **Code mort / vestiges** : `docker-compose.prod.yml` (INC-08) · `otplib` (TECH-005) · `.git` imbriqué front (TECH-001) · `/api/hello` (TECH-002) · assets Next par défaut (`public/*.svg`) · suppressions stagées non commitées (ancien système d'erreurs + maquette) à finaliser.
 2. **Documents** : `WORKFLOW.md` obsolète stagé (DOC-002) ; `CLAUDE.md` 3 affirmations périmées (DOC-001) ; README 2 erreurs factuelles (DOC-003).
-3. **Duplication** : résolution note→module dupliquée (2 pages) ; reconstruction des conversations côté client (API-001).
+3. **Duplication** : résolution note→module dupliquée (2 pages) ; ~~reconstruction des conversations côté client~~ (corrigé le 2026-07-15, `API-001`).
 4. **Gros fichiers** : `auth.use-cases.ts` ~500 l., `messagerie/page.tsx` 451 l., `formations/page.tsx` 442 l. — surveiller.
 5. **Typage** : excellent (0 `any`) ; unions discriminées systématiques ; TS 6 strict.
 6. **TODO/FIXME** : aucun dans le code applicatif (les limitations sont des messages UI assumés — bonne pratique).

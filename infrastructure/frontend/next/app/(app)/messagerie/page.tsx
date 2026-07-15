@@ -7,12 +7,25 @@ import { api, ApiError } from "@/lib/api";
 
 const POLL_INTERVAL_MS = 30000;
 
+type ConversationKind = "class" | "course" | "private";
+
+type ConversationSummary = {
+    conversationId: string;
+    kind: ConversationKind;
+    title: string;
+    subtitle: string;
+    lastMessage: { content: string; senderId: string; createdAt: string } | null;
+    unreadCount: number;
+};
+
 type ConversationEntry = {
     id: string; // conversationId
     label: string;
     sublabel: string;
     color: string;
     initials: string;
+    lastMessage: { content: string; senderId: string; createdAt: string } | null;
+    unreadCount: number;
 };
 
 type Message = { id: string; conversationId: string; senderId: string; content: string; createdAt: string };
@@ -43,90 +56,26 @@ function initialsOf(label: string) {
         .toUpperCase();
 }
 
-// La résolution nom/prénom à partir d'un userId n'existe pas côté backend (cf. CLAUDE.md section 10) :
-// on affiche donc le contexte de la conversation (module, classe) plutôt qu'un nom de personne.
-async function loadStudentConversations(): Promise<ConversationEntry[]> {
-    const student = await api.get<{ id: string }>("/students/me");
-    const [studentGroups, privates] = await Promise.all([
-        api.get<{ groupId: string }[]>(`/student-groups/student/${student.id}`),
-        api.get<{ conversationId: string }[]>("/conversation-privates/mine"),
-    ]);
+function colorFor(kind: ConversationKind, privateIndex: number) {
+    if (kind === "class") return "bg-emerald-500";
+    if (kind === "course") return "bg-blue-500";
+    return COLORS[privateIndex % COLORS.length];
+}
 
-    const entries: ConversationEntry[] = [];
-
-    for (const sg of studentGroups) {
-        const group = await api.get<{ classId: string }>(`/groups/${sg.groupId}`);
-        const [klass, courses] = await Promise.all([
-            api.get<{ number: number; conversationId: string }>(`/classes/${group.classId}`),
-            api.get<{ moduleId: string; conversationId: string }[]>(`/groups/${sg.groupId}/courses`),
-        ]);
-
-        entries.push({
-            id: klass.conversationId,
-            label: `Classe ${klass.number}`,
-            sublabel: "Groupe de classe",
-            color: "bg-emerald-500",
-            initials: `C${klass.number}`,
-        });
-
-        for (const course of courses) {
-            const courseModule = await api.get<{ name: string }>(`/modules/${course.moduleId}`);
-            entries.push({
-                id: course.conversationId,
-                label: courseModule.name,
-                sublabel: "Cours avec l'intervenant",
-                color: "bg-blue-500",
-                initials: initialsOf(courseModule.name),
-            });
-        }
-    }
-
-    privates.forEach((p) => {
-        entries.push({
-            id: p.conversationId,
-            label: "Administration",
-            sublabel: "Message privé",
-            color: "bg-orange-500",
-            initials: "AD",
-        });
+function toEntries(summaries: ConversationSummary[]): ConversationEntry[] {
+    let privateIndex = 0;
+    return summaries.map((s) => {
+        const color = colorFor(s.kind, s.kind === "private" ? privateIndex++ : 0);
+        return {
+            id: s.conversationId,
+            label: s.title,
+            sublabel: s.subtitle,
+            color,
+            initials: initialsOf(s.title),
+            lastMessage: s.lastMessage,
+            unreadCount: s.unreadCount,
+        };
     });
-
-    return entries;
-}
-
-async function loadInstructorConversations(): Promise<ConversationEntry[]> {
-    const courses = await api.get<{ moduleId: string; conversationId: string }[]>("/courses/mine");
-    const entries: ConversationEntry[] = [];
-    for (const course of courses) {
-        const courseModule = await api.get<{ name: string }>(`/modules/${course.moduleId}`);
-        entries.push({
-            id: course.conversationId,
-            label: courseModule.name,
-            sublabel: "Cours",
-            color: "bg-blue-500",
-            initials: initialsOf(courseModule.name),
-        });
-    }
-    return entries;
-}
-
-async function loadAdminConversations(myUserId: string): Promise<ConversationEntry[]> {
-    const privates = await api.get<{ conversationId: string; userAId: string | null; userBId: string | null }[]>(
-        "/conversation-privates/mine",
-    );
-    return Promise.all(
-        privates.map(async (p, i) => {
-            const otherUserId = p.userAId === myUserId ? p.userBId : p.userAId;
-            const label = otherUserId ? await resolveSenderName(otherUserId) : "Conversation privée";
-            return {
-                id: p.conversationId,
-                label,
-                sublabel: "Message privé",
-                color: COLORS[i % COLORS.length],
-                initials: initialsOf(label),
-            };
-        }),
-    );
 }
 
 export default function Messagerie() {
@@ -156,6 +105,19 @@ export default function Messagerie() {
         meRef.current = me;
     }, [me]);
 
+    const refreshConversations = async (opts: { silent?: boolean } = {}) => {
+        try {
+            const summaries = await api.get<ConversationSummary[]>("/conversations/mine");
+            const entries = toEntries(summaries);
+            setConversations(entries);
+            if (!opts.silent) {
+                if (entries.length > 0) setActiveId((prev) => prev ?? entries[0].id);
+            }
+        } catch (error) {
+            if (!opts.silent) setLoadError(error instanceof ApiError ? error.message : "Impossible de charger vos conversations.");
+        }
+    };
+
     useEffect(() => {
         (async () => {
             setLoading(true);
@@ -163,28 +125,27 @@ export default function Messagerie() {
             try {
                 const user = await api.get<Me>("/users/me");
                 setMe(user);
+                await refreshConversations();
 
-                let entries: ConversationEntry[] = [];
-                if (user.role === "STUDENT") entries = await loadStudentConversations();
-                else if (user.role === "INSTRUCTOR") entries = await loadInstructorConversations();
-                else {
-                    entries = await loadAdminConversations(user.id);
-                    if (user.role === "ADMIN" || user.role === "SUPER_ADMIN") {
-                        await api
-                            .get("/admins/me")
-                            .then(() => setLimitedRole(false))
-                            .catch(() => setLimitedRole(user.role === "ADMIN"));
-                    }
+                if (user.role === "ADMIN" || user.role === "SUPER_ADMIN") {
+                    await api
+                        .get("/admins/me")
+                        .then(() => setLimitedRole(false))
+                        .catch(() => setLimitedRole(user.role === "ADMIN"));
                 }
-
-                setConversations(entries);
-                if (entries.length > 0) setActiveId(entries[0].id);
             } catch (error) {
                 setLoadError(error instanceof ApiError ? error.message : "Impossible de charger vos conversations.");
             } finally {
                 setLoading(false);
             }
         })();
+    }, []);
+
+    // Rafraîchit la liste des conversations (dernier message + non-lus) toutes les 30s — même
+    // décision d'équipe que le fil de la conversation active : pas de WebSocket, cf. CLAUDE.md.
+    useEffect(() => {
+        const interval = setInterval(() => void refreshConversations({ silent: true }), POLL_INTERVAL_MS);
+        return () => clearInterval(interval);
     }, []);
 
     const fetchMessages = async (conversationId: string, opts: { silent?: boolean } = {}) => {
@@ -218,6 +179,9 @@ export default function Messagerie() {
     useEffect(() => {
         if (!activeId) return;
         void fetchMessages(activeId);
+        // Ouvrir une conversation marque optimistiquement son badge à zéro — la prochaine
+        // synchronisation de refreshConversations() confirmera depuis le backend.
+        setConversations((prev) => prev.map((c) => (c.id === activeId ? { ...c, unreadCount: 0 } : c)));
         const interval = setInterval(() => void fetchMessages(activeId, { silent: true }), POLL_INTERVAL_MS);
         return () => clearInterval(interval);
     }, [activeId]);
@@ -233,6 +197,7 @@ export default function Messagerie() {
             const message = await api.post<Message>("/messages", { conversationId: activeId, content: draft.trim() });
             setMessages((prev) => [...prev, message]);
             setDraft("");
+            void refreshConversations({ silent: true });
         } catch (error) {
             setMessagesError(error instanceof ApiError ? error.message : "Envoi impossible.");
         } finally {
@@ -306,8 +271,17 @@ export default function Messagerie() {
                                         {conv.initials}
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                        <span className="font-semibold text-xs text-gray-900">{conv.label}</span>
-                                        <div className="text-xs text-gray-500 truncate mt-0.5">{conv.sublabel}</div>
+                                        <div className="flex items-center justify-between gap-2">
+                                            <span className="font-semibold text-xs text-gray-900 truncate">{conv.label}</span>
+                                            {conv.unreadCount > 0 && (
+                                                <span className="flex-shrink-0 min-w-[18px] h-[18px] px-1 rounded-full bg-[#001944] text-white text-[10px] font-bold flex items-center justify-center">
+                                                    {conv.unreadCount > 9 ? "9+" : conv.unreadCount}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="text-xs text-gray-500 truncate mt-0.5">
+                                            {conv.lastMessage ? conv.lastMessage.content : conv.sublabel}
+                                        </div>
                                     </div>
                                 </button>
                             ))}
@@ -412,13 +386,16 @@ export default function Messagerie() {
             </div>
 
             {showNewConversation && (
-                <NewConversationModal onClose={() => setShowNewConversation(false)} />
+                <NewConversationModal
+                    onClose={() => setShowNewConversation(false)}
+                    onCreated={() => { setShowNewConversation(false); void refreshConversations(); }}
+                />
             )}
         </div>
     );
 }
 
-function NewConversationModal({ onClose }: { onClose: () => void }) {
+function NewConversationModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
     const [students, setStudents] = useState<{ id: string; userId: string; label: string }[]>([]);
     const [studentUserId, setStudentUserId] = useState("");
     const [error, setError] = useState("");
@@ -454,8 +431,7 @@ function NewConversationModal({ onClose }: { onClose: () => void }) {
                 userAId: me.id,
                 userBId: studentUserId,
             });
-            onClose();
-            window.location.reload();
+            onCreated();
         } catch (e) {
             setError(e instanceof ApiError ? e.message : "Création impossible.");
         } finally {
