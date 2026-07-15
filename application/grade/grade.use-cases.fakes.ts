@@ -21,6 +21,7 @@ import { type NotificationRepository } from "@application/notification/notificat
 import { NotificationUseCases } from "@application/notification/notification.use-cases";
 import { GradeUseCases } from "@application/grade/grade.use-cases";
 import { notImplementedMethod, notImplementedRepository } from "../../test/fakes/not-implemented";
+import { createFakeAuditRecorder } from "../../test/fakes/audit-recorder";
 
 function createFakeGradeRepository() {
     const grades = new Map<string, Grade>();
@@ -81,6 +82,7 @@ export function buildGradeUseCases() {
     const grades = createFakeGradeRepository();
     const students = createFakeStudentRepository();
     const notifications = createFakeNotificationUseCases();
+    const { auditRecorder, entries: auditEntries } = createFakeAuditRecorder();
 
     const gradeUseCases = new GradeUseCases(
         grades.repo,
@@ -97,7 +99,8 @@ export function buildGradeUseCases() {
         notImplementedRepository<SessionExamStudentRepository>("sessionExamStudents"),
         notImplementedRepository<ModuleRepository>("modules"),
         notifications.useCases,
+        auditRecorder,
     );
 
-    return { gradeUseCases, grades: grades.grades, students: students.students, sentNotifications: notifications.sent };
+    return { gradeUseCases, grades: grades.grades, students: students.students, sentNotifications: notifications.sent, auditEntries };
 }
