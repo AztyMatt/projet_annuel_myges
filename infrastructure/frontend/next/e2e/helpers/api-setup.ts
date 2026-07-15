@@ -127,7 +127,10 @@ export async function createProgramChain(adminToken: string, suffix: string): Pr
     return { programId: program.id, classId: klass.id, groupId: group.id, blocId: bloc.id, moduleId: testModule.id };
 }
 
-export async function createInstructor(adminToken: string, suffix: string): Promise<{ email: string; instructorId: string }> {
+export async function createInstructor(
+    adminToken: string,
+    suffix: string,
+): Promise<{ email: string; instructorId: string }> {
     const email = `e2e-instructor-${suffix}@myges-test.fr`;
     const userId = await signup(email, "Intervenant", "E2E");
     const instructor = await api<{ id: string }>("/instructors", {
@@ -165,12 +168,22 @@ export async function createCourse(
     const course = await api<{ id: string }>("/courses", {
         method: "POST",
         token: adminToken,
-        body: { instructorId, moduleId: chain.moduleId, classId: chain.classId, groupId: chain.groupId, blocId: chain.blocId },
+        body: {
+            instructorId,
+            moduleId: chain.moduleId,
+            classId: chain.classId,
+            groupId: chain.groupId,
+            blocId: chain.blocId,
+        },
     });
     return { courseId: course.id };
 }
 
-export async function createAssessment(adminToken: string, courseId: string, suffix: string): Promise<{ assessmentId: string }> {
+export async function createAssessment(
+    adminToken: string,
+    courseId: string,
+    suffix: string,
+): Promise<{ assessmentId: string }> {
     const assessment = await api<{ id: string }>("/assessments", {
         method: "POST",
         token: adminToken,

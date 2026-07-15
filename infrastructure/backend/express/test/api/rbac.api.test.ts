@@ -58,7 +58,9 @@ describe("RBAC — POST /grades/:id/lock (réservé admin/super admin)", () => {
     });
 
     it("refuse un intervenant", async () => {
-        const res = await request(app).post("/api/grades/inconnue/lock").set("Authorization", `Bearer ${instructorToken}`);
+        const res = await request(app)
+            .post("/api/grades/inconnue/lock")
+            .set("Authorization", `Bearer ${instructorToken}`);
         expect(res.status).toBe(403);
     });
 
@@ -89,17 +91,23 @@ describe("RBAC — GET /grades (liste complète, réservé admin/super admin)", 
 
 describe("RBAC — POST /absences/:id/validate (réservé admin/super admin)", () => {
     it("refuse un étudiant", async () => {
-        const res = await request(app).post("/api/absences/inconnue/validate").set("Authorization", `Bearer ${studentToken}`);
+        const res = await request(app)
+            .post("/api/absences/inconnue/validate")
+            .set("Authorization", `Bearer ${studentToken}`);
         expect(res.status).toBe(403);
     });
 
     it("refuse un intervenant", async () => {
-        const res = await request(app).post("/api/absences/inconnue/validate").set("Authorization", `Bearer ${instructorToken}`);
+        const res = await request(app)
+            .post("/api/absences/inconnue/validate")
+            .set("Authorization", `Bearer ${instructorToken}`);
         expect(res.status).toBe(403);
     });
 
     it("laisse passer un admin (404 attendu, pas 403)", async () => {
-        const res = await request(app).post("/api/absences/inconnue/validate").set("Authorization", `Bearer ${adminToken}`);
+        const res = await request(app)
+            .post("/api/absences/inconnue/validate")
+            .set("Authorization", `Bearer ${adminToken}`);
         expect(res.status).not.toBe(403);
         expect(res.status).toBe(404);
     });
@@ -135,13 +143,17 @@ describe("RBAC — POST /users/invite (réservé admin/super admin)", () => {
 describe("RBAC — DELETE /users/:id (suppression du compte d'autrui, réservé super admin)", () => {
     it("refuse un admin simple qui tente de supprimer le compte d'un étudiant", async () => {
         const target = await createTestStudent();
-        const res = await request(app).delete(`/api/users/${target.user.id}`).set("Authorization", `Bearer ${adminToken}`);
+        const res = await request(app)
+            .delete(`/api/users/${target.user.id}`)
+            .set("Authorization", `Bearer ${adminToken}`);
         expect(res.status).toBe(403);
     });
 
     it("un super admin peut supprimer le compte d'un utilisateur sans rôle", async () => {
         const target = await createTestUserWithoutRole();
-        const res = await request(app).delete(`/api/users/${target.user.id}`).set("Authorization", `Bearer ${superAdminToken}`);
+        const res = await request(app)
+            .delete(`/api/users/${target.user.id}`)
+            .set("Authorization", `Bearer ${superAdminToken}`);
         expect(res.status).toBe(200);
     });
 });
@@ -153,7 +165,9 @@ describe("RBAC — GET /admin/security/users (réservé super admin uniquement)"
     });
 
     it("autorise un super admin", async () => {
-        const res = await request(app).get("/api/admin/security/users").set("Authorization", `Bearer ${superAdminToken}`);
+        const res = await request(app)
+            .get("/api/admin/security/users")
+            .set("Authorization", `Bearer ${superAdminToken}`);
         expect(res.status).toBe(200);
         expect(Array.isArray(res.body.users)).toBe(true);
     });
