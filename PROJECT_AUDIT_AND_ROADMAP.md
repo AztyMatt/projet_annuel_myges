@@ -240,9 +240,9 @@ Sources : **S** = `Sujet.pdf`, **C** = `cahierDesCharges.md`. Priorité : **P0**
 - → Tâches **DEL-001…DEL-005** (§9.4).
 
 ### 7.4 Messagerie (§3.5)
-- **Fonctionne** : conversations classe/cours/privées reconstruites côté client, envoi, marquage lu.
-- **Dégradé** : pas de noms affichables (gap USR), `ADMIN` simple exclu de la messagerie ciblée (`GET /admins/user/:userId` réservé SUPER_ADMIN), pas de temps réel, pas d'endpoint agrégé « mes conversations » (N appels en cascade).
-- → USR-*, NOTIF-*, API-001.
+- **Fonctionne** : conversations classe/cours/privées via l'agrégat serveur `GET /conversations/mine` (2026-07-15, `API-001`) — un seul appel, noms résolus, dernier message + badge de non-lus, envoi, marquage lu.
+- **Dégradé** : pas de temps réel (polling 30s, décision d'équipe).
+- → NOTIF-* (reste).
 
 ### 7.5 Notifications temps réel (§3.1, §3.5) — `NON COMMENCÉ` côté code, listé ici car les pages hôtes existent
 - → Feature **NOTIF-001…NOTIF-012** (§9.2).
@@ -443,7 +443,10 @@ Sources : **S** = `Sujet.pdf`, **C** = `cahierDesCharges.md`. Priorité : **P0**
 
 ### 9.6 Fonctionnalité : messagerie — corrections ciblées
 
-- [ ] `API-001` Créer `GET /conversations/mine` (agrégat serveur : conversations + dernier message + non-lus) pour remplacer la cascade d'appels client de `app/(app)/messagerie/page.tsx` (451 lignes, en partie à cause de cette reconstruction).
+- [x] `API-001` *(fait le 2026-07-15)* `GET /conversations/mine` créé — agrégat serveur (classe/cours/privées + dernier message + compteur de non-lus), résout aussi le nom du participant privé (remplace l'ancien placeholder "Administration" y compris côté étudiant).
+  - Backend : `ConversationUseCases.listMine(auth)` (`application/conversation/conversation.use-cases.ts`) — résout les conversations de classe/cours pour un étudiant (via `student-groups` → `groups` → `classes`/`courses`), les conversations de cours pour un intervenant (`courses.findByInstructorId`), les conversations privées pour tout rôle (`conversationPrivates.findByUserId`, avec résolution du nom du second participant) ; enrichit chaque entrée avec le dernier message (`messages.findByConversationId`, le plus récent) et le nombre de non-lus (messages pas envoyés par soi et absents de `messageReads.findByUserId`) ; trie par activité la plus récente. Route `GET /conversations/mine` (`conversation/routes.ts`, positionnée **avant** `GET /conversations/:id` pour ne pas être avalée par le paramètre `:id`).
+  - Frontend : `app/(app)/messagerie/page.tsx` réécrite pour consommer ce seul endpoint au lieu de la cascade (`students/me` → `student-groups` → `groups` → `classes`/`courses` → `modules`, ou `courses/mine` → `modules`, ou `conversation-privates/mine` → `users/:id` par entrée) ; la liste des conversations est maintenant aussi rafraîchie par polling 30s (même pattern que le fil de messages), avec badge de non-lus et aperçu du dernier message dans la sidebar — comble la limitation notée dans `CLAUDE.md` §11.2 ("aucun endpoint n'expose de compteur de non-lus, pas de badge"). Vérifié par API (3 rôles) et par navigateur réel (Playwright, 3 rôles, thread + badge).
+  - Non fait : pas de test automatisé dédié (aucune couverture Vitest/Supertest n'existait déjà sur `conversation`/`message`, cohérent avec l'état antérieur — pas une régression introduite ici).
 - [x] `API-002` Permettre à un `ADMIN` de retrouver son propre `adminId` : soit ouvrir `GET /admins/user/:userId` à l'intéressé lui-même (`admin/routes.ts:16` — vérifier `requesterId === userId`), soit ajouter `GET /admins/me`. Retire la « fonctionnalité limitée pour votre rôle ».
 - [ ] `API-003` Test API : un ADMIN non-super crée une conversation privée de bout en bout.
 
@@ -626,7 +629,7 @@ Sources : **S** = `Sujet.pdf`, **C** = `cahierDesCharges.md`. Priorité : **P0**
 3. **`storage.adapter.ts` no-op** (FILE-*).
 4. **Régression d'autorisation** sur la suppression de compte (DEL-*) ; revue générale nécessaire (SEC-101).
 5. Endpoints présents mais non consommés par le front : `POST /grades/:id/unlock` (NOTE-001), `GET /audit-logs/user/:userId` et variantes (utiles après AUD-*), `DELETE /users/:id` (superadmin — pas d'UI de suppression de compte dans `/superadmin/gestion`, seulement retrait de rôle).
-6. Pas d'endpoint agrégé pour la messagerie (API-001) ni de pagination serveur (audit-logs paginés côté client).
+6. ~~Pas d'endpoint agrégé pour la messagerie~~ — corrigé le 2026-07-15 (`API-001`) ; pas de pagination serveur (audit-logs paginés côté client).
 7. `console.*` comme seule journalisation applicative — pas de logger structuré (acceptable ; Sentry via OBS-002 comblera l'essentiel).
 8. Pas de documentation API (DOC-004).
 
@@ -707,7 +710,7 @@ Conséquence : chaque fonctionnalité listée « terminée » en §6 l'est **san
 
 1. **Code mort / vestiges** : `docker-compose.prod.yml` (INC-08) · `otplib` (TECH-005) · `.git` imbriqué front (TECH-001) · `/api/hello` (TECH-002) · assets Next par défaut (`public/*.svg`) · suppressions stagées non commitées (ancien système d'erreurs + maquette) à finaliser.
 2. **Documents** : `WORKFLOW.md` obsolète stagé (DOC-002) ; `CLAUDE.md` 3 affirmations périmées (DOC-001) ; README 2 erreurs factuelles (DOC-003).
-3. **Duplication** : résolution note→module dupliquée (2 pages) ; reconstruction des conversations côté client (API-001).
+3. **Duplication** : résolution note→module dupliquée (2 pages) ; ~~reconstruction des conversations côté client~~ (corrigé le 2026-07-15, `API-001`).
 4. **Gros fichiers** : `auth.use-cases.ts` ~500 l., `messagerie/page.tsx` 451 l., `formations/page.tsx` 442 l. — surveiller.
 5. **Typage** : excellent (0 `any`) ; unions discriminées systématiques ; TS 6 strict.
 6. **TODO/FIXME** : aucun dans le code applicatif (les limitations sont des messages UI assumés — bonne pratique).

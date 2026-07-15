@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { type Conversation } from "@domain/conversation/conversation.entity";
 import { GENERAL_GROUP_NAME } from "@domain/group/group.entity";
 import { type ConversationPrivate } from "@domain/conversation/conversation-private/conversation-private.entity";
+import { type Message } from "@domain/message/message.entity";
 import { type ConversationRepository } from "@application/conversation/conversation.repository";
 import { type ConversationPrivateRepository } from "@application/conversation/conversation-private/conversation-private.repository";
 import { type CourseRepository } from "@application/course/course.repository";
@@ -9,6 +10,10 @@ import { type ClassRepository } from "@application/class/class.repository";
 import { type InstructorRepository } from "@application/instructor/instructor.repository";
 import { type StudentRepository } from "@application/student/student.repository";
 import { type GroupRepository } from "@application/group/group.repository";
+import { type StudentGroupRepository } from "@application/group/student-group/student-group.repository";
+import { type ModuleRepository } from "@application/module/module.repository";
+import { type MessageRepository } from "@application/message/message.repository";
+import { type MessageReadRepository } from "@application/message/message-read/message-read.repository";
 import { type UserRepository } from "@application/auth/user.repository";
 import { type UnitOfWork } from "@application/types/unit-of-work";
 import { NotFound, Forbidden, ForbiddenOwnership } from "@application/types/results";
@@ -54,6 +59,19 @@ export type ListConversationPrivatesResult = Forbidden | {
     conversationPrivates: ConversationPrivateView[];
 };
 
+export type ConversationKind = "class" | "course" | "private";
+
+export type ConversationSummaryView = {
+    conversationId: string;
+    kind: ConversationKind;
+    title: string;
+    subtitle: string;
+    lastMessage: { content: string; senderId: string; createdAt: string } | null;
+    unreadCount: number;
+};
+
+export type ListMineConversationsResult = { kind: "conversations_listed_mine"; conversations: ConversationSummaryView[] };
+
 const toConversationView = (c: Conversation): ConversationView => ({
     id: c.id,
     createdAt: c.createdAt.toISOString(),
@@ -77,6 +95,10 @@ export class ConversationUseCases {
         private readonly students: StudentRepository,
         private readonly groups: GroupRepository,
         private readonly users: UserRepository,
+        private readonly studentGroups: StudentGroupRepository,
+        private readonly modules: ModuleRepository,
+        private readonly messages: MessageRepository,
+        private readonly messageReads: MessageReadRepository,
     ) {}
 
     private async resolveParticipants(conversationId: string): Promise<string[]> {
@@ -192,5 +214,91 @@ export class ConversationUseCases {
             kind: "conversation_privates_listed",
             conversationPrivates: entries.map(toConversationPrivateView),
         };
+    }
+
+    /**
+     * Agrégat serveur des conversations de l'utilisateur (classe, cours, privées) avec dernier
+     * message et compteur de non-lus — remplace la cascade d'appels que le front devait faire
+     * lui-même (students/me → student-groups → groups → classes/courses → modules...). Voir
+     * CLAUDE.md / PROJECT_AUDIT_AND_ROADMAP.md (API-001).
+     */
+    async listMine(auth: AuthContext): Promise<ListMineConversationsResult> {
+        type Item = { conversationId: string; kind: ConversationKind; title: string; subtitle: string };
+        const items: Item[] = [];
+
+        const student = await this.students.findByUserId(auth.requesterId);
+        if (student) {
+            const studentGroups = await this.studentGroups.findByStudentId(student.id);
+            const seenClassIds = new Set<string>();
+            for (const sg of studentGroups) {
+                const group = await this.groups.findById(sg.groupId);
+                if (!group) continue;
+                if (!seenClassIds.has(group.classId)) {
+                    seenClassIds.add(group.classId);
+                    const klass = await this.classes.findById(group.classId);
+                    if (klass) {
+                        items.push({ conversationId: klass.conversationId, kind: "class", title: `Classe ${klass.number}`, subtitle: "Groupe de classe" });
+                    }
+                }
+                const courses = await this.courses.findByGroupId(sg.groupId);
+                for (const course of courses) {
+                    const courseModule = await this.modules.findById(course.moduleId);
+                    items.push({
+                        conversationId: course.conversationId,
+                        kind: "course",
+                        title: courseModule?.name ?? "Cours",
+                        subtitle: "Cours avec l'intervenant",
+                    });
+                }
+            }
+        } else {
+            const instructor = await this.instructors.findByUserId(auth.requesterId);
+            if (instructor) {
+                const courses = await this.courses.findByInstructorId(instructor.id);
+                for (const course of courses) {
+                    const courseModule = await this.modules.findById(course.moduleId);
+                    items.push({
+                        conversationId: course.conversationId,
+                        kind: "course",
+                        title: courseModule?.name ?? "Cours",
+                        subtitle: "Cours",
+                    });
+                }
+            }
+        }
+
+        const privates = await this.conversationPrivates.findByUserId(auth.requesterId);
+        for (const priv of privates) {
+            const otherUserId = priv.userAId === auth.requesterId ? priv.userBId : priv.userAId;
+            const otherUser = otherUserId ? await this.users.findById(otherUserId) : undefined;
+            items.push({
+                conversationId: priv.conversationId,
+                kind: "private",
+                title: otherUser ? `${otherUser.firstname} ${otherUser.lastname}` : "Conversation privée",
+                subtitle: "Message privé",
+            });
+        }
+
+        const readMessageIds = new Set((await this.messageReads.findByUserId(auth.requesterId)).map((r) => r.messageId));
+        const summaries: ConversationSummaryView[] = await Promise.all(
+            items.map(async (item) => {
+                const messages = await this.messages.findByConversationId(item.conversationId);
+                const last = messages.reduce<Message | null>((latest, m) => (!latest || m.createdAt > latest.createdAt ? m : latest), null);
+                const unreadCount = messages.filter((m) => m.senderId !== auth.requesterId && !readMessageIds.has(m.id)).length;
+                return {
+                    ...item,
+                    lastMessage: last ? { content: last.content, senderId: last.senderId, createdAt: last.createdAt.toISOString() } : null,
+                    unreadCount,
+                };
+            }),
+        );
+
+        summaries.sort((a, b) => {
+            const aTime = a.lastMessage ? new Date(a.lastMessage.createdAt).getTime() : 0;
+            const bTime = b.lastMessage ? new Date(b.lastMessage.createdAt).getTime() : 0;
+            return bTime - aTime;
+        });
+
+        return { kind: "conversations_listed_mine", conversations: summaries };
     }
 }
