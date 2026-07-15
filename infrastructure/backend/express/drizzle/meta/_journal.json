@@ -57,6 +57,13 @@
       "when": 1783879426923,
       "tag": "0007_hard_night_thrasher",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1784118456112,
+      "tag": "0008_first_owl",
+      "breakpoints": true
     }
   ]
 }

@@ -11,7 +11,7 @@ export const users = pgTable("users", {
     passwordUpdatedAt: timestamp("password_updated_at", { withTimezone: true }).notNull(),
     twoFactorEnabled: boolean("two_factor_enabled").notNull().default(false),
     twoFactorSecret: text("two_factor_secret"),
-    gdprConsentAt: timestamp("gdpr_consent_at", { withTimezone: true }).notNull(),
+    gdprConsentAt: timestamp("gdpr_consent_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
     lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
 });
@@ -30,5 +30,6 @@ export const passwordResetTokens = pgTable("password_reset_tokens", {
     userId: text("user_id")
         .notNull()
         .references(() => users.id, { onDelete: "cascade" }),
+    purpose: text("purpose").notNull().default("reset"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
 });

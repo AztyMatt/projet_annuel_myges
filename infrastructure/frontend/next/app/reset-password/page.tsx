@@ -10,11 +10,15 @@ function ResetPasswordForm() {
     const searchParams = useSearchParams();
     const token = searchParams.get("token");
     const isForgotFlow = Boolean(token);
+    // Lien d'invitation envoyé par l'administration : même token que le reset, mais le compte
+    // n'a pas encore de consentement RGPD — il est recueilli ici, à l'activation.
+    const isInvitationFlow = isForgotFlow && searchParams.get("invitation") === "1";
 
     const [email, setEmail] = useState(searchParams.get("email") ?? "");
     const [oldPassword, setOldPassword] = useState("");
     const [newPassword, setNewPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
+    const [gdprConsent, setGdprConsent] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
@@ -53,6 +57,10 @@ function ResetPasswordForm() {
             setError("Les mots de passe ne correspondent pas.");
             return;
         }
+        if (isInvitationFlow && !gdprConsent) {
+            setError("Vous devez accepter le traitement de vos données pour activer votre compte.");
+            return;
+        }
 
         setLoading(true);
         setError("");
@@ -62,14 +70,20 @@ function ResetPasswordForm() {
             const response = await fetch("/api/auth/password/reset-with-token", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ token, newPassword }),
+                body: JSON.stringify(
+                    isInvitationFlow ? { token, newPassword, gdprConsent } : { token, newPassword },
+                ),
             });
             const payload = (await response.json()) as { error?: string; message?: string };
             if (!response.ok) {
                 setError(payload.error ?? "Lien invalide ou expiré.");
                 return;
             }
-            setSuccess("Mot de passe mis à jour. Vous pouvez vous connecter.");
+            setSuccess(
+                isInvitationFlow
+                    ? "Compte activé. Vous pouvez vous connecter."
+                    : "Mot de passe mis à jour. Vous pouvez vous connecter.",
+            );
             setTimeout(() => router.push("/login"), 2000);
         } catch {
             setError("Serveur indisponible.");
@@ -84,11 +98,15 @@ function ResetPasswordForm() {
             style={{ background: "linear-gradient(135deg, #001944 0%, #002C6E 55%, #1d4ed8 100%)" }}
         >
             <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-8">
-                <h1 className="text-2xl font-bold text-gray-900">Réinitialisation mot de passe</h1>
+                <h1 className="text-2xl font-bold text-gray-900">
+                    {isInvitationFlow ? "Définissez votre mot de passe" : "Réinitialisation mot de passe"}
+                </h1>
                 <p className="text-sm text-gray-500 mt-1 mb-6">
-                    {isForgotFlow
-                        ? "Choisissez un nouveau mot de passe fort (12+ caractères, majuscule, minuscule, chiffre, symbole)."
-                        : "Obligatoire tous les 60 jours — saisissez votre ancien mot de passe et un nouveau mot de passe fort."}
+                    {isInvitationFlow
+                        ? "Votre compte a été créé par l'administration. Choisissez un mot de passe fort (12+ caractères, majuscule, minuscule, chiffre, symbole) pour l'activer."
+                        : isForgotFlow
+                          ? "Choisissez un nouveau mot de passe fort (12+ caractères, majuscule, minuscule, chiffre, symbole)."
+                          : "Obligatoire tous les 60 jours — saisissez votre ancien mot de passe et un nouveau mot de passe fort."}
                 </p>
 
                 <form
@@ -144,6 +162,22 @@ function ResetPasswordForm() {
                                 required
                             />
                         </div>
+                    )}
+
+                    {isInvitationFlow && (
+                        <label className="flex items-start gap-2 text-xs text-gray-600 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={gdprConsent}
+                                onChange={(e: ChangeEvent<HTMLInputElement>) => setGdprConsent(e.target.checked)}
+                                className="mt-0.5"
+                                required
+                            />
+                            <span>
+                                J&apos;accepte que mes données personnelles soient traitées dans le cadre de la gestion
+                                de ma scolarité (RGPD). Ce consentement est requis pour activer le compte.
+                            </span>
+                        </label>
                     )}
 
                     {error && (
