@@ -9,7 +9,8 @@ export type User = {
     passwordUpdatedAt: Date;
     twoFactorEnabled: boolean;
     twoFactorSecret: string | null;
-    gdprConsentAt: Date;
+    /** null = compte créé par invitation, le consentement est donné à l'activation (définition du mot de passe) */
+    gdprConsentAt: Date | null;
     createdAt: Date;
     lastLoginAt: Date | null;
 };

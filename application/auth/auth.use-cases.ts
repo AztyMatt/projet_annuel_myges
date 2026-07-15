@@ -9,9 +9,11 @@ import {
 } from "@domain/auth/security-policy";
 import { type User } from "@domain/auth/user.entity";
 import { Role } from "@domain/auth/user.enums";
+import { type Student } from "@domain/student/student.entity";
 import { type AdminRepository } from "@application/admin/admin.repository";
 import { type InstructorRepository } from "@application/instructor/instructor.repository";
 import { type StudentRepository } from "@application/student/student.repository";
+import { type ProgramRepository } from "@application/program/program.repository";
 import { type FileRepository } from "@application/file/file.repository";
 import { type MessageRepository } from "@application/message/message.repository";
 import { type MessageReadRepository } from "@application/message/message-read/message-read.repository";
@@ -29,6 +31,8 @@ import { Forbidden } from "@application/types/results";
 const MAX_2FA_ATTEMPTS = 5;
 const TWO_FACTOR_SESSION_EXPIRY_MS = 5 * 60 * 1000;
 const PASSWORD_RESET_TOKEN_EXPIRY_MS = 60 * 60 * 1000;
+// Une invitation doit survivre à un week-end — TTL volontairement plus long que le reset (1 h)
+const INVITATION_TOKEN_EXPIRY_MS = 72 * 60 * 60 * 1000;
 
 type RoleKey = keyof typeof Role;
 
@@ -78,7 +82,14 @@ export type ResetPasswordResult =
     | { kind: "user_not_found" }
     | { kind: "invalid_old_password" }
     | { kind: "invalid_or_expired_token" }
+    | { kind: "missing_gdpr_consent" }
     | { kind: "password_updated" };
+
+export type InviteStudentResult =
+    | Forbidden
+    | { kind: "user_already_exists" }
+    | { kind: "program_not_found" }
+    | { kind: "student_invited"; user: { id: string; email: string } };
 
 export type RequestPasswordResetResult = { kind: "reset_email_sent" };
 
@@ -116,7 +127,7 @@ export type GdprExportResult =
     | { kind: "user_not_found" }
     | {
           kind: "data_exported";
-          data: { id: string; firstname: string; lastname: string; email: string; gdprConsentAt: Date; createdAt: Date; lastLoginAt: Date | null };
+          data: { id: string; firstname: string; lastname: string; email: string; gdprConsentAt: Date | null; createdAt: Date; lastLoginAt: Date | null };
       };
 
 export type DeleteAccountResult =
@@ -143,6 +154,7 @@ export class AuthUseCases {
         private readonly admins: AdminRepository,
         private readonly students: StudentRepository,
         private readonly instructors: InstructorRepository,
+        private readonly programs: ProgramRepository,
         private readonly files: FileRepository,
         private readonly messages: MessageRepository,
         private readonly messageReads: MessageReadRepository,
@@ -295,7 +307,7 @@ export class AuthUseCases {
         const user = await this.users.findByEmail(input.email.toLowerCase());
         if (user) {
             await this.passwordResetTokens.deleteByUserId(user.id);
-            const resetToken = await this.passwordResetTokens.create(user.id);
+            const resetToken = await this.passwordResetTokens.create(user.id, "reset");
             const resetUrl = `${this.frontendPublicUrl}/reset-password?token=${encodeURIComponent(resetToken.token)}`;
             await this.emailSender.sendPasswordResetEmail({ to: user.email, resetUrl });
         }
@@ -303,20 +315,66 @@ export class AuthUseCases {
         return { kind: "reset_email_sent" };
     }
 
-    async resetWithToken(input: { token: string; newPassword: string }): Promise<ResetPasswordResult> {
-        const { token, newPassword } = input;
+    async resetWithToken(input: { token: string; newPassword: string; gdprConsent?: boolean }): Promise<ResetPasswordResult> {
+        const { token, newPassword, gdprConsent = false } = input;
         if (!isStrongPassword(newPassword)) return { kind: "weak_password" };
 
-        const notBefore = new Date(Date.now() - PASSWORD_RESET_TOKEN_EXPIRY_MS);
-        const resetToken = await this.passwordResetTokens.find(token, notBefore);
+        const resetToken = await this.passwordResetTokens.find(token);
         if (!resetToken) return { kind: "invalid_or_expired_token" };
+        const expiryMs = resetToken.purpose === "invitation" ? INVITATION_TOKEN_EXPIRY_MS : PASSWORD_RESET_TOKEN_EXPIRY_MS;
+        if (resetToken.createdAt.getTime() < Date.now() - expiryMs) return { kind: "invalid_or_expired_token" };
 
         const user = await this.users.findById(resetToken.userId);
         if (!user) return { kind: "invalid_or_expired_token" };
 
+        // Compte créé par invitation : l'admin n'a pas pu consentir à la place de l'étudiant,
+        // le consentement RGPD est recueilli ici, au moment où il active son compte.
+        if (user.gdprConsentAt === null) {
+            if (!gdprConsent) return { kind: "missing_gdpr_consent" };
+            user.gdprConsentAt = new Date();
+        }
+
         await this.applyPasswordUpdate(user, newPassword);
         await this.passwordResetTokens.delete(resetToken.token);
         return { kind: "password_updated" };
+    }
+
+    async inviteStudent(
+        input: { firstname: string; lastname: string; email: string; programId: string },
+        auth: AuthContext,
+    ): Promise<InviteStudentResult> {
+        if (!auth.isAdmin) return Forbidden;
+        const email = input.email.toLowerCase();
+        if (await this.users.findByEmail(email)) return { kind: "user_already_exists" };
+        if (!(await this.programs.findById(input.programId))) return { kind: "program_not_found" };
+
+        const user: User = {
+            id: randomUUID(),
+            firstname: input.firstname,
+            lastname: input.lastname,
+            email,
+            // Hash d'un aléa jamais communiqué : la connexion est impossible tant que
+            // l'étudiant n'a pas défini son propre mot de passe via le lien d'invitation.
+            passwordHash: await this.hasher.hash(randomUUID()),
+            failedAttempts: 0,
+            lockedUntil: null,
+            passwordUpdatedAt: new Date(),
+            twoFactorEnabled: false,
+            twoFactorSecret: null,
+            gdprConsentAt: null,
+            createdAt: new Date(),
+            lastLoginAt: null,
+        };
+        await this.users.save(user);
+
+        const student: Student = { id: randomUUID(), userId: user.id, programId: input.programId };
+        await this.students.save(student);
+
+        const inviteToken = await this.passwordResetTokens.create(user.id, "invitation");
+        const inviteUrl = `${this.frontendPublicUrl}/reset-password?token=${encodeURIComponent(inviteToken.token)}&invitation=1`;
+        await this.emailSender.sendInvitationEmail({ to: user.email, firstname: user.firstname, inviteUrl });
+
+        return { kind: "student_invited", user: { id: user.id, email: user.email } };
     }
 
     private async applyPasswordUpdate(user: User, newPassword: string): Promise<ResetPasswordResult> {
@@ -457,8 +515,8 @@ export class AuthUseCases {
     async cleanupExpiredSessions(): Promise<void> {
         const twoFactorCutoff = new Date(Date.now() - TWO_FACTOR_SESSION_EXPIRY_MS);
         await this.twoFactorSessions.deleteOlderThan(twoFactorCutoff);
-        const passwordResetCutoff = new Date(Date.now() - PASSWORD_RESET_TOKEN_EXPIRY_MS);
-        await this.passwordResetTokens.deleteOlderThan(passwordResetCutoff);
+        await this.passwordResetTokens.deleteOlderThan(new Date(Date.now() - PASSWORD_RESET_TOKEN_EXPIRY_MS), "reset");
+        await this.passwordResetTokens.deleteOlderThan(new Date(Date.now() - INVITATION_TOKEN_EXPIRY_MS), "invitation");
     }
 
     async deleteAccount(userId: string, auth: AuthContext): Promise<DeleteAccountResult> {

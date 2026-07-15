@@ -58,6 +58,14 @@ const forgotPasswordSchema = z.object({
 const resetWithTokenSchema = z.object({
     token: z.string().min(1),
     newPassword: z.string().min(1),
+    gdprConsent: z.boolean().optional(),
+});
+
+const inviteStudentSchema = z.object({
+    firstname: z.string().min(1),
+    lastname: z.string().min(1),
+    email: z.email(),
+    programId: z.string().min(1),
 });
 
 type AuthUserView = { id: string; firstname: string; lastname: string; email: string; role: string };
@@ -148,6 +156,8 @@ const resetPasswordResponse = (result: ResetPasswordResult): { status: HttpStatu
             return { status: 401, body: { error: "Ancien mot de passe invalide" } };
         case "invalid_or_expired_token":
             return { status: 401, body: { error: "Jeton de réinitialisation invalide ou expiré" } };
+        case "missing_gdpr_consent":
+            return { status: 400, body: { error: "Le consentement RGPD est requis pour activer votre compte" } };
         case "password_updated":
             return { status: 200, body: { message: "Mot de passe mis à jour" } };
     }
@@ -274,6 +284,19 @@ authRouter.post("/auth/password/reset-with-token", validateBody(resetWithTokenSc
     send(response, { status: httpResponse.status, body: httpResponse.body });
 });
 
+authRouter.post("/users/invite", ...authed(async (request, response) => {
+    const auth = getAuthFlags(request.auth);
+    const result = await authUseCases.inviteStudent(request.body, auth);
+    respond(response, result, {
+        user_already_exists: { blocked: { type: "Creation", reason: "Un utilisateur avec cet email existe déjà" } },
+        program_not_found: { status: 404, error: "Filière introuvable" },
+        student_invited: (r) => ({
+            status: 201,
+            body: { userId: r.user.id, email: r.user.email, message: "Invitation envoyée" },
+        }),
+    });
+}, inviteStudentSchema));
+
 authRouter.get("/users/me", ...authed(async (request, response) => {
     const httpResponse = getMeResponse(await authUseCases.getMe(request.auth.userId));
     send(response, { status: httpResponse.status, body: httpResponse.body });
@@ -304,7 +327,7 @@ authRouter.get("/gdpr/export", ...authed(async (request, response) => {
         data_exported: (r) => ({ status: 200, body: {
             data: {
                 ...r.data,
-                gdprConsentAt: r.data.gdprConsentAt.toISOString(),
+                gdprConsentAt: r.data.gdprConsentAt?.toISOString() ?? null,
                 createdAt: r.data.createdAt.toISOString(),
                 lastLoginAt: r.data.lastLoginAt?.toISOString() ?? null,
             },
