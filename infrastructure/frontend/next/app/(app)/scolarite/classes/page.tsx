@@ -112,7 +112,7 @@ export default function ClassesPage() {
             <div className="flex items-center justify-between flex-wrap gap-3">
                 <div>
                     <h2 className="text-2xl font-bold text-gray-900">Classes et groupes</h2>
-                    <p className="text-sm text-gray-500 mt-1">Gestion des promotions en sous-effectif : déplacer manuellement les étudiants puis supprimer l&apos;ancienne classe — pas de fusion automatique.</p>
+                    <p className="text-sm text-gray-500 mt-1">Filières, classes et groupes d&apos;étudiants.</p>
                 </div>
                 <button
                     onClick={() => setShowCreateClass(true)}

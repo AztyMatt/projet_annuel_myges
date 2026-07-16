@@ -16,6 +16,11 @@ const ROLE_PROTECTED_PREFIXES: Array<{ prefix: string; roles: Role[] }> = [
 // Pages communes à tous les rôles connectés : authentification requise, pas de restriction de rôle.
 const COMMON_PROTECTED_PREFIXES = ["/parametres", "/messagerie"];
 
+// Pages qui n'ont de sens que déconnecté : un utilisateur déjà authentifié qui les visite
+// (ex. tape /login dans la barre d'adresse alors qu'il est déjà connecté) est renvoyé vers
+// son espace au lieu de revoir le formulaire.
+const PUBLIC_ONLY_PREFIXES = ["/login", "/signup"];
+
 const matchesPrefix = (pathname: string, prefix: string) => pathname === prefix || pathname.startsWith(`${prefix}/`);
 
 export async function middleware(request: NextRequest) {
@@ -32,6 +37,15 @@ export async function middleware(request: NextRequest) {
         if (token) headers.set("Authorization", `Bearer ${token}`);
 
         return NextResponse.rewrite(destination, { request: { headers } });
+    }
+
+    if (PUBLIC_ONLY_PREFIXES.some((prefix) => matchesPrefix(pathname, prefix))) {
+        const token = request.cookies.get(AUTH_COOKIE_NAME)?.value;
+        const session = token ? await verifySessionToken(token) : null;
+        if (session) {
+            return NextResponse.redirect(new URL(ROLE_HOME[session.role] ?? "/login", request.url));
+        }
+        return NextResponse.next();
     }
 
     const roleRule = ROLE_PROTECTED_PREFIXES.find(({ prefix }) => matchesPrefix(pathname, prefix));
@@ -55,6 +69,8 @@ export async function middleware(request: NextRequest) {
 export const config = {
     matcher: [
         "/api/:path*",
+        "/login",
+        "/signup",
         "/etudiant/:path*",
         "/intervenant/:path*",
         "/scolarite/:path*",

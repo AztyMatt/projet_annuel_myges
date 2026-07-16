@@ -99,7 +99,7 @@ export default function EtudiantsPage() {
             <div className="flex items-start justify-between gap-4">
                 <div>
                     <h2 className="text-2xl font-bold text-gray-900">Dossiers étudiants</h2>
-                    <p className="text-sm text-gray-500 mt-1">Liste et fiches détaillées des étudiants inscrits.</p>
+                    <p className="text-sm text-gray-500 mt-1">Dossiers et suivi des étudiants inscrits.</p>
                 </div>
                 <button
                     onClick={() => setShowInvite(true)}

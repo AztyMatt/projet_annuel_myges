@@ -533,9 +533,9 @@ Sources : **S** = `Sujet.pdf`, **C** = `cahierDesCharges.md`. Priorité : **P0**
 ### 9.11 Observabilité (rubrique à zéro)
 
 - [x] `OBS-001` Santé des conteneurs : déployer **Uptime Kuma** (le moins coûteux) *(à créer : `k8s/monitoring/uptime-kuma.yml`)* pointé sur `/health` backend + `/` frontend, ou stack kube-prometheus si le temps le permet.
-- [ ] `OBS-002` Erreurs applicatives : intégrer **Sentry** (ou GlitchTip auto-hébergé) — SDK Node dans `server.ts`/error handler `app.ts:75`, SDK Next (`instrumentation.ts` *(à créer)*), DSN via Infisical.
-- [ ] `OBS-003` Analytique RGPD — **à moitié fait (2026-07-14)** : **Umami** auto-hébergé déployé (`k8s/observability/umami/` + postgres dédié) mais **script de tracking absent du front** → reste : `<script>` Umami dans `app/layout.tsx` + mention politique cookies (lié à LEG-002).
-- [ ] `OBS-004` Capturer les erreurs du error handler Express dans Sentry (aujourd'hui simple `console.error`).
+- [ ] `OBS-002` Erreurs applicatives : intégrer **Sentry** (ou GlitchTip auto-hébergé) — SDK Node dans `server.ts`/error handler `app.ts:75`, SDK Next (`instrumentation.ts` *(à créer)*), DSN via Infisical. **Hors périmètre / facultatif (décision utilisateur du 2026-07-15)** — ne pas implémenter sauf changement d'avis explicite.
+- [x] `OBS-003` Analytique RGPD — **fait (2026-07-15)** : **Umami** auto-hébergé (`k8s/observability/umami/` + postgres dédié) + script de tracking injecté dans `app/layout.tsx` (`next/script`, `strategy="afterInteractive"`). Reste lié : `LEG-002` (bandeau cookies, probablement pas nécessaire — Umami ne pose pas de cookie — à assumer/documenter plutôt qu'à coder).
+- [ ] `OBS-004` Capturer les erreurs du error handler Express dans Sentry (aujourd'hui simple `console.error`) — **non fait, exclu du périmètre courant** (Sentry lui-même marqué facultatif, décision utilisateur du 2026-07-15).
 
 ---
 
@@ -760,7 +760,7 @@ Tâches : UI-002…005, LEG-001/002, DOC-004/005, PM-001, seed de démo, répét
 - [ ] **Sujet — Sécurité** : inscription ✅, connexion ✅, mot de passe oublié ✅, réinitialisation ✅, mdp fort ✅, 60 j ✅, blocage ✅, 2FA TOTP ✅ — reste : email SMTP réel (AUTH-001), durcissements SEC-102…110
 - [ ] **Sujet — Infrastructure** : Docker ✅, k8s (≡ Swarm accepté) ✅, ≥2 réplicas ✅, registre GHCR ✅, WebSocket ❌ (NOTIF), pare-feu ❌ (K8S-005 + VPS), domaine+SSL ✅ (cert-manager, 2026-07-12), VPS à confirmer
 - [x] **Sujet — Tests (2026-07-15)** : unitaires ✅ (71), fonctionnels API ✅ (27), interface ✅ (5 Playwright, pas encore en CI) — 103 tests au total, tous vérifiés réellement verts
-- [ ] **Sujet — Observabilité** : santé ✅ (Uptime Kuma, 2026-07-14), erreurs ❌ (Sentry), analytique ⚠️ (Umami déployé, script front manquant) → reste OBS-002/003
+- [~] **Sujet — Observabilité** : santé ✅ (Uptime Kuma, 2026-07-14), analytique ✅ (Umami branché, 2026-07-15), erreurs ❌ (Sentry — **hors périmètre, facultatif, décision utilisateur du 2026-07-15**)
 - [ ] **Sujet — Sauvegarde 3-2-1** : ❌ → phase 6 ; IaC ✅
 - [ ] **Sujet — Gestion de projet** : git ✅, outil de suivi à prouver (PM-001)
 - [ ] **Cahier — Métier** : planning ✅, notes ⚠️ (audit), absences ⚠️ (justificatifs), documents ⚠️ (upload), messagerie ⚠️ (noms, admin, temps réel), supports/rendus ⚠️ (upload), administration ✅, audit ❌ (écriture)

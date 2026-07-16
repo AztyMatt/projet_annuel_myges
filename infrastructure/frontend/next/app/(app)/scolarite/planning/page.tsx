@@ -157,8 +157,7 @@ export default function PlanningScolarite() {
             <div>
                 <h2 className="text-2xl font-bold text-gray-900">Planning — gestion des sessions</h2>
                 <p className="text-sm text-gray-500 mt-1">
-                    Situations exceptionnelles (grève, jour férié déplacé...) : modifiez la session (date/salle) ou
-                    supprimez-la — il n&apos;existe pas de champ dédié pour tracer le motif dans le modèle actuel.
+                    Créez, modifiez ou supprimez les sessions de tous les cours.
                 </p>
             </div>
 
