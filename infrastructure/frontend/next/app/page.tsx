@@ -87,7 +87,7 @@ export default function Home() {
                         Fonctionnalités
                     </h2>
                     <p className="text-center text-gray-500 text-sm mb-10">
-                        Tout ce qu'il faut pour suivre une scolarité, du planning à la messagerie.
+                        Tout ce qu&apos;il faut pour suivre une scolarité, du planning à la messagerie.
                     </p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
                         {features.map(({ icon: Icon, title, description }) => (
