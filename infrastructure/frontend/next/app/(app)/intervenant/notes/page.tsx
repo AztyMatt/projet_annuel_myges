@@ -292,8 +292,7 @@ export default function SaisieNotes() {
             </div>
 
             <p className="text-xs text-gray-400">
-                Le gel des notes se fait depuis l&apos;administration (<code>/scolarite/notes</code>) une fois la
-                saisie terminée — cette action n&apos;est pas autorisée pour les intervenants côté backend.
+                Le gel des notes se fait depuis l&apos;espace administration une fois la saisie terminée.
             </p>
         </div>
     );

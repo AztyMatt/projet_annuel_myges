@@ -40,6 +40,12 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
       FRONTEND_PUBLIC_URL: ${FRONTEND_PUBLIC_URL:-http://localhost:3000}
       UPLOADS_DIR: /app/uploads
+      # Optionnelles : envoi d'email réel (voir email-sender.adapter.ts) — si absentes, fallback console.log
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
     depends_on:
       postgres:
         condition: service_healthy
