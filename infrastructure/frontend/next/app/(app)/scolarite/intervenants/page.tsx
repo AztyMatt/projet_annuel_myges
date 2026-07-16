@@ -57,8 +57,8 @@ export default function IntervenantsPage() {
             <div>
                 <h2 className="text-2xl font-bold text-gray-900">Intervenants</h2>
                 <p className="text-sm text-gray-500 mt-1">
-                    La création d&apos;un profil intervenant se fait depuis l&apos;attribution de rôle
-                    (<code>/superadmin/gestion</code>) — cette page permet de modifier un intervenant existant.
+                    Modification des profils intervenants — la création se fait depuis l&apos;espace super
+                    administrateur.
                 </p>
             </div>
 
